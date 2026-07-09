@@ -201,6 +201,7 @@ function updateStatus(data)
     setText("mqtt", data.mqttConnected ? "CONNECTED" : "DISCONNECTED");
     setText("watchdog", data.watchdogSafeMode ? "SAFE MODE" : data.watchdogHealthy ? "OK" : "WARNING");
     setText("heap", `${Math.round(data.freeHeap / 1024)} kB`);
+    setText("espTemp", `${Number(data.espTemp).toFixed(1)} °C`);
     setText("uptime", formatTime(data.uptime));
     setText("firmware", data.firmware || "--");
     setText("watchdogReason", data.watchdogReason || "OK");
