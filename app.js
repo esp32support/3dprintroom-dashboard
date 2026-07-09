@@ -238,9 +238,6 @@ function setOffline(message)
 let lastMessageAt = 0;
 const STALE_AFTER_MS = 30000; // SEND_INTERVAL is 5s; 30s silence => treat as offline
 
-setText("brokerHost", BROKER_CONFIG.host);
-setText("brokerTopic", BROKER_CONFIG.topic);
-
 const client = mqtt.connect(`wss://${BROKER_CONFIG.host}:${BROKER_CONFIG.port}/mqtt`, {
     username: BROKER_CONFIG.username,
     password: BROKER_CONFIG.password,
