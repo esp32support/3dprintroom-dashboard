@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3DPrintRoomMonitor - Remote</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <main class="shell">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Environmental monitor - remote</p>
+                <h1>3DPrintRoomMonitor</h1>
+            </div>
+
+            <section class="alarmBanner good" id="alarmBanner" aria-live="polite">
+                <div>
+                    <span class="label">Alarm</span>
+                    <strong id="alarmText">GOOD</strong>
+                </div>
+                <p id="alarmMessage">Connecting to broker...</p>
+            </section>
+        </header>
+
+        <section class="primaryGrid">
+
+            <article class="panel primaryMetric">
+                <div class="panelHeader">
+                    <span>Temperature</span>
+                    <span class="trend stable" id="temperatureTrend">STABLE</span>
+                </div>
+
+                <div class="metricLine">
+                    <strong id="tempAvg">--.-</strong>
+                    <span>&deg;C</span>
+                </div>
+
+                <div class="bar">
+                    <span id="tempBar"></span>
+                </div>
+
+                <dl class="subgrid">
+                    <div>
+                        <dt>AHT21</dt>
+                        <dd id="tempAHT">--.- &deg;C</dd>
+                    </div>
+
+                    <div>
+                        <dt>BME280</dt>
+                        <dd id="tempBME">--.- &deg;C</dd>
+                    </div>
+                </dl>
+            </article>
+
+            <article class="panel primaryMetric">
+                <div class="panelHeader">
+                    <span>Humidity</span>
+                    <span class="trend stable" id="humidityTrend">STABLE</span>
+                </div>
+
+                <div class="metricLine">
+                    <strong id="humAvg">--.-</strong>
+                    <span>%</span>
+                </div>
+
+                <div class="bar">
+                    <span id="humBar"></span>
+                </div>
+
+                <dl class="subgrid">
+                    <div>
+                        <dt>AHT21</dt>
+                        <dd id="humAHT">--.- %</dd>
+                    </div>
+
+                    <div>
+                        <dt>BME280</dt>
+                        <dd id="humBME">--.- %</dd>
+                    </div>
+                </dl>
+            </article>
+
+            <article class="panel airPanel">
+                <div class="panelHeader">
+                    <span>Air Quality</span>
+                    <span class="trend stable" id="tvocTrend">STABLE</span>
+                </div>
+
+                <div class="aqiDial" id="aqiDial">
+                    <span>AQI</span>
+                    <strong id="aqi">--</strong>
+                </div>
+
+                <div class="airRows">
+
+                    <div>
+                        <div class="rowHead">
+                            <span>TVOC</span>
+                            <strong id="tvoc">-- ppb</strong>
+                        </div>
+                        <div class="bar">
+                            <span id="tvocBar"></span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="rowHead">
+                            <span>eCO₂</span>
+                            <strong id="eco2">-- ppm</strong>
+                        </div>
+                        <div class="bar">
+                            <span id="eco2Bar"></span>
+                        </div>
+                    </div>
+
+                    <div class="rowHead compact">
+                        <span>eCO₂ trend</span>
+                        <strong class="trend stable" id="eco2Trend">STABLE</strong>
+                    </div>
+
+                </div>
+            </article>
+
+        </section>
+
+        <section class="secondaryGrid">
+
+            <article class="panel roomStatePanel">
+
+                <div class="panelHeader">
+                    <span>Room State</span>
+                    <strong id="airScore">0</strong>
+                </div>
+
+                <div class="stateValue" id="airStateText">
+                    Air quality stable
+                </div>
+
+                <p class="stateMessage" id="airStateMessage">
+                    Waiting for data
+                </p>
+
+                <div class="bar stateBar">
+                    <span id="airStateBar"></span>
+                </div>
+
+                <div class="predictionBox">
+                    <span>Prediction</span>
+                    <strong id="predictionText">Likely stable</strong>
+                    <p id="predictionMessage">Waiting for trend data</p>
+                </div>
+
+            </article>
+
+            <article class="panel systemPanel">
+
+                <div class="panelHeader">
+                    <span>System Health</span>
+                    <strong id="connectionState">OFFLINE</strong>
+                </div>
+
+                <dl class="statusList">
+
+                    <div>
+                        <dt>Network</dt>
+                        <dd id="ssid">--</dd>
+                    </div>
+
+                    <div>
+                        <dt>IP Address</dt>
+                        <dd id="ip">0.0.0.0</dd>
+                    </div>
+
+                    <div>
+                        <dt>WiFi</dt>
+                        <dd id="wifi">-- dBm</dd>
+                    </div>
+
+                    <div>
+                        <dt>MQTT</dt>
+                        <dd id="mqtt">--</dd>
+                    </div>
+
+                    <div>
+                        <dt>Watchdog</dt>
+                        <dd id="watchdog">--</dd>
+                    </div>
+
+                    <div>
+                        <dt>Heap</dt>
+                        <dd id="heap">-- kB</dd>
+                    </div>
+
+                    <div>
+                        <dt>Uptime</dt>
+                        <dd id="uptime">0 s</dd>
+                    </div>
+
+                    <div>
+                        <dt>Firmware</dt>
+                        <dd id="firmware">--</dd>
+                    </div>
+
+                </dl>
+
+                <div class="bar heapBar">
+                    <span id="heapBar"></span>
+                </div>
+
+                <p class="watchdogReason" id="watchdogReason">
+                    Waiting for data
+                </p>
+
+            </article>
+
+            <article class="panel sensorsPanel">
+
+                <div class="panelHeader">
+                    <span>Sensor Status</span>
+                    <strong id="pressure">---- hPa</strong>
+                </div>
+
+                <div class="sensorPills">
+                    <span id="ahtState">AHT21 --</span>
+                    <span id="bmeState">BME280 --</span>
+                    <span id="ensState">ENS160 --</span>
+                </div>
+
+                <dl class="statusList">
+                    <div>
+                        <dt>Pressure</dt>
+                        <dd id="pressureDetail">---- hPa</dd>
+                    </div>
+
+                    <div>
+                        <dt>Last message</dt>
+                        <dd id="lastUpdate">--</dd>
+                    </div>
+                </dl>
+
+            </article>
+
+            <article class="panel connectPanel">
+
+                <div class="panelHeader">
+                    <span>Broker connection</span>
+                    <strong id="brokerState">CONNECTING</strong>
+                </div>
+
+                <dl class="statusList">
+                    <div>
+                        <dt>Host</dt>
+                        <dd id="brokerHost">--</dd>
+                    </div>
+
+                    <div>
+                        <dt>Topic</dt>
+                        <dd id="brokerTopic">--</dd>
+                    </div>
+                </dl>
+
+                <p class="watchdogReason" id="brokerMessage">
+                    Loading broker.js configuration...
+                </p>
+
+            </article>
+
+        </section>
+
+    </main>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="broker.config.js"></script>
+    <script src="app.js"></script>
+
+</body>
+</html>
