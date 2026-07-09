@@ -268,6 +268,31 @@ dd{
     color:var(--muted);
 }
 
+.historyList{
+    display:grid;
+    gap:8px;
+}
+
+.historyItem{
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:12px;
+    align-items:center;
+    padding:12px;
+    border-radius:6px;
+    background:#14181b;
+    border-left:6px solid var(--green);
+}
+
+.historyItem strong{
+    display:block;
+}
+
+.historyItem span{
+    color:var(--muted);
+    white-space:nowrap;
+}
+
 .stateValue{
     min-height:72px;
     font-size:30px;

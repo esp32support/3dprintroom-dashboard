@@ -218,6 +218,52 @@ function updateStatus(data)
     setSensorState("ensState", "ENS160", data.ensOK !== false);
 
     updateAlarm(data);
+    renderHistory(data.history);
+}
+
+function renderHistory(items)
+{
+    const list = byId("historyList");
+
+    if (!list)
+        return;
+
+    list.innerHTML = "";
+
+    if (!items || items.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No alarm history";
+        list.appendChild(empty);
+        return;
+    }
+
+    [...items].reverse().forEach(item =>
+    {
+        const row = document.createElement("div");
+        row.className = "historyItem";
+        row.style.borderLeftColor = colorForLevel(item.level);
+
+        const left = document.createElement("div");
+
+        const title = document.createElement("strong");
+        const message = document.createElement("small");
+
+        title.textContent = item.text || "GOOD";
+        message.textContent = item.message || "";
+
+        left.appendChild(title);
+        left.appendChild(message);
+
+        const time = document.createElement("span");
+        time.textContent = item.time || "--";
+
+        row.appendChild(left);
+        row.appendChild(time);
+
+        list.appendChild(row);
+    });
 }
 
 function setOffline(message)
