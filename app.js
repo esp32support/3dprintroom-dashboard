@@ -211,7 +211,7 @@ function updateStatus(data)
 
     setText("pressure", `${data.pressure.toFixed(1)} hPa`);
     setText("pressureDetail", `${data.pressure.toFixed(1)} hPa`);
-    setText("lastUpdate", new Date().toLocaleTimeString());
+    setText("lastUpdate", new Date().toLocaleTimeString([], { hour12: false }));
 
     setSensorState("ahtState", "AHT21", data.ahtOK !== false);
     setSensorState("bmeState", "BME280", data.bmeOK !== false);
