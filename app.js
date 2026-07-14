@@ -67,15 +67,18 @@ function colorForLevel(level)
 
 function colorForAirState(state)
 {
+    // 0=Excellent 1=Good 2=Fair 3=Moderate 4=Poor 5=Very Poor 6=Hazardous
     switch (Number(state) || 0)
     {
+        case 6:
+            return "var(--black)";
         case 5:
-            return "var(--red)";
+            return "var(--darkred)";
         case 4:
+            return "var(--red)";
         case 3:
             return "var(--orange)";
         case 2:
-        case 1:
             return "var(--yellow)";
         default:
             return "var(--green)";
