@@ -211,9 +211,7 @@ function updateStatus(data)
     setText("connectionState", "ONLINE");
 
     setText("bootCountTotal", data.bootCountTotal ?? "--");
-    setText("bootTime", data.bootTime && data.bootTime !== "--" ? data.bootTime : "syncing...");
-    setText("prevBootTime", data.prevBootTime || "--");
-    setText("resetReason", data.resetReason || "--");
+    renderBootHistory(data.bootHistory);
 
     setBar("heapBar", data.freeHeap / 1024, 320,
         data.freeHeap < 50000 ? "var(--orange)" : "var(--green)");
@@ -267,6 +265,59 @@ function renderHistory(items)
 
         const time = document.createElement("span");
         time.textContent = item.time || "--";
+
+        row.appendChild(left);
+        row.appendChild(time);
+
+        list.appendChild(row);
+    });
+}
+
+function colorForResetReason(reason)
+{
+    const text = (reason || "").toLowerCase();
+
+    if (text.includes("brownout") || text.includes("panic") || text.includes("watchdog"))
+        return "var(--red)";
+
+    if (text.includes("unknown") || text.includes("sdio") || text.includes("external"))
+        return "var(--orange)";
+
+    return "var(--green)";  // Power-on, Software (ESP.restart), Deep sleep wake
+}
+
+function renderBootHistory(items)
+{
+    const list = byId("bootHistoryList");
+
+    if (!list)
+        return;
+
+    list.innerHTML = "";
+
+    if (!items || items.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No boot history yet";
+        list.appendChild(empty);
+        return;
+    }
+
+    // Already newest-first from the device, unlike the alarm history array.
+    items.forEach(item =>
+    {
+        const row = document.createElement("div");
+        row.className = "historyItem";
+        row.style.borderLeftColor = colorForResetReason(item.reason);
+
+        const left = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = item.reason || "Unknown";
+        left.appendChild(title);
+
+        const time = document.createElement("span");
+        time.textContent = item.time && item.time !== "pending" ? item.time : "syncing...";
 
         row.appendChild(left);
         row.appendChild(time);
@@ -367,6 +418,6 @@ if (bootInfoToggle && bootInfoPanel)
         else
             bootInfoPanel.setAttribute("hidden", "");
 
-        bootInfoToggle.textContent = hidden ? "Hide" : "Info";
+        bootInfoToggle.textContent = hidden ? "Hide" : "History";
     });
 }

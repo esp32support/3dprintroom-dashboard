@@ -202,12 +202,12 @@
                     <div>
                         <dt>Uptime</dt>
                         <dd id="uptime">0 s</dd>
-                        <button type="button" class="infoBtn" id="bootInfoToggle">Info</button>
                     </div>
 
                     <div>
                         <dt>Firmware</dt>
                         <dd id="firmware">--</dd>
+                        <button type="button" class="infoBtn" id="bootInfoToggle">History</button>
                     </div>
 
                 </dl>
@@ -216,29 +216,10 @@
                     <span id="heapBar"></span>
                 </div>
 
-                <dl class="statusList bootInfoPanel" id="bootInfoPanel" hidden>
-
-                    <div>
-                        <dt>Boot Count</dt>
-                        <dd id="bootCountTotal">--</dd>
-                    </div>
-
-                    <div>
-                        <dt>Last Boot</dt>
-                        <dd id="bootTime">--</dd>
-                    </div>
-
-                    <div>
-                        <dt>Previous Boot</dt>
-                        <dd id="prevBootTime">--</dd>
-                    </div>
-
-                    <div>
-                        <dt>Reset Reason</dt>
-                        <dd id="resetReason">--</dd>
-                    </div>
-
-                </dl>
+                <div class="bootInfoPanel" id="bootInfoPanel" hidden>
+                    <p class="compact">Total boots (all-time): <strong id="bootCountTotal">--</strong></p>
+                    <div class="historyList" id="bootHistoryList"></div>
+                </div>
 
                 <p class="watchdogReason" id="watchdogReason">
                     Waiting for data
