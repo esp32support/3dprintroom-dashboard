@@ -210,6 +210,11 @@ function updateStatus(data)
     setText("watchdogReason", data.watchdogReason || "OK");
     setText("connectionState", "ONLINE");
 
+    setText("bootCountTotal", data.bootCountTotal ?? "--");
+    setText("bootTime", data.bootTime && data.bootTime !== "--" ? data.bootTime : "syncing...");
+    setText("prevBootTime", data.prevBootTime || "--");
+    setText("resetReason", data.resetReason || "--");
+
     setBar("heapBar", data.freeHeap / 1024, 320,
         data.freeHeap < 50000 ? "var(--orange)" : "var(--green)");
 
@@ -347,3 +352,21 @@ setInterval(() =>
     if (lastMessageAt && Date.now() - lastMessageAt > STALE_AFTER_MS)
         setOffline("Device has not published in over 30s");
 }, 5000);
+
+const bootInfoToggle = byId("bootInfoToggle");
+const bootInfoPanel = byId("bootInfoPanel");
+
+if (bootInfoToggle && bootInfoPanel)
+{
+    bootInfoToggle.addEventListener("click", () =>
+    {
+        const hidden = bootInfoPanel.hasAttribute("hidden");
+
+        if (hidden)
+            bootInfoPanel.removeAttribute("hidden");
+        else
+            bootInfoPanel.setAttribute("hidden", "");
+
+        bootInfoToggle.textContent = hidden ? "Hide" : "Info";
+    });
+}

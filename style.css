@@ -193,6 +193,32 @@ dd{
     font-weight:800;
 }
 
+.infoBtn{
+    margin-top:8px;
+    padding:5px 10px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#1c2226;
+    color:var(--cyan);
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    cursor:pointer;
+}
+
+.infoBtn:hover{
+    border-color:var(--cyan);
+}
+
+.bootInfoPanel{
+    margin-top:12px;
+}
+
+.bootInfoPanel[hidden]{
+    display:none;
+}
+
 .airPanel{
     display:grid;
     grid-template-columns:160px 1fr;
