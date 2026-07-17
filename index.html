@@ -16,25 +16,39 @@
                 <h1>3DPrintRoomMonitor</h1>
             </div>
 
-            <section class="statusStrip" id="statusStrip" aria-live="polite">
-                <span class="stripLabel">Master</span>
-                <div class="statusPill">
-                    <span class="statusDot" id="wifiDot"></span>
-                    <span>WiFi</span>
-                </div>
-                <div class="statusPill">
-                    <span class="statusDot" id="brokerDot"></span>
-                    <span>Broker</span>
-                </div>
-                <div class="statusPill">
-                    <span class="statusDot" id="mqttDot"></span>
-                    <span>MQTT</span>
-                </div>
-                <div class="statusPill">
-                    <span class="statusDot" id="watchdogDot"></span>
-                    <span>Watchdog</span>
-                </div>
-            </section>
+            <div class="statusStripStack">
+                <section class="statusStrip" id="statusStrip" aria-live="polite">
+                    <span class="stripLabel">Master</span>
+                    <div class="statusPill">
+                        <span class="statusDot" id="wifiDot"></span>
+                        <span>WiFi</span>
+                    </div>
+                    <div class="statusPill">
+                        <span class="statusDot" id="brokerDot"></span>
+                        <span>Broker</span>
+                    </div>
+                    <div class="statusPill">
+                        <span class="statusDot" id="mqttDot"></span>
+                        <span>MQTT</span>
+                    </div>
+                    <div class="statusPill">
+                        <span class="statusDot" id="watchdogDot"></span>
+                        <span>Watchdog</span>
+                    </div>
+                </section>
+
+                <section class="statusStrip" id="printerStatusStrip" aria-live="polite">
+                    <span class="stripLabel">Printer</span>
+                    <div class="statusPill">
+                        <span class="statusDot" id="printerWifiDot"></span>
+                        <span>WiFi</span>
+                    </div>
+                    <div class="statusPill">
+                        <span class="statusDot" id="printerMqttDot"></span>
+                        <span>MQTT</span>
+                    </div>
+                </section>
+            </div>
         </header>
 
         <nav class="tabNav" role="tablist">
@@ -319,18 +333,6 @@
         </div><!-- /tab-room -->
 
         <div class="tabPanel" id="tab-printer" role="tabpanel" aria-labelledby="tabBtn-printer" hidden>
-
-            <section class="statusStrip" id="printerStatusStrip" aria-live="polite">
-                <span class="stripLabel">Printer</span>
-                <div class="statusPill">
-                    <span class="statusDot" id="printerWifiDot"></span>
-                    <span>WiFi</span>
-                </div>
-                <div class="statusPill">
-                    <span class="statusDot" id="printerMqttDot"></span>
-                    <span>MQTT</span>
-                </div>
-            </section>
 
             <section class="printerHero panel" id="printerHero">
                 <div class="printerHeroMain">

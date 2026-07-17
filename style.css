@@ -109,15 +109,18 @@ h1{
     box-shadow:0 14px 36px rgba(0,0,0,.28);
 }
 
+.statusStripStack{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:10px;
+}
+
 .statusStrip{
     display:flex;
     align-items:center;
     flex-wrap:wrap;
     gap:12px;
-}
-
-#printerStatusStrip{
-    margin-bottom:18px;
 }
 
 .stripLabel{

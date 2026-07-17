@@ -958,9 +958,13 @@ document.addEventListener("visibilitychange", () =>
     if (document.visibilityState !== "visible")
         return;
 
-    if (client.connected)
-        return;
-
+    // mqtt.js's own `connected` flag can still read true even when a
+    // backgrounded tab's connection has effectively died (the browser
+    // throttled it enough that neither side noticed the drop) - trusting
+    // that flag here is what let this go stale until a full page reload.
+    // Reconnecting unconditionally is cheap when already healthy (mqtt.js
+    // just cycles the connection) and is the only way to reliably recover
+    // the actually-broken case.
     setDot("brokerDot", false);
     client.reconnect();
 });
