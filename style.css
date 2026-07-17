@@ -67,6 +67,15 @@ body{
     color:var(--text);
 }
 
+.logoutBtn{
+    margin-left:auto;
+    color:var(--muted);
+}
+
+.logoutBtn:hover{
+    color:var(--red);
+}
+
 .tabBtn.active{
     background:linear-gradient(180deg,var(--panel2),var(--panel));
     border-color:var(--line);

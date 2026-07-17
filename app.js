@@ -903,6 +903,23 @@ TABS.forEach(t =>
         btn.addEventListener("click", () => selectTab(t));
 });
 
+const logoutBtn = byId("logoutBtn");
+
+if (logoutBtn)
+{
+    logoutBtn.addEventListener("click", async () =>
+    {
+        try
+        {
+            await fetch("/api/logout", { method: "POST" });
+        }
+        finally
+        {
+            window.location.href = "/login.html";
+        }
+    });
+}
+
 // ===== New spool =====
 
 async function onNewSpool(trayId, btn)

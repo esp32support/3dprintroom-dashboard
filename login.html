@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3DPrintRoomMonitor - Sign in</title>
+<style>
+  :root{
+    --bg:#101214; --panel:#1b1f22; --panel2:#20262a; --line:#394149;
+    --text:#f4f7f9; --muted:#9ba7b0; --cyan:#40c4d8; --red:#ff4d5e;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:var(--bg); color:var(--text); font-family:Segoe UI,Arial,sans-serif;
+  }
+  .card{
+    width:min(360px,90vw); padding:32px;
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 14px 36px rgba(0,0,0,.35);
+  }
+  h1{margin:0 0 4px; font-size:22px;}
+  p.sub{margin:0 0 24px; color:var(--muted); font-size:13px;}
+  label.field{
+    display:block; margin-bottom:14px; font-size:12px; color:var(--muted);
+    font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+  }
+  input[type=text], input[type=password]{
+    width:100%; margin-top:6px; padding:10px 12px; border-radius:6px;
+    border:1px solid var(--line); background:#0c0f11; color:var(--text);
+    font-size:15px; font-family:inherit;
+  }
+  input[type=text]:focus, input[type=password]:focus{outline:none; border-color:var(--cyan);}
+  .rememberRow{
+    display:flex; align-items:center; gap:8px; margin-bottom:20px;
+    font-size:13px; color:var(--muted);
+  }
+  .rememberRow label{margin:0; font-weight:500; text-transform:none; letter-spacing:normal;}
+  button{
+    width:100%; padding:12px; border-radius:6px; border:1px solid var(--cyan);
+    background:#123a41; color:var(--cyan); font-weight:800; text-transform:uppercase;
+    letter-spacing:.04em; font-size:14px; cursor:pointer; font-family:inherit;
+  }
+  button:hover{background:var(--cyan); color:#0c1a1d;}
+  button:disabled{opacity:.6; cursor:default;}
+  #result{margin-top:14px; min-height:20px; font-size:13px; color:var(--red); text-align:center;}
+</style>
+</head>
+<body>
+  <form class="card" id="loginForm">
+    <h1>3DPrintRoomMonitor</h1>
+    <p class="sub">Sign in to view the dashboard</p>
+
+    <label class="field">Username
+      <input type="text" id="username" autocomplete="username" required>
+    </label>
+
+    <label class="field">Password
+      <input type="password" id="password" autocomplete="current-password" required>
+    </label>
+
+    <div class="rememberRow">
+      <input type="checkbox" id="rememberMe" checked>
+      <label for="rememberMe">Remember me</label>
+    </div>
+
+    <button type="submit" id="submitBtn">Sign in</button>
+    <p id="result"></p>
+  </form>
+
+  <script>
+    document.getElementById("loginForm").addEventListener("submit", async (event) =>
+    {
+        event.preventDefault();
+
+        const btn = document.getElementById("submitBtn");
+        const result = document.getElementById("result");
+
+        btn.disabled = true;
+        result.textContent = "";
+
+        try
+        {
+            const res = await fetch("/api/login", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    username: document.getElementById("username").value,
+                    password: document.getElementById("password").value,
+                    rememberMe: document.getElementById("rememberMe").checked,
+                }),
+            });
+
+            if (res.ok)
+            {
+                window.location.href = "/";
+                return;
+            }
+
+            const data = await res.json();
+            result.textContent = data.error || "Login failed";
+        }
+        catch (err)
+        {
+            result.textContent = "Request failed: " + err.message;
+        }
+        finally
+        {
+            btn.disabled = false;
+        }
+    });
+  </script>
+</body>
+</html>
