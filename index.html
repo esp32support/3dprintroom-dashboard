@@ -338,13 +338,14 @@
                 <div class="printerHeroMain">
                     <span class="label" id="printerNameLabel">Printer</span>
                     <strong id="printerState">WAITING FOR DATA</strong>
+                    <p id="printerStage" class="printerStage" hidden></p>
                     <p id="printerProject">No project</p>
                 </div>
                 <div class="printerHeroSide">
-                    <span class="label">Active filament</span>
-                    <div class="activeFilament">
-                        <span class="swatch" id="activeSwatch"></span>
-                        <strong id="activeFilamentText">--</strong>
+                    <span class="label">Project preview</span>
+                    <div class="printerThumbnail" id="printerThumbnailWrap">
+                        <img id="printerThumbnail" alt="" hidden>
+                        <span id="printerThumbnailPlaceholder">No preview</span>
                     </div>
                 </div>
             </section>
@@ -357,19 +358,25 @@
                         <strong id="printerProgressPct">--%</strong>
                     </div>
 
-                    <div class="metricLine">
-                        <strong id="printerLayer">--</strong>
-                        <span id="printerLayerTotal">/ --</span>
-                    </div>
+                    <dl class="subgrid">
+                        <div>
+                            <dt>Current layer</dt>
+                            <dd><strong id="printerLayer">--</strong><span id="printerLayerTotal"> / --</span></dd>
+                        </div>
+                    </dl>
 
                     <div class="bar">
                         <span id="printerProgressBar"></span>
                     </div>
 
-                    <dl class="subgrid">
+                    <dl class="subgrid progressGrid">
                         <div>
                             <dt>Started</dt>
                             <dd id="printerStarted">--</dd>
+                        </div>
+                        <div>
+                            <dt>Ended</dt>
+                            <dd id="printerEnded">--</dd>
                         </div>
                         <div>
                             <dt>Elapsed</dt>

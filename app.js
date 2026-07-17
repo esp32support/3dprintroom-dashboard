@@ -427,6 +427,55 @@ function trayLabel(tray)
     return tray.type ? `Tray ${tray.id + 1} - ${tray.type}` : `Tray ${tray.id + 1}`;
 }
 
+// Bambu's stg_cur sub-stage codes, while gcode_state is RUNNING/PREPARE -
+// same table used by Home Assistant's Bambu integration (community
+// reverse-engineered, not officially documented by Bambu). -1 and 255 both
+// mean "idle/no stage" depending on printer generation; not shown here
+// since the caller only displays this while actively running/preparing.
+const STAGE_TEXT = {
+    0: "Printing",
+    1: "Auto bed leveling",
+    2: "Heating bed",
+    3: "Sweeping XY mech mode",
+    4: "Changing filament",
+    5: "M400 pause",
+    6: "Paused - filament runout",
+    7: "Heating hotend",
+    8: "Calibrating extrusion",
+    9: "Scanning bed surface",
+    10: "Inspecting first layer",
+    11: "Identifying build plate",
+    12: "Calibrating micro lidar",
+    13: "Homing toolhead",
+    14: "Cleaning nozzle tip",
+    15: "Checking extruder temperature",
+    16: "Paused by user",
+    17: "Paused - front cover open",
+    18: "Calibrating micro lidar",
+    19: "Calibrating extrusion flow",
+    20: "Paused - nozzle temp malfunction",
+    21: "Paused - bed temp malfunction",
+    22: "Unloading filament",
+    23: "Paused - step skipped",
+    24: "Loading filament",
+    25: "Calibrating motor noise",
+    26: "Paused - AMS lost",
+    27: "Paused - low fan speed",
+    28: "Paused - chamber temp error",
+    29: "Cooling chamber",
+    30: "Paused by G-code",
+    31: "Motor noise calibration",
+    32: "Paused - nozzle covered",
+    33: "Paused - cutter error",
+    34: "Paused - first layer error",
+    35: "Paused - nozzle clog",
+};
+
+function stageText(stgCur)
+{
+    return STAGE_TEXT[Number(stgCur)] || "Working...";
+}
+
 // Firmware packs per-tray usage as "id:color:type:amount;id:color:type:amount"
 function parseTrayUsage(packed)
 {
@@ -590,8 +639,11 @@ function renderPrintHistory(items)
     items.forEach(item =>
     {
         const row = document.createElement("div");
-        row.className = "historyItem";
+        row.className = "historyItem historyItemClickable";
         row.style.borderLeftColor = "var(--cyan)";
+        row.tabIndex = 0;
+        row.setAttribute("role", "button");
+        row.setAttribute("aria-expanded", "false");
 
         const left = document.createElement("div");
 
@@ -603,6 +655,16 @@ function renderPrintHistory(items)
         sub.textContent = `${item.layers || 0} layers - ${item.start || "?"}`;
         left.appendChild(sub);
 
+        const time = document.createElement("span");
+        time.textContent = printDuration(item.start, item.end);
+
+        row.appendChild(left);
+        row.appendChild(time);
+
+        const detail = document.createElement("div");
+        detail.className = "historyDetail";
+        detail.hidden = true;
+
         const usage = parseTrayUsage(item.trays);
 
         if (usage.length > 0)
@@ -610,14 +672,37 @@ function renderPrintHistory(items)
             const chips = document.createElement("div");
             chips.className = "usageChips";
             usage.forEach(e => chips.appendChild(usageChip(e)));
-            left.appendChild(chips);
+            detail.appendChild(chips);
+        }
+        else
+        {
+            const none = document.createElement("p");
+            none.textContent = "No filament usage recorded for this print - the A1's AMS-lite doesn't report enough data to measure it.";
+            detail.appendChild(none);
         }
 
-        const time = document.createElement("span");
-        time.textContent = printDuration(item.start, item.end);
+        const times = document.createElement("p");
+        times.textContent = `Started ${item.start || "?"} - Ended ${item.end || "?"}`;
+        detail.appendChild(times);
 
-        row.appendChild(left);
-        row.appendChild(time);
+        row.appendChild(detail);
+
+        const toggle = () =>
+        {
+            const hidden = detail.hidden;
+            detail.hidden = !hidden;
+            row.setAttribute("aria-expanded", hidden ? "true" : "false");
+        };
+
+        row.addEventListener("click", toggle);
+        row.addEventListener("keydown", (event) =>
+        {
+            if (event.key === "Enter" || event.key === " ")
+            {
+                event.preventDefault();
+                toggle();
+            }
+        });
 
         list.appendChild(row);
     });
@@ -737,7 +822,11 @@ function updatePrinter(data)
     setDot("printerMqttDot", bambuOk);
 
     setText("printerNameLabel", data.printerName || "Printer");
-    setText("printerState", bambuOk ? state : "PRINTER UNREACHABLE");
+    // The printer settles to FINISH once a job completes and stays there
+    // until the next print starts - showing that literally reads as stuck,
+    // when the printer is really just idle again.
+    const displayState = state === "FINISH" ? "IDLE" : state;
+    setText("printerState", bambuOk ? displayState : "PRINTER UNREACHABLE");
     setText("printerProject", data.subtaskName || "No project");
 
     const hero = byId("printerHero");
@@ -748,11 +837,22 @@ function updatePrinter(data)
         hero.className = `printerHero panel ${mood}`;
     }
 
+    const stageEl = byId("printerStage");
+
+    if (stageEl)
+    {
+        const showStage = bambuOk && (state === "RUNNING" || state === "PREPARE");
+        stageEl.hidden = !showStage;
+
+        if (showStage)
+            stageEl.textContent = stageText(data.stageCur);
+    }
+
     const layer = Number(data.layerNum) || 0;
     const total = Number(data.totalLayerNum) || 0;
 
     setText("printerLayer", total > 0 ? String(layer) : "--");
-    setText("printerLayerTotal", total > 0 ? `/ ${total}` : "/ --");
+    setText("printerLayerTotal", total > 0 ? ` / ${total}` : " / --");
 
     const pct = total > 0 ? Math.round((layer / total) * 100) : 0;
     setText("printerProgressPct", total > 0 ? `${pct}%` : "--%");
@@ -764,30 +864,18 @@ function updatePrinter(data)
 
     const trays = data.trays || [];
     const trayNow = data.trayNow;
-    const active = trays.find(t => t.id === trayNow);
 
-    const swatch = byId("activeSwatch");
-
-    if (swatch)
-        swatch.style.background = active ? trayColorCss(active.color) : "#2a3136";
-
-    // 254 = external spool, 255 = nothing loaded (per Bambu's tray_now field)
-    let activeText = "--";
-
-    if (trayNow === 254)
-        activeText = "External spool";
-    else if (active)
-        activeText = trayLabel(active);
-    else if (bambuOk)
-        activeText = "None loaded";
-
-    setText("activeFilamentText", activeText);
-
-    // Started / elapsed / ETA only make sense while a print is actually running.
+    // Started/Ended/Elapsed describe whichever print is most recent -
+    // still running, or just finished - not just "while running", so you
+    // can see what happened after it's done. currentStart only resets when
+    // a NEW print starts, so this naturally covers both cases.
     const running = bambuOk && state === "RUNNING";
-    setText("printerStarted", running ? (data.currentStart || "--") : "--");
-    setText("printerElapsed", running && data.currentStart
-        ? printDuration(data.currentStart, data.now)
+    const hasCurrentPrint = Boolean(data.currentStart);
+
+    setText("printerStarted", hasCurrentPrint ? data.currentStart : "--");
+    setText("printerEnded", data.currentEnd || "--");
+    setText("printerElapsed", hasCurrentPrint
+        ? printDuration(data.currentStart, data.currentEnd || data.now)
         : "--");
 
     const remainingMin = Number(data.remainingTime) || 0;
