@@ -304,6 +304,31 @@
 
             </article>
 
+            <article class="panel eventsPanel">
+
+                <div class="panelHeader">
+                    <span>System Events</span>
+                    <strong>This session</strong>
+                </div>
+
+                <div class="historyList" id="systemEventsList">
+                    <div class="historyItem">Waiting for data...</div>
+                </div>
+
+            </article>
+
+        </section>
+
+        <section class="dangerZone">
+            <div>
+                <strong>Reboot device</strong>
+                <p>Restarts the master immediately. It'll drop offline for a few seconds while it reconnects.</p>
+            </div>
+            <form id="rebootForm">
+                <input type="password" id="rebootPassword" placeholder="Reboot password" autocomplete="current-password" required>
+                <button type="submit">Reboot</button>
+            </form>
+            <p class="watchdogReason" id="rebootResult"></p>
         </section>
 
     </main>

@@ -226,6 +226,7 @@ function updateStatus(data)
 
     updateAlarm(data);
     renderHistory(data.history);
+    renderSystemEvents(data.systemEvents);
 }
 
 function renderHistory(items)
@@ -350,6 +351,46 @@ function renderBootHistory(items)
 
         const time = document.createElement("span");
         time.textContent = item.time && item.time !== "pending" ? item.time : "syncing...";
+
+        row.appendChild(left);
+        row.appendChild(time);
+
+        list.appendChild(row);
+    });
+}
+
+function renderSystemEvents(items)
+{
+    const list = byId("systemEventsList");
+
+    if (!list)
+        return;
+
+    list.innerHTML = "";
+
+    if (!items || items.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No events this session yet";
+        list.appendChild(empty);
+        return;
+    }
+
+    // Already newest-first from the device (RAM-only log, cleared on reboot).
+    items.forEach(item =>
+    {
+        const row = document.createElement("div");
+        row.className = "historyItem";
+        row.style.borderLeftColor = "var(--cyan)";
+
+        const left = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = item.text || "--";
+        left.appendChild(title);
+
+        const time = document.createElement("span");
+        time.textContent = item.time || "--";
 
         row.appendChild(left);
         row.appendChild(time);
@@ -524,6 +565,48 @@ if (otaTriggerForm)
 
             if (res.ok)
                 byId("otaPassword").value = "";
+        }
+        catch (err)
+        {
+            resultEl.textContent = `Request failed: ${err.message}`;
+        }
+        finally
+        {
+            submitBtn.disabled = false;
+        }
+    });
+}
+
+const rebootForm = byId("rebootForm");
+
+if (rebootForm)
+{
+    rebootForm.addEventListener("submit", async (event) =>
+    {
+        event.preventDefault();
+
+        const resultEl = byId("rebootResult");
+        const submitBtn = rebootForm.querySelector("button[type=submit]");
+
+        submitBtn.disabled = true;
+        resultEl.textContent = "Publishing command...";
+
+        try
+        {
+            const res = await fetch("/api/trigger-reboot", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ password: byId("rebootPassword").value }),
+            });
+
+            const data = await res.json();
+
+            resultEl.textContent = res.ok
+                ? data.message
+                : `Error: ${data.error || res.statusText}`;
+
+            if (res.ok)
+                byId("rebootPassword").value = "";
         }
         catch (err)
         {
