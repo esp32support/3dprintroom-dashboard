@@ -118,6 +118,14 @@ function healthLabel(ok)
     return ok ? "OK" : "FAULT";
 }
 
+function setDot(id, ok)
+{
+    const el = byId(id);
+
+    if (el)
+        el.classList.toggle("ok", !!ok);
+}
+
 function setSensorState(id, name, ok)
 {
     const el = byId(id);
@@ -127,22 +135,6 @@ function setSensorState(id, name, ok)
 
     el.textContent = `${name} ${healthLabel(ok)}`;
     el.style.borderLeftColor = ok ? "var(--green)" : "var(--red)";
-}
-
-function updateAlarm(data)
-{
-    const banner = byId("alarmBanner");
-    const cls = alarmClass(data.alarmLevel);
-
-    banner.className = `alarmBanner ${cls}`;
-
-    if (data.alarmLevel >= 2)
-        banner.classList.add("alarmPulse");
-
-    banner.style.borderLeftColor = colorForLevel(data.alarmLevel);
-
-    setText("alarmText", data.alarmText || "GOOD");
-    setText("alarmMessage", data.alarmMessage || "Air quality normal");
 }
 
 function updateStatus(data)
@@ -200,14 +192,13 @@ function updateStatus(data)
     setText("ssid", data.ssid || "--");
     setText("ip", data.ip || "--");
 
-    setText("wifi", `${data.wifi} dBm`);
-    setText("mqtt", data.mqttConnected ? "CONNECTED" : "DISCONNECTED");
-    setText("watchdog", data.watchdogSafeMode ? "SAFE MODE" : data.watchdogHealthy ? "OK" : "WARNING");
+    setDot("wifiDot", true);
+    setDot("mqttDot", data.mqttConnected);
+    setDot("watchdogDot", !data.watchdogSafeMode && data.watchdogHealthy);
     setText("heap", `${Math.round(data.freeHeap / 1024)} kB`);
     setText("espTemp", `${Number(data.espTemp).toFixed(1)} °C`);
     setText("uptime", formatTime(data.uptime));
     setText("firmware", data.firmware || "--");
-    setText("watchdogReason", data.watchdogReason || "OK");
     setText("connectionState", "ONLINE");
 
     setText("bootCountTotal", data.bootCountTotal ?? "--");
@@ -216,7 +207,6 @@ function updateStatus(data)
     setBar("heapBar", data.freeHeap / 1024, 320,
         data.freeHeap < 50000 ? "var(--orange)" : "var(--green)");
 
-    setText("pressure", `${data.pressure.toFixed(1)} hPa`);
     setText("pressureDetail", `${data.pressure.toFixed(1)} hPa`);
     setText("lastUpdate", new Date().toLocaleTimeString([], { hour12: false }));
 
@@ -224,7 +214,6 @@ function updateStatus(data)
     setSensorState("bmeState", "BME280", data.bmeOK !== false);
     setSensorState("ensState", "ENS160", data.ensOK !== false);
 
-    updateAlarm(data);
     renderHistory(data.history);
     renderSystemEvents(data.systemEvents);
 }
@@ -408,17 +397,12 @@ function renderSystemEvents(items)
     });
 }
 
-function setOffline(message)
+function setOffline()
 {
-    const banner = byId("alarmBanner");
-
-    banner.className = "alarmBanner critical alarmPulse";
-    banner.style.borderLeftColor = "var(--red)";
-
-    setText("alarmText", "OFFLINE");
-    setText("alarmMessage", message || "No data from device");
+    setDot("wifiDot", false);
+    setDot("mqttDot", false);
+    setDot("watchdogDot", false);
     setText("connectionState", "OFFLINE");
-    setText("watchdogReason", "No message received");
 }
 
 // ===== Printer tab =====
@@ -789,13 +773,12 @@ const client = mqtt.connect(`wss://${BROKER_CONFIG.host}:${BROKER_CONFIG.port}/m
 
 client.on("connect", () =>
 {
-    setText("brokerState", "CONNECTED");
-    setText("brokerMessage", "Connected. Waiting for the device's next publish...");
+    setDot("brokerDot", true);
 
     client.subscribe(BROKER_CONFIG.topic, (err) =>
     {
         if (err)
-            setText("brokerMessage", `Subscribe failed: ${err.message}`);
+            setDot("brokerDot", false);
     });
 
     // Subscribed separately rather than with a "#" wildcard, so the viewer
@@ -810,19 +793,18 @@ client.on("connect", () =>
 
 client.on("reconnect", () =>
 {
-    setText("brokerState", "RECONNECTING");
+    setDot("brokerDot", false);
 });
 
 client.on("close", () =>
 {
-    setText("brokerState", "DISCONNECTED");
-    setOffline("Broker connection lost");
+    setDot("brokerDot", false);
+    setOffline();
 });
 
-client.on("error", (err) =>
+client.on("error", () =>
 {
-    setText("brokerState", "ERROR");
-    setText("brokerMessage", err.message || String(err));
+    setDot("brokerDot", false);
 });
 
 client.on("message", (topic, payload) =>
@@ -846,22 +828,21 @@ client.on("message", (topic, payload) =>
     {
         const data = JSON.parse(payload.toString());
         lastMessageAt = Date.now();
-        setText("brokerMessage", "Live data streaming.");
         updateStatus(data);
     }
     catch (err)
     {
-        setText("brokerMessage", `Bad payload: ${err.message}`);
+        setOffline();
     }
 });
 
-setOffline("Connecting to broker...");
+setOffline();
 setPrinterOffline("Waiting for the printer monitor...");
 
 setInterval(() =>
 {
     if (lastMessageAt && Date.now() - lastMessageAt > STALE_AFTER_MS)
-        setOffline("Device has not published in over 30s");
+        setOffline();
 
     if (lastPrinterMessageAt && Date.now() - lastPrinterMessageAt > STALE_AFTER_MS)
         setPrinterOffline("Printer monitor has not published in over 30s");
@@ -976,7 +957,7 @@ document.addEventListener("visibilitychange", () =>
     if (client.connected)
         return;
 
-    setText("brokerState", "RECONNECTING");
+    setDot("brokerDot", false);
     client.reconnect();
 });
 
@@ -1013,6 +994,24 @@ if (otaTriggerToggle && otaTriggerPanel)
             otaTriggerPanel.setAttribute("hidden", "");
 
         otaTriggerToggle.textContent = hidden ? "Hide" : "Update";
+    });
+}
+
+const systemEventsToggle = byId("systemEventsToggle");
+const systemEventsPanel = byId("systemEventsPanel");
+
+if (systemEventsToggle && systemEventsPanel)
+{
+    systemEventsToggle.addEventListener("click", () =>
+    {
+        const hidden = systemEventsPanel.hasAttribute("hidden");
+
+        if (hidden)
+            systemEventsPanel.removeAttribute("hidden");
+        else
+            systemEventsPanel.setAttribute("hidden", "");
+
+        systemEventsToggle.textContent = hidden ? "Hide" : "Events";
     });
 }
 

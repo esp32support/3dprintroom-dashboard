@@ -102,33 +102,46 @@ h1{
 }
 
 .panel,
-.alarmBanner{
+.statusPill{
     background:linear-gradient(180deg,var(--panel2),var(--panel));
     border:1px solid var(--line);
     border-radius:8px;
     box-shadow:0 14px 36px rgba(0,0,0,.28);
 }
 
-.alarmBanner{
+.statusStrip{
     display:flex;
     align-items:center;
-    justify-content:space-between;
-    gap:18px;
-    padding:18px 20px;
-    border-left:8px solid var(--green);
+    flex-wrap:wrap;
+    gap:12px;
 }
 
-.alarmBanner strong{
-    display:block;
-    margin-top:4px;
-    font-size:36px;
-    line-height:1;
-}
-
-.alarmBanner p{
-    margin:0;
+.statusPill{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:0 18px;
+    flex:1;
+    min-width:110px;
     color:var(--muted);
-    text-align:right;
+    font-size:13px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+
+.statusDot{
+    width:13px;
+    height:13px;
+    flex:none;
+    border-radius:50%;
+    background:var(--red);
+    box-shadow:0 0 8px rgba(255,77,94,.55);
+}
+
+.statusDot.ok{
+    background:var(--green);
+    box-shadow:0 0 8px rgba(53,208,127,.55);
 }
 
 .label{
@@ -255,6 +268,16 @@ dd{
 
 .infoBtn:hover{
     border-color:var(--cyan);
+}
+
+.toolsButtonRow{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+}
+
+.toolsButtonRow .infoBtn{
+    margin-top:0;
 }
 
 .bootInfoPanel{
@@ -503,15 +526,6 @@ dd{
     border-color:var(--red);
 }
 
-.alarmPulse{
-    animation:pulse 1.2s ease-in-out infinite alternate;
-}
-
-@keyframes pulse{
-    from{box-shadow:0 14px 36px rgba(0,0,0,.28);}
-    to{box-shadow:0 0 28px rgba(255,77,94,.45);}
-}
-
 .dangerZone{
     display:flex;
     flex-wrap:wrap;
@@ -739,14 +753,8 @@ dd{
         padding:12px;
     }
 
-    .alarmBanner,
     .airPanel{
         display:block;
-    }
-
-    .alarmBanner p{
-        margin-top:10px;
-        text-align:left;
     }
 
     .aqiDial{

@@ -16,12 +16,23 @@
                 <h1>3DPrintRoomMonitor</h1>
             </div>
 
-            <section class="alarmBanner good" id="alarmBanner" aria-live="polite">
-                <div>
-                    <span class="label">Alarm</span>
-                    <strong id="alarmText">GOOD</strong>
+            <section class="statusStrip" id="statusStrip" aria-live="polite">
+                <div class="statusPill">
+                    <span class="statusDot" id="wifiDot"></span>
+                    <span>WiFi</span>
                 </div>
-                <p id="alarmMessage">Connecting to broker...</p>
+                <div class="statusPill">
+                    <span class="statusDot" id="brokerDot"></span>
+                    <span>Broker</span>
+                </div>
+                <div class="statusPill">
+                    <span class="statusDot" id="mqttDot"></span>
+                    <span>MQTT</span>
+                </div>
+                <div class="statusPill">
+                    <span class="statusDot" id="watchdogDot"></span>
+                    <span>Watchdog</span>
+                </div>
             </section>
         </header>
 
@@ -59,6 +70,11 @@
                     <div>
                         <dt>BME280</dt>
                         <dd id="tempBME">--.- &deg;C</dd>
+                    </div>
+
+                    <div>
+                        <dt>Pressure</dt>
+                        <dd id="pressureDetail">---- hPa</dd>
                     </div>
                 </dl>
             </article>
@@ -183,21 +199,6 @@
                     </div>
 
                     <div>
-                        <dt>WiFi</dt>
-                        <dd id="wifi">-- dBm</dd>
-                    </div>
-
-                    <div>
-                        <dt>MQTT</dt>
-                        <dd id="mqtt">--</dd>
-                    </div>
-
-                    <div>
-                        <dt>Watchdog</dt>
-                        <dd id="watchdog">--</dd>
-                    </div>
-
-                    <div>
                         <dt>Heap</dt>
                         <dd id="heap">-- kB</dd>
                     </div>
@@ -215,14 +216,26 @@
                     <div>
                         <dt>Firmware</dt>
                         <dd id="firmware">--</dd>
-                        <button type="button" class="infoBtn" id="bootInfoToggle">History</button>
-                        <button type="button" class="infoBtn" id="otaTriggerToggle">Update</button>
                     </div>
 
                 </dl>
 
                 <div class="bar heapBar">
                     <span id="heapBar"></span>
+                </div>
+
+            </article>
+
+            <article class="panel toolsPanel">
+
+                <div class="panelHeader">
+                    <span>Firmware Tools</span>
+                </div>
+
+                <div class="toolsButtonRow">
+                    <button type="button" class="infoBtn" id="bootInfoToggle">History</button>
+                    <button type="button" class="infoBtn" id="otaTriggerToggle">Update</button>
+                    <button type="button" class="infoBtn" id="systemEventsToggle">Events</button>
                 </div>
 
                 <div class="bootInfoPanel" id="bootInfoPanel" hidden>
@@ -253,9 +266,11 @@
                     <p class="watchdogReason" id="otaTriggerResult"></p>
                 </div>
 
-                <p class="watchdogReason" id="watchdogReason">
-                    Waiting for data
-                </p>
+                <div class="bootInfoPanel" id="systemEventsPanel" hidden>
+                    <div class="historyList" id="systemEventsList">
+                        <div class="historyItem">Waiting for data...</div>
+                    </div>
+                </div>
 
             </article>
 
@@ -263,7 +278,6 @@
 
                 <div class="panelHeader">
                     <span>Sensor Status</span>
-                    <strong id="pressure">---- hPa</strong>
                 </div>
 
                 <div class="sensorPills">
@@ -273,11 +287,6 @@
                 </div>
 
                 <dl class="statusList">
-                    <div>
-                        <dt>Pressure</dt>
-                        <dd id="pressureDetail">---- hPa</dd>
-                    </div>
-
                     <div>
                         <dt>Last message</dt>
                         <dd id="lastUpdate">--</dd>
@@ -294,32 +303,6 @@
                 </div>
 
                 <div class="historyList" id="historyList">
-                    <div class="historyItem">Waiting for data...</div>
-                </div>
-
-            </article>
-
-            <article class="panel connectPanel">
-
-                <div class="panelHeader">
-                    <span>Broker connection</span>
-                    <strong id="brokerState">CONNECTING</strong>
-                </div>
-
-                <p class="watchdogReason" id="brokerMessage">
-                    Loading broker.js configuration...
-                </p>
-
-            </article>
-
-            <article class="panel eventsPanel">
-
-                <div class="panelHeader">
-                    <span>System Events</span>
-                    <strong>This session</strong>
-                </div>
-
-                <div class="historyList" id="systemEventsList">
                     <div class="historyItem">Waiting for data...</div>
                 </div>
 
