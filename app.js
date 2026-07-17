@@ -517,6 +517,57 @@ function renderTrays(trays, trayNow)
     });
 }
 
+// Mirrors Bambu Studio's own AMS panel look (A1-A4 spool graphics), unlike
+// the plain list in the Filament card - that one's earmarked to become a
+// curated filament library later (see PLAN.md), this is just "what's
+// loaded right now."
+function renderAmsGrid(trays, trayNow)
+{
+    const grid = byId("amsGrid");
+
+    if (!grid)
+        return;
+
+    grid.innerHTML = "";
+
+    if (!trays || trays.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "Waiting for data...";
+        grid.appendChild(empty);
+        return;
+    }
+
+    trays.forEach(tray =>
+    {
+        const slot = document.createElement("div");
+        slot.className = "amsSlot" + (tray.id === trayNow ? " active" : "");
+
+        const label = document.createElement("span");
+        label.className = "amsSlotLabel";
+        label.textContent = `A${tray.id + 1}`;
+
+        const spool = document.createElement("span");
+        spool.className = "amsSpool";
+        spool.style.background = tray.type ? trayColorCss(tray.color) : "#2a3136";
+
+        const hole = document.createElement("span");
+        hole.className = "amsSpoolHole";
+        spool.appendChild(hole);
+
+        const material = document.createElement("span");
+        material.className = "amsSlotMaterial" + (tray.type ? "" : " empty");
+        material.textContent = tray.type || "Empty";
+
+        slot.appendChild(label);
+        slot.appendChild(spool);
+        slot.appendChild(material);
+
+        grid.appendChild(slot);
+    });
+}
+
 function renderPrintHistory(items)
 {
     const list = byId("printHistoryList");
@@ -709,6 +760,7 @@ function updatePrinter(data)
 
     setText("printerNozzle", `${Number(data.nozzleTemp || 0).toFixed(1)} °C`);
     setText("printerBed", `${Number(data.bedTemp || 0).toFixed(1)} °C`);
+    setText("printerFan", bambuOk ? `${Number(data.fanSpeedPct) || 0}%` : "--%");
 
     const trays = data.trays || [];
     const trayNow = data.trayNow;
@@ -742,6 +794,7 @@ function updatePrinter(data)
     setText("printerEta", running && remainingMin > 0 ? formatTime(remainingMin * 60) : "--");
 
     renderTrays(trays, trayNow);
+    renderAmsGrid(trays, trayNow);
     renderPrintHistory(data.history || []);
     renderTodayTotals(data.history || []);
 }

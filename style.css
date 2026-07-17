@@ -662,6 +662,70 @@ dd{
     font-size:28px;
 }
 
+.amsSubhead{
+    margin-top:18px;
+}
+
+.amsGrid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+}
+
+.amsSlot{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    padding:12px 8px;
+    border-radius:8px;
+    background:#14181b;
+    border:2px solid #2f363d;
+    text-align:center;
+}
+
+.amsSlot.active{
+    border-color:var(--cyan);
+}
+
+.amsSlotLabel{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+}
+
+.amsSpool{
+    position:relative;
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    border:2px solid #0c0f11;
+}
+
+.amsSpoolHole{
+    position:absolute;
+    top:50%;
+    left:50%;
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    background:#14181b;
+    border:1px solid #2f363d;
+    transform:translate(-50%,-50%);
+}
+
+.amsSlotMaterial{
+    font-size:13px;
+    font-weight:800;
+}
+
+.amsSlotMaterial.empty{
+    color:var(--muted);
+    font-weight:600;
+}
+
 .printerGrid{
     grid-template-columns:1fr 1fr;
 }
