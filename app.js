@@ -298,6 +298,15 @@ function detailForResetReason(reason)
             return "Supply voltage dropped too low - check the USB cable/power supply.";
         case "SDIO reset":
             return "Reset via the SDIO slave interface (not used by this device).";
+        case "Remote reboot (dashboard)":
+        case "Remote reboot (LAN dashboard)":
+            return "You (or someone with the reboot password) triggered this restart intentionally.";
+        case "Firmware update (remote/MQTT)":
+            return "A firmware update was triggered remotely and applied successfully.";
+        case "Firmware update (LAN upload)":
+            return "A firmware update was uploaded via the LAN dashboard and applied successfully.";
+        case "Dashboard files update (remote/MQTT)":
+            return "The LAN dashboard's files (HTML/CSS/JS) were updated remotely.";
         default:
             return "Reset reason not recognized by the firmware.";
     }
