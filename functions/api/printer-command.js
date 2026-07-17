@@ -1,8 +1,8 @@
 // POST /api/printer-command
 // Relays a command to the printer monitor (3dprinterinfo device) over MQTT.
-// Same server-side-only credential handling as the other Functions here: the
-// dashboard password gates the endpoint, and the real MQTT publish
-// credential never reaches the browser.
+// Gated by the session cookie (_middleware.js already blocks unauthenticated
+// requests to this route) - the real MQTT publish credential never reaches
+// the browser either way.
 //
 // Commands:
 //   { command: "newSpool", trayId: 0..3 }  - reset that tray's running total
@@ -25,11 +25,7 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
-    const { password, command, trayId } = body;
-
-    if (!password || password !== env.DASHBOARD_PASSWORD) {
-        return jsonResponse({ error: "unauthorized" }, 401);
-    }
+    const { command, trayId } = body;
 
     if (command !== "newSpool") {
         return jsonResponse({ error: `unknown command: ${command}` }, 400);

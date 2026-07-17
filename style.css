@@ -552,26 +552,6 @@ dd{
     max-width:420px;
 }
 
-.dangerZone form{
-    display:flex;
-    gap:8px;
-}
-
-.dangerZone input{
-    padding:8px 10px;
-    border-radius:6px;
-    border:1px solid #4a2226;
-    background:#0c0f11;
-    color:var(--text);
-    font-size:14px;
-    width:180px;
-}
-
-.dangerZone input:focus{
-    outline:none;
-    border-color:var(--red);
-}
-
 .dangerZone button{
     padding:8px 16px;
     border-radius:6px;

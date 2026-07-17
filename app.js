@@ -907,10 +907,7 @@ if (logoutBtn)
 
 async function onNewSpool(trayId, btn)
 {
-    const password = window.prompt(
-        `Reset the running total for tray ${trayId + 1}?\n\nEnter the dashboard password:`);
-
-    if (!password)
+    if (!window.confirm(`Reset the running total for tray ${trayId + 1}?`))
         return;
 
     const original = btn.textContent;
@@ -922,7 +919,7 @@ async function onNewSpool(trayId, btn)
         const res = await fetch("/api/printer-command", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ password, command: "newSpool", trayId }),
+            body: JSON.stringify({ command: "newSpool", trayId }),
         });
 
         const data = await res.json();
@@ -1037,7 +1034,6 @@ if (otaTriggerForm)
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
-                    password: byId("otaPassword").value,
                     firmwareUrl: byId("otaUrl").value,
                     authHeader: byId("otaAuthHeader").value,
                     acceptHeader: byId("otaAcceptHeader").value,
@@ -1049,9 +1045,6 @@ if (otaTriggerForm)
             resultEl.textContent = res.ok
                 ? data.message
                 : `Error: ${data.error || res.statusText}`;
-
-            if (res.ok)
-                byId("otaPassword").value = "";
         }
         catch (err)
         {
@@ -1064,36 +1057,28 @@ if (otaTriggerForm)
     });
 }
 
-const rebootForm = byId("rebootForm");
+const rebootBtn = byId("rebootBtn");
 
-if (rebootForm)
+if (rebootBtn)
 {
-    rebootForm.addEventListener("submit", async (event) =>
+    rebootBtn.addEventListener("click", async () =>
     {
-        event.preventDefault();
+        if (!window.confirm("Reboot the master now? It'll drop offline for a few seconds."))
+            return;
 
         const resultEl = byId("rebootResult");
-        const submitBtn = rebootForm.querySelector("button[type=submit]");
 
-        submitBtn.disabled = true;
+        rebootBtn.disabled = true;
         resultEl.textContent = "Publishing command...";
 
         try
         {
-            const res = await fetch("/api/trigger-reboot", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ password: byId("rebootPassword").value }),
-            });
-
+            const res = await fetch("/api/trigger-reboot", { method: "POST" });
             const data = await res.json();
 
             resultEl.textContent = res.ok
                 ? data.message
                 : `Error: ${data.error || res.statusText}`;
-
-            if (res.ok)
-                byId("rebootPassword").value = "";
         }
         catch (err)
         {
@@ -1101,7 +1086,7 @@ if (rebootForm)
         }
         finally
         {
-            submitBtn.disabled = false;
+            rebootBtn.disabled = false;
         }
     });
 }

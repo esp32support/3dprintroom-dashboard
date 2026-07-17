@@ -2,7 +2,8 @@
 // Publishes an MQTT-triggered firmware update command, without ever putting
 // the device's MQTT/OTA credentials in the public dashboard's JS. Those
 // credentials live only as Cloudflare Pages environment secrets, read here
-// server-side; the browser only ever sees a dashboard-specific password.
+// server-side. Gated by the session cookie (_middleware.js already blocks
+// unauthenticated requests to this route).
 import { mqttPublishOnce } from "../_lib/mqtt-mini.js";
 
 function jsonResponse(obj, status = 200) {
@@ -22,11 +23,7 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
-    const { password, firmwareUrl, authHeader, acceptHeader } = body;
-
-    if (!password || password !== env.DASHBOARD_PASSWORD) {
-        return jsonResponse({ error: "unauthorized" }, 401);
-    }
+    const { firmwareUrl, authHeader, acceptHeader } = body;
 
     if (!firmwareUrl) {
         return jsonResponse({ error: "firmwareUrl is required" }, 400);

@@ -246,10 +246,6 @@
                 <div class="bootInfoPanel" id="otaTriggerPanel" hidden>
                     <form class="otaForm" id="otaTriggerForm">
                         <label>
-                            Dashboard password
-                            <input type="password" id="otaPassword" autocomplete="current-password" required>
-                        </label>
-                        <label>
                             Firmware URL
                             <input type="text" id="otaUrl" placeholder="https://api.github.com/repos/OWNER/REPO/releases/assets/123" required>
                         </label>
@@ -315,10 +311,7 @@
                 <strong>Reboot device</strong>
                 <p>Restarts the master immediately. It'll drop offline for a few seconds while it reconnects.</p>
             </div>
-            <form id="rebootForm">
-                <input type="password" id="rebootPassword" placeholder="Reboot password" autocomplete="current-password" required>
-                <button type="submit">Reboot</button>
-            </form>
+            <button type="button" id="rebootBtn">Reboot</button>
             <p class="watchdogReason" id="rebootResult"></p>
         </section>
 
