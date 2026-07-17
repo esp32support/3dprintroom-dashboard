@@ -343,7 +343,9 @@ function renderBootHistory(items)
         const title = document.createElement("strong");
         const detail = document.createElement("small");
         title.textContent = item.reason || "Unknown";
-        detail.textContent = detailForResetReason(item.reason);
+        detail.textContent = item.activity
+            ? `${detailForResetReason(item.reason)} (was ${item.activity})`
+            : detailForResetReason(item.reason);
         left.appendChild(title);
         left.appendChild(detail);
 
