@@ -116,6 +116,19 @@ h1{
     gap:12px;
 }
 
+#printerStatusStrip{
+    margin-bottom:18px;
+}
+
+.stripLabel{
+    color:var(--muted);
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    white-space:nowrap;
+}
+
 .statusPill{
     display:flex;
     align-items:center;
@@ -640,10 +653,6 @@ dd{
     color:var(--muted);
     font-size:13px;
     line-height:1.5;
-}
-
-.connSubhead{
-    margin-top:18px;
 }
 
 .tempGrid dd{

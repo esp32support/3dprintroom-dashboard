@@ -682,9 +682,10 @@ function updatePrinter(data)
     const state = data.gcodeState || "UNKNOWN";
     const bambuOk = data.bambuConnected === true;
 
-    setText("printerMonitorState", data.wifiConnected ? "ONLINE" : "OFFLINE");
-    setText("printerLinkState", bambuOk ? "CONNECTED" : "DISCONNECTED");
+    setDot("printerWifiDot", data.wifiConnected === true);
+    setDot("printerMqttDot", bambuOk);
 
+    setText("printerNameLabel", data.printerName || "Printer");
     setText("printerState", bambuOk ? state : "PRINTER UNREACHABLE");
     setText("printerProject", data.subtaskName || "No project");
 
@@ -730,12 +731,15 @@ function updatePrinter(data)
 
     setText("activeFilamentText", activeText);
 
-    // Started / elapsed only make sense while a print is actually running.
+    // Started / elapsed / ETA only make sense while a print is actually running.
     const running = bambuOk && state === "RUNNING";
     setText("printerStarted", running ? (data.currentStart || "--") : "--");
     setText("printerElapsed", running && data.currentStart
         ? printDuration(data.currentStart, data.now)
         : "--");
+
+    const remainingMin = Number(data.remainingTime) || 0;
+    setText("printerEta", running && remainingMin > 0 ? formatTime(remainingMin * 60) : "--");
 
     renderTrays(trays, trayNow);
     renderPrintHistory(data.history || []);
@@ -744,10 +748,11 @@ function updatePrinter(data)
 
 function setPrinterOffline(message)
 {
+    setDot("printerWifiDot", false);
+    setDot("printerMqttDot", false);
+
     setText("printerState", "NO DATA");
     setText("printerProject", message || "Monitor not reporting");
-    setText("printerMonitorState", "OFFLINE");
-    setText("printerLinkState", "--");
 
     const hero = byId("printerHero");
 

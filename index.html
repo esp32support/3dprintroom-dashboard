@@ -17,6 +17,7 @@
             </div>
 
             <section class="statusStrip" id="statusStrip" aria-live="polite">
+                <span class="stripLabel">Master</span>
                 <div class="statusPill">
                     <span class="statusDot" id="wifiDot"></span>
                     <span>WiFi</span>
@@ -319,9 +320,21 @@
 
         <div class="tabPanel" id="tab-printer" role="tabpanel" aria-labelledby="tabBtn-printer" hidden>
 
+            <section class="statusStrip" id="printerStatusStrip" aria-live="polite">
+                <span class="stripLabel">Printer</span>
+                <div class="statusPill">
+                    <span class="statusDot" id="printerWifiDot"></span>
+                    <span>WiFi</span>
+                </div>
+                <div class="statusPill">
+                    <span class="statusDot" id="printerMqttDot"></span>
+                    <span>MQTT</span>
+                </div>
+            </section>
+
             <section class="printerHero panel" id="printerHero">
                 <div class="printerHeroMain">
-                    <span class="label">Printer</span>
+                    <span class="label" id="printerNameLabel">Printer</span>
                     <strong id="printerState">WAITING FOR DATA</strong>
                     <p id="printerProject">No project</p>
                 </div>
@@ -360,6 +373,10 @@
                             <dt>Elapsed</dt>
                             <dd id="printerElapsed">--</dd>
                         </div>
+                        <div>
+                            <dt>ETA</dt>
+                            <dd id="printerEta">--</dd>
+                        </div>
                     </dl>
                 </article>
 
@@ -378,42 +395,12 @@
                             <dd id="printerBed">--.- &deg;C</dd>
                         </div>
                     </dl>
-
-                    <div class="panelHeader connSubhead">
-                        <span>Link status</span>
-                    </div>
-
-                    <dl class="statusList">
-                        <div>
-                            <dt>Monitor</dt>
-                            <dd id="printerMonitorState">--</dd>
-                        </div>
-                        <div>
-                            <dt>Printer MQTT</dt>
-                            <dd id="printerLinkState">--</dd>
-                        </div>
-                    </dl>
                 </article>
-
-                <article class="panel">
-                    <div class="panelHeader">
-                        <span>Today</span>
-                        <strong id="todayPrintCount">0 prints</strong>
-                    </div>
-
-                    <div class="historyList" id="todayTotalsList">
-                        <div class="historyItem">No prints logged today</div>
-                    </div>
-                </article>
-
-            </section>
-
-            <section class="secondaryGrid printerGrid">
 
                 <article class="panel amsPanel">
                     <div class="panelHeader">
-                        <span>AMS trays</span>
-                        <strong>Filament</strong>
+                        <span>Filament</span>
+                        <strong>AMS</strong>
                     </div>
 
                     <p class="hint">
@@ -424,6 +411,21 @@
 
                     <div class="trayList" id="trayList">
                         <div class="historyItem">Waiting for data...</div>
+                    </div>
+                </article>
+
+            </section>
+
+            <section class="secondaryGrid printerGrid">
+
+                <article class="panel">
+                    <div class="panelHeader">
+                        <span>Today</span>
+                        <strong id="todayPrintCount">0 prints</strong>
+                    </div>
+
+                    <div class="historyList" id="todayTotalsList">
+                        <div class="historyItem">No prints logged today</div>
                     </div>
                 </article>
 
