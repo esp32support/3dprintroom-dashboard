@@ -470,3 +470,68 @@ if (bootInfoToggle && bootInfoPanel)
         bootInfoToggle.textContent = hidden ? "Hide" : "History";
     });
 }
+
+const otaTriggerToggle = byId("otaTriggerToggle");
+const otaTriggerPanel = byId("otaTriggerPanel");
+
+if (otaTriggerToggle && otaTriggerPanel)
+{
+    otaTriggerToggle.addEventListener("click", () =>
+    {
+        const hidden = otaTriggerPanel.hasAttribute("hidden");
+
+        if (hidden)
+            otaTriggerPanel.removeAttribute("hidden");
+        else
+            otaTriggerPanel.setAttribute("hidden", "");
+
+        otaTriggerToggle.textContent = hidden ? "Hide" : "Update";
+    });
+}
+
+const otaTriggerForm = byId("otaTriggerForm");
+
+if (otaTriggerForm)
+{
+    otaTriggerForm.addEventListener("submit", async (event) =>
+    {
+        event.preventDefault();
+
+        const resultEl = byId("otaTriggerResult");
+        const submitBtn = otaTriggerForm.querySelector("button[type=submit]");
+
+        submitBtn.disabled = true;
+        resultEl.textContent = "Publishing command...";
+
+        try
+        {
+            const res = await fetch("/api/trigger-ota", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    password: byId("otaPassword").value,
+                    firmwareUrl: byId("otaUrl").value,
+                    authHeader: byId("otaAuthHeader").value,
+                    acceptHeader: byId("otaAcceptHeader").value,
+                }),
+            });
+
+            const data = await res.json();
+
+            resultEl.textContent = res.ok
+                ? data.message
+                : `Error: ${data.error || res.statusText}`;
+
+            if (res.ok)
+                byId("otaPassword").value = "";
+        }
+        catch (err)
+        {
+            resultEl.textContent = `Request failed: ${err.message}`;
+        }
+        finally
+        {
+            submitBtn.disabled = false;
+        }
+    });
+}

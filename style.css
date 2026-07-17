@@ -219,6 +219,44 @@ dd{
     display:none;
 }
 
+.otaForm{
+    display:grid;
+    gap:10px;
+    margin-top:4px;
+}
+
+.otaForm label{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    font-size:12px;
+    color:var(--muted);
+    font-weight:700;
+    text-transform:uppercase;
+}
+
+.otaForm input{
+    padding:8px 10px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#0c0f11;
+    color:var(--text);
+    font-size:14px;
+    font-weight:500;
+    text-transform:none;
+    font-family:inherit;
+}
+
+.otaForm input:focus{
+    outline:none;
+    border-color:var(--cyan);
+}
+
+.otaForm button{
+    justify-self:start;
+    margin-top:4px;
+}
+
 .airPanel{
     display:grid;
     grid-template-columns:160px 1fr;

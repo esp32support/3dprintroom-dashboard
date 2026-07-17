@@ -208,6 +208,7 @@
                         <dt>Firmware</dt>
                         <dd id="firmware">--</dd>
                         <button type="button" class="infoBtn" id="bootInfoToggle">History</button>
+                        <button type="button" class="infoBtn" id="otaTriggerToggle">Update</button>
                     </div>
 
                 </dl>
@@ -219,6 +220,29 @@
                 <div class="bootInfoPanel" id="bootInfoPanel" hidden>
                     <p class="compact">Total boots (all-time): <strong id="bootCountTotal">--</strong></p>
                     <div class="historyList" id="bootHistoryList"></div>
+                </div>
+
+                <div class="bootInfoPanel" id="otaTriggerPanel" hidden>
+                    <form class="otaForm" id="otaTriggerForm">
+                        <label>
+                            Dashboard password
+                            <input type="password" id="otaPassword" autocomplete="current-password" required>
+                        </label>
+                        <label>
+                            Firmware URL
+                            <input type="text" id="otaUrl" placeholder="https://api.github.com/repos/OWNER/REPO/releases/assets/123" required>
+                        </label>
+                        <label>
+                            Authorization header (optional)
+                            <input type="text" id="otaAuthHeader" placeholder="Bearer github_pat_...">
+                        </label>
+                        <label>
+                            Accept header (optional)
+                            <input type="text" id="otaAcceptHeader" placeholder="application/octet-stream">
+                        </label>
+                        <button type="submit" class="infoBtn">Trigger Update</button>
+                    </form>
+                    <p class="watchdogReason" id="otaTriggerResult"></p>
                 </div>
 
                 <p class="watchdogReason" id="watchdogReason">
