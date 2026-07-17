@@ -25,6 +25,13 @@
             </section>
         </header>
 
+        <nav class="tabNav" role="tablist">
+            <button type="button" class="tabBtn active" id="tabBtn-room" role="tab" aria-selected="true" aria-controls="tab-room">Room</button>
+            <button type="button" class="tabBtn" id="tabBtn-printer" role="tab" aria-selected="false" aria-controls="tab-printer">Printer</button>
+        </nav>
+
+        <div class="tabPanel" id="tab-room" role="tabpanel" aria-labelledby="tabBtn-room">
+
         <section class="primaryGrid">
 
             <article class="panel primaryMetric">
@@ -330,6 +337,133 @@
             </form>
             <p class="watchdogReason" id="rebootResult"></p>
         </section>
+
+        </div><!-- /tab-room -->
+
+        <div class="tabPanel" id="tab-printer" role="tabpanel" aria-labelledby="tabBtn-printer" hidden>
+
+            <section class="printerHero panel" id="printerHero">
+                <div class="printerHeroMain">
+                    <span class="label">Printer</span>
+                    <strong id="printerState">WAITING FOR DATA</strong>
+                    <p id="printerProject">No project</p>
+                </div>
+                <div class="printerHeroSide">
+                    <span class="label">Active filament</span>
+                    <div class="activeFilament">
+                        <span class="swatch" id="activeSwatch"></span>
+                        <strong id="activeFilamentText">--</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="primaryGrid">
+
+                <article class="panel">
+                    <div class="panelHeader">
+                        <span>Progress</span>
+                        <strong id="printerProgressPct">--%</strong>
+                    </div>
+
+                    <div class="metricLine">
+                        <strong id="printerLayer">--</strong>
+                        <span id="printerLayerTotal">/ --</span>
+                    </div>
+
+                    <div class="bar">
+                        <span id="printerProgressBar"></span>
+                    </div>
+
+                    <dl class="subgrid">
+                        <div>
+                            <dt>Started</dt>
+                            <dd id="printerStarted">--</dd>
+                        </div>
+                        <div>
+                            <dt>Elapsed</dt>
+                            <dd id="printerElapsed">--</dd>
+                        </div>
+                    </dl>
+                </article>
+
+                <article class="panel">
+                    <div class="panelHeader">
+                        <span>Temperatures</span>
+                    </div>
+
+                    <dl class="subgrid tempGrid">
+                        <div>
+                            <dt>Nozzle</dt>
+                            <dd id="printerNozzle">--.- &deg;C</dd>
+                        </div>
+                        <div>
+                            <dt>Bed</dt>
+                            <dd id="printerBed">--.- &deg;C</dd>
+                        </div>
+                    </dl>
+
+                    <div class="panelHeader connSubhead">
+                        <span>Link status</span>
+                    </div>
+
+                    <dl class="statusList">
+                        <div>
+                            <dt>Monitor</dt>
+                            <dd id="printerMonitorState">--</dd>
+                        </div>
+                        <div>
+                            <dt>Printer MQTT</dt>
+                            <dd id="printerLinkState">--</dd>
+                        </div>
+                    </dl>
+                </article>
+
+                <article class="panel">
+                    <div class="panelHeader">
+                        <span>Today</span>
+                        <strong id="todayPrintCount">0 prints</strong>
+                    </div>
+
+                    <div class="historyList" id="todayTotalsList">
+                        <div class="historyItem">No prints logged today</div>
+                    </div>
+                </article>
+
+            </section>
+
+            <section class="secondaryGrid printerGrid">
+
+                <article class="panel amsPanel">
+                    <div class="panelHeader">
+                        <span>AMS trays</span>
+                        <strong>Filament</strong>
+                    </div>
+
+                    <p class="hint">
+                        The A1's AMS-lite doesn't report how much filament is left on a
+                        spool, so usage is counted per print instead. Press "New spool"
+                        when you physically swap one to reset its running total.
+                    </p>
+
+                    <div class="trayList" id="trayList">
+                        <div class="historyItem">Waiting for data...</div>
+                    </div>
+                </article>
+
+                <article class="panel historyPanel">
+                    <div class="panelHeader">
+                        <span>Print history</span>
+                        <strong>Recent</strong>
+                    </div>
+
+                    <div class="historyList" id="printHistoryList">
+                        <div class="historyItem">Waiting for data...</div>
+                    </div>
+                </article>
+
+            </section>
+
+        </div><!-- /tab-printer -->
 
     </main>
 

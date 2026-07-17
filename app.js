@@ -421,10 +421,363 @@ function setOffline(message)
     setText("watchdogReason", "No message received");
 }
 
+// ===== Printer tab =====
+
+// The printer reports tray colours as hex RRGGBBAA; CSS wants #RRGGBB.
+function trayColorCss(hex)
+{
+    if (!hex || hex.length < 6)
+        return "#2a3136";   // unknown - neutral grey
+
+    return "#" + hex.slice(0, 6);
+}
+
+function trayLabel(tray)
+{
+    if (!tray)
+        return "--";
+
+    // type is blank until the printer actually reports the tray's filament.
+    return tray.type ? `Tray ${tray.id + 1} - ${tray.type}` : `Tray ${tray.id + 1}`;
+}
+
+// Firmware packs per-tray usage as "id:color:type:amount;id:color:type:amount"
+function parseTrayUsage(packed)
+{
+    if (!packed)
+        return [];
+
+    return packed.split(";").filter(Boolean).map(chunk =>
+    {
+        const [id, color, type, amount] = chunk.split(":");
+        return { id: Number(id), color, type, amount };
+    });
+}
+
+function usageChip(entry)
+{
+    const chip = document.createElement("span");
+    chip.className = "usageChip";
+
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = trayColorCss(entry.color);
+
+    const label = document.createElement("span");
+    label.textContent = `${entry.type || "?"} ${entry.amount || ""}`.trim();
+
+    chip.appendChild(sw);
+    chip.appendChild(label);
+    return chip;
+}
+
+function renderTrays(trays, trayNow)
+{
+    const list = byId("trayList");
+
+    if (!list)
+        return;
+
+    list.innerHTML = "";
+
+    if (!trays || trays.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No tray data yet";
+        list.appendChild(empty);
+        return;
+    }
+
+    trays.forEach(tray =>
+    {
+        const row = document.createElement("div");
+        row.className = "trayItem" + (tray.id === trayNow ? " active" : "");
+
+        const sw = document.createElement("span");
+        sw.className = "swatch";
+        sw.style.background = trayColorCss(tray.color);
+
+        const meta = document.createElement("div");
+        meta.className = "trayMeta";
+
+        const title = document.createElement("strong");
+        title.textContent = trayLabel(tray);
+
+        const sub = document.createElement("small");
+
+        if (tray.id === trayNow)
+            sub.textContent = "Currently printing";
+        else if (!tray.type)
+            sub.textContent = "No filament data";
+        else
+            sub.textContent = "Idle";
+
+        meta.appendChild(title);
+        meta.appendChild(sub);
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "infoBtn";
+        btn.textContent = "New spool";
+        btn.dataset.trayId = tray.id;
+        btn.addEventListener("click", () => onNewSpool(tray.id, btn));
+
+        row.appendChild(sw);
+        row.appendChild(meta);
+        row.appendChild(btn);
+
+        list.appendChild(row);
+    });
+}
+
+function renderPrintHistory(items)
+{
+    const list = byId("printHistoryList");
+
+    if (!list)
+        return;
+
+    list.innerHTML = "";
+
+    if (!items || items.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No prints logged yet";
+        list.appendChild(empty);
+        return;
+    }
+
+    // Already newest-first from the device.
+    items.forEach(item =>
+    {
+        const row = document.createElement("div");
+        row.className = "historyItem";
+        row.style.borderLeftColor = "var(--cyan)";
+
+        const left = document.createElement("div");
+
+        const title = document.createElement("strong");
+        title.textContent = item.name || "Untitled";
+        left.appendChild(title);
+
+        const sub = document.createElement("small");
+        sub.textContent = `${item.layers || 0} layers - ${item.start || "?"}`;
+        left.appendChild(sub);
+
+        const usage = parseTrayUsage(item.trays);
+
+        if (usage.length > 0)
+        {
+            const chips = document.createElement("div");
+            chips.className = "usageChips";
+            usage.forEach(e => chips.appendChild(usageChip(e)));
+            left.appendChild(chips);
+        }
+
+        const time = document.createElement("span");
+        time.textContent = printDuration(item.start, item.end);
+
+        row.appendChild(left);
+        row.appendChild(time);
+
+        list.appendChild(row);
+    });
+}
+
+// Firmware timestamps are local "YYYY-MM-DD HH:MM:SS" strings.
+function parseDeviceTime(s)
+{
+    if (!s || s === "unknown" || s === "pending")
+        return null;
+
+    const d = new Date(s.replace(" ", "T"));
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function printDuration(start, end)
+{
+    const a = parseDeviceTime(start);
+    const b = parseDeviceTime(end);
+
+    if (!a || !b)
+        return "--";
+
+    return formatTime(Math.max(0, Math.round((b - a) / 1000)));
+}
+
+function isToday(s)
+{
+    const d = parseDeviceTime(s);
+
+    if (!d)
+        return false;
+
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear()
+        && d.getMonth() === now.getMonth()
+        && d.getDate() === now.getDate();
+}
+
+function renderTodayTotals(items)
+{
+    const list = byId("todayTotalsList");
+
+    if (!list)
+        return;
+
+    list.innerHTML = "";
+
+    const todays = (items || []).filter(i => isToday(i.start));
+    setText("todayPrintCount", `${todays.length} print${todays.length === 1 ? "" : "s"}`);
+
+    if (todays.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No prints logged today";
+        list.appendChild(empty);
+        return;
+    }
+
+    // Group by colour+material: two different "reds" (e.g. red PLA vs red
+    // PETG) stay separate rather than being merged into one bogus total.
+    const groups = new Map();
+
+    todays.forEach(item =>
+    {
+        parseTrayUsage(item.trays).forEach(e =>
+        {
+            const key = `${e.color}|${e.type}`;
+            const prev = groups.get(key) || { color: e.color, type: e.type, amounts: [] };
+            prev.amounts.push(e.amount);
+            groups.set(key, prev);
+        });
+    });
+
+    if (groups.size === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = `${todays.length} print(s) today, no filament usage recorded`;
+        list.appendChild(empty);
+        return;
+    }
+
+    groups.forEach(g =>
+    {
+        const row = document.createElement("div");
+        row.className = "historyItem";
+        row.style.borderLeftColor = trayColorCss(g.color);
+
+        const left = document.createElement("div");
+
+        const title = document.createElement("strong");
+        title.textContent = g.type || "?";
+        left.appendChild(title);
+
+        const sub = document.createElement("small");
+        sub.textContent = `${g.amounts.length} print(s)`;
+        left.appendChild(sub);
+
+        const total = document.createElement("span");
+        total.textContent = g.amounts.join(" + ");
+
+        row.appendChild(left);
+        row.appendChild(total);
+
+        list.appendChild(row);
+    });
+}
+
+function updatePrinter(data)
+{
+    const state = data.gcodeState || "UNKNOWN";
+    const bambuOk = data.bambuConnected === true;
+
+    setText("printerMonitorState", data.wifiConnected ? "ONLINE" : "OFFLINE");
+    setText("printerLinkState", bambuOk ? "CONNECTED" : "DISCONNECTED");
+
+    setText("printerState", bambuOk ? state : "PRINTER UNREACHABLE");
+    setText("printerProject", data.subtaskName || "No project");
+
+    const hero = byId("printerHero");
+
+    if (hero)
+    {
+        const mood = !bambuOk ? "offline" : (state === "RUNNING" ? "running" : "idle");
+        hero.className = `printerHero panel ${mood}`;
+    }
+
+    const layer = Number(data.layerNum) || 0;
+    const total = Number(data.totalLayerNum) || 0;
+
+    setText("printerLayer", total > 0 ? String(layer) : "--");
+    setText("printerLayerTotal", total > 0 ? `/ ${total}` : "/ --");
+
+    const pct = total > 0 ? Math.round((layer / total) * 100) : 0;
+    setText("printerProgressPct", total > 0 ? `${pct}%` : "--%");
+    setBar("printerProgressBar", pct, 100, "var(--cyan)");
+
+    setText("printerNozzle", `${Number(data.nozzleTemp || 0).toFixed(1)} °C`);
+    setText("printerBed", `${Number(data.bedTemp || 0).toFixed(1)} °C`);
+
+    const trays = data.trays || [];
+    const trayNow = data.trayNow;
+    const active = trays.find(t => t.id === trayNow);
+
+    const swatch = byId("activeSwatch");
+
+    if (swatch)
+        swatch.style.background = active ? trayColorCss(active.color) : "#2a3136";
+
+    // 254 = external spool, 255 = nothing loaded (per Bambu's tray_now field)
+    let activeText = "--";
+
+    if (trayNow === 254)
+        activeText = "External spool";
+    else if (active)
+        activeText = trayLabel(active);
+    else if (bambuOk)
+        activeText = "None loaded";
+
+    setText("activeFilamentText", activeText);
+
+    // Started / elapsed only make sense while a print is actually running.
+    const running = bambuOk && state === "RUNNING";
+    setText("printerStarted", running ? (data.currentStart || "--") : "--");
+    setText("printerElapsed", running && data.currentStart
+        ? printDuration(data.currentStart, data.now)
+        : "--");
+
+    renderTrays(trays, trayNow);
+    renderPrintHistory(data.history || []);
+    renderTodayTotals(data.history || []);
+}
+
+function setPrinterOffline(message)
+{
+    setText("printerState", "NO DATA");
+    setText("printerProject", message || "Monitor not reporting");
+    setText("printerMonitorState", "OFFLINE");
+    setText("printerLinkState", "--");
+
+    const hero = byId("printerHero");
+
+    if (hero)
+        hero.className = "printerHero panel offline";
+}
+
 // ===== MQTT (browser, over Secure WebSockets) =====
 
 let lastMessageAt = 0;
+let lastPrinterMessageAt = 0;
 const STALE_AFTER_MS = 30000; // SEND_INTERVAL is 5s; 30s silence => treat as offline
+
+// The printer monitor (3dprinterinfo, separate device) publishes to a
+// subtopic of the room monitor's topic.
+const PRINTER_TOPIC = `${BROKER_CONFIG.topic}/printer`;
 
 const client = mqtt.connect(`wss://${BROKER_CONFIG.host}:${BROKER_CONFIG.port}/mqtt`, {
     username: BROKER_CONFIG.username,
@@ -443,6 +796,15 @@ client.on("connect", () =>
     {
         if (err)
             setText("brokerMessage", `Subscribe failed: ${err.message}`);
+    });
+
+    // Subscribed separately rather than with a "#" wildcard, so the viewer
+    // credential's topic permissions stay explicit and a failure here is
+    // clearly attributable to the printer topic alone.
+    client.subscribe(PRINTER_TOPIC, (err) =>
+    {
+        if (err)
+            setPrinterOffline(`Subscribe failed: ${err.message}`);
     });
 });
 
@@ -465,6 +827,21 @@ client.on("error", (err) =>
 
 client.on("message", (topic, payload) =>
 {
+    if (topic === PRINTER_TOPIC)
+    {
+        try
+        {
+            lastPrinterMessageAt = Date.now();
+            updatePrinter(JSON.parse(payload.toString()));
+        }
+        catch (err)
+        {
+            setPrinterOffline(`Bad payload: ${err.message}`);
+        }
+
+        return;
+    }
+
     try
     {
         const data = JSON.parse(payload.toString());
@@ -479,12 +856,95 @@ client.on("message", (topic, payload) =>
 });
 
 setOffline("Connecting to broker...");
+setPrinterOffline("Waiting for the printer monitor...");
 
 setInterval(() =>
 {
     if (lastMessageAt && Date.now() - lastMessageAt > STALE_AFTER_MS)
         setOffline("Device has not published in over 30s");
+
+    if (lastPrinterMessageAt && Date.now() - lastPrinterMessageAt > STALE_AFTER_MS)
+        setPrinterOffline("Printer monitor has not published in over 30s");
 }, 5000);
+
+// ===== Tabs =====
+
+const TABS = ["room", "printer"];
+
+function selectTab(name)
+{
+    TABS.forEach(t =>
+    {
+        const btn = byId(`tabBtn-${t}`);
+        const panel = byId(`tab-${t}`);
+        const isActive = (t === name);
+
+        if (btn)
+        {
+            btn.classList.toggle("active", isActive);
+            btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        }
+
+        if (panel)
+        {
+            if (isActive)
+                panel.removeAttribute("hidden");
+            else
+                panel.setAttribute("hidden", "");
+        }
+    });
+}
+
+TABS.forEach(t =>
+{
+    const btn = byId(`tabBtn-${t}`);
+
+    if (btn)
+        btn.addEventListener("click", () => selectTab(t));
+});
+
+// ===== New spool =====
+
+async function onNewSpool(trayId, btn)
+{
+    const password = window.prompt(
+        `Reset the running total for tray ${trayId + 1}?\n\nEnter the dashboard password:`);
+
+    if (!password)
+        return;
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "...";
+
+    try
+    {
+        const res = await fetch("/api/printer-command", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ password, command: "newSpool", trayId }),
+        });
+
+        const data = await res.json();
+        btn.textContent = res.ok ? "Reset!" : "Failed";
+
+        if (!res.ok)
+            window.alert(`Error: ${data.error || res.statusText}`);
+    }
+    catch (err)
+    {
+        btn.textContent = "Failed";
+        window.alert(`Request failed: ${err.message}`);
+    }
+    finally
+    {
+        setTimeout(() =>
+        {
+            btn.disabled = false;
+            btn.textContent = original;
+        }, 1500);
+    }
+}
 
 // Mobile browsers (and backgrounded desktop tabs) suspend long-lived
 // WebSocket connections without necessarily firing a "close" event - the

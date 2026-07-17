@@ -40,6 +40,43 @@ body{
     margin-bottom:18px;
 }
 
+.tabNav{
+    display:flex;
+    gap:6px;
+    margin-bottom:18px;
+    border-bottom:1px solid var(--line);
+}
+
+.tabBtn{
+    padding:10px 22px;
+    border:1px solid transparent;
+    border-bottom:none;
+    border-radius:8px 8px 0 0;
+    background:transparent;
+    color:var(--muted);
+    font-family:inherit;
+    font-size:14px;
+    font-weight:800;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    cursor:pointer;
+    margin-bottom:-1px;
+}
+
+.tabBtn:hover{
+    color:var(--text);
+}
+
+.tabBtn.active{
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border-color:var(--line);
+    color:var(--cyan);
+}
+
+.tabPanel[hidden]{
+    display:none;
+}
+
 .eyebrow{
     margin:0 0 6px;
     color:var(--cyan);
@@ -533,6 +570,147 @@ dd{
 .dangerZone #rebootResult{
     width:100%;
     margin:0;
+}
+
+/* ===== Printer tab ===== */
+
+.printerHero{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:18px;
+    border-left:8px solid var(--muted);
+}
+
+.printerHero.running{
+    border-left-color:var(--green);
+}
+
+.printerHero.idle{
+    border-left-color:var(--muted);
+}
+
+.printerHero.offline{
+    border-left-color:var(--red);
+}
+
+.printerHeroMain strong{
+    display:block;
+    margin-top:4px;
+    font-size:36px;
+    line-height:1;
+}
+
+.printerHeroMain p{
+    margin:6px 0 0;
+    color:var(--muted);
+}
+
+.printerHeroSide{
+    text-align:right;
+}
+
+.activeFilament{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top:6px;
+}
+
+.activeFilament strong{
+    font-size:22px;
+}
+
+.swatch{
+    width:22px;
+    height:22px;
+    flex:none;
+    border-radius:50%;
+    border:2px solid var(--line);
+    background:#2a3136;
+}
+
+.hint{
+    margin:0 0 14px;
+    color:var(--muted);
+    font-size:13px;
+    line-height:1.5;
+}
+
+.connSubhead{
+    margin-top:18px;
+}
+
+.tempGrid dd{
+    font-size:28px;
+}
+
+.printerGrid{
+    grid-template-columns:1fr 1fr;
+}
+
+.trayList{
+    display:grid;
+    gap:8px;
+}
+
+.trayItem{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    align-items:center;
+    gap:12px;
+    padding:12px;
+    border-radius:6px;
+    background:#14181b;
+    border:1px solid #2f363d;
+}
+
+.trayItem.active{
+    border-color:var(--cyan);
+}
+
+.trayItem strong{
+    display:block;
+}
+
+.trayItem small{
+    color:var(--muted);
+}
+
+.trayMeta{
+    min-width:0;
+}
+
+.historyItem small{
+    display:block;
+    color:var(--muted);
+}
+
+.usageChips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:6px;
+}
+
+.usageChip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:3px 8px;
+    border-radius:999px;
+    background:#0c0f11;
+    border:1px solid #2f363d;
+    font-size:12px;
+    font-weight:700;
+}
+
+.usageChip .swatch{
+    width:12px;
+    height:12px;
+    border-width:1px;
 }
 
 @media(max-width:1120px){
