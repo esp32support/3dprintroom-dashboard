@@ -273,6 +273,35 @@ function renderHistory(items)
     });
 }
 
+function detailForResetReason(reason)
+{
+    switch (reason)
+    {
+        case "Power-on":
+            return "Cold start - power was applied (includes a USB flash/reset).";
+        case "External reset pin":
+            return "EN pin pulled low - the physical reset button or an external circuit.";
+        case "Software (ESP.restart)":
+            return "The firmware called ESP.restart() itself, e.g. after an OTA update.";
+        case "Software panic/crash":
+            return "The firmware crashed (exception / bad memory access) and auto-rebooted.";
+        case "Interrupt watchdog":
+            return "An interrupt handler ran too long and tripped the interrupt watchdog.";
+        case "Task watchdog (loop stalled)":
+            return "loop() didn't return in time - something blocked it too long.";
+        case "Other watchdog":
+            return "A watchdog fired for a reason outside the categories above.";
+        case "Deep sleep wake":
+            return "Woke from deep sleep (this firmware doesn't use deep sleep).";
+        case "Brownout (power sag)":
+            return "Supply voltage dropped too low - check the USB cable/power supply.";
+        case "SDIO reset":
+            return "Reset via the SDIO slave interface (not used by this device).";
+        default:
+            return "Reset reason not recognized by the firmware.";
+    }
+}
+
 function colorForResetReason(reason)
 {
     const text = (reason || "").toLowerCase();
@@ -313,8 +342,11 @@ function renderBootHistory(items)
 
         const left = document.createElement("div");
         const title = document.createElement("strong");
+        const detail = document.createElement("small");
         title.textContent = item.reason || "Unknown";
+        detail.textContent = detailForResetReason(item.reason);
         left.appendChild(title);
+        left.appendChild(detail);
 
         const time = document.createElement("span");
         time.textContent = item.time && item.time !== "pending" ? item.time : "syncing...";
@@ -403,6 +435,23 @@ setInterval(() =>
     if (lastMessageAt && Date.now() - lastMessageAt > STALE_AFTER_MS)
         setOffline("Device has not published in over 30s");
 }, 5000);
+
+// Mobile browsers (and backgrounded desktop tabs) suspend long-lived
+// WebSocket connections without necessarily firing a "close" event - the
+// page just goes quiet. mqtt.js's own reconnectPeriod doesn't help if the
+// tab itself was frozen. Force a fresh connection whenever the tab becomes
+// visible again, rather than trusting whatever state it was left in.
+document.addEventListener("visibilitychange", () =>
+{
+    if (document.visibilityState !== "visible")
+        return;
+
+    if (client.connected)
+        return;
+
+    setText("brokerState", "RECONNECTING");
+    client.reconnect();
+});
 
 const bootInfoToggle = byId("bootInfoToggle");
 const bootInfoPanel = byId("bootInfoPanel");
