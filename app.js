@@ -689,8 +689,15 @@ function renderAmsGrid(trays, trayNow)
 
     trays.forEach(tray =>
     {
+        const isActive = tray.id === trayNow;
+
         const slot = document.createElement("div");
-        slot.className = "amsSlot" + (tray.id === trayNow ? " active" : "");
+        slot.className = "amsSlot" + (isActive ? " active" : "");
+
+        // Border matches the actual filament color instead of a generic
+        // highlight color, so it reads as "this exact spool" at a glance.
+        if (isActive && tray.type)
+            slot.style.borderColor = trayColorCss(tray.color);
 
         const label = document.createElement("span");
         label.className = "amsSlotLabel";
@@ -968,12 +975,12 @@ function updatePrinter(data)
     const running = bambuOk && state === "RUNNING";
     const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
 
-    // MQTT's tray_now is too sparse to rely on (confirmed live - it's often
-    // just absent from the report stream entirely). The Task API's
-    // amsDetailMapping tells us which slot the job was actually assigned
-    // to, which is available as soon as printing starts and doesn't depend
-    // on catching the right MQTT message. Falls back to tray_now if no
-    // task data is available yet.
+    // The Task API's amsDetailMapping tells us which slot the job was
+    // actually assigned to, plus its weight - MQTT alone can't give us the
+    // weight at all. But if the Task API isn't available (secret not set
+    // up yet, fetch failed, still loading), fall back to MQTT's tray_now +
+    // the trays array so the hero still shows *something* rather than
+    // going blank just because the bonus data source is down.
     const primaryDetail = latestPrinterTask && latestPrinterTask.amsDetail && latestPrinterTask.amsDetail.length > 0
         ? latestPrinterTask.amsDetail[0]
         : null;
@@ -981,6 +988,8 @@ function updatePrinter(data)
     const trayNow = preparing && primaryDetail
         ? (primaryDetail.amsId * 4) + primaryDetail.slotId
         : data.trayNow;
+
+    const mqttActiveTray = trays.find(t => t.id === trayNow);
 
     const swatch = byId("activeSwatch");
 
@@ -991,6 +1000,14 @@ function updatePrinter(data)
 
         setText("activeFilamentText", primaryDetail.type || "--");
         setText("activeFilamentWeight", `${primaryDetail.weight.toFixed(1)} g`);
+    }
+    else if (preparing && mqttActiveTray && mqttActiveTray.type)
+    {
+        if (swatch)
+            swatch.style.background = trayColorCss(mqttActiveTray.color);
+
+        setText("activeFilamentText", mqttActiveTray.type);
+        setText("activeFilamentWeight", "");
     }
     else
     {

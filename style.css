@@ -731,6 +731,13 @@ dd{
 
 .amsSlot.active{
     border-color:var(--cyan);
+    border-width:4px;
+    padding:10px 6px;
+    /* currentColor picks up the inline border-color set in JS (the actual
+       filament color) - a subtle glow keeps the highlight visible even for
+       very dark filaments where the border alone would barely show up
+       against the card's own dark background. */
+    box-shadow:0 0 12px 2px color-mix(in srgb, currentColor 60%, transparent);
 }
 
 .amsSlotLabel{
