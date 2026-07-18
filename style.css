@@ -314,6 +314,10 @@ dd{
     margin-top:4px;
 }
 
+.otaForm[hidden]{
+    display:none;
+}
+
 .otaForm label{
     display:flex;
     flex-direction:column;
@@ -786,38 +790,6 @@ dd{
     grid-template-columns:1fr 1fr;
 }
 
-.trayList{
-    display:grid;
-    gap:8px;
-}
-
-.trayItem{
-    display:grid;
-    grid-template-columns:auto 1fr auto;
-    align-items:center;
-    gap:12px;
-    padding:12px;
-    border-radius:6px;
-    background:#14181b;
-    border:1px solid #2f363d;
-}
-
-.trayItem.active{
-    border-color:var(--cyan);
-}
-
-.trayItem strong{
-    display:block;
-}
-
-.trayItem small{
-    color:var(--muted);
-}
-
-.trayMeta{
-    min-width:0;
-}
-
 .historyItem small{
     display:block;
     color:var(--muted);
@@ -846,6 +818,70 @@ dd{
     width:12px;
     height:12px;
     border-width:1px;
+}
+
+.filamentList{
+    display:grid;
+    gap:10px;
+}
+
+.filamentEntry{
+    padding:12px;
+    border-radius:6px;
+    background:#14181b;
+    border:1px solid #2f363d;
+}
+
+.filamentEntryHead{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    align-items:center;
+    gap:10px;
+}
+
+.filamentEntryHead strong{
+    display:block;
+}
+
+.filamentEntryHead small{
+    color:var(--muted);
+}
+
+.filamentEntryHead .infoBtn{
+    font-size:11px;
+    padding:4px 8px;
+}
+
+.spoolList{
+    display:grid;
+    gap:6px;
+    margin-top:10px;
+}
+
+.spoolRow{
+    display:grid;
+    grid-template-columns:1fr auto auto;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    border-radius:6px;
+    background:#0c0f11;
+    border:1px solid #2f363d;
+    font-size:13px;
+}
+
+.spoolRow .bar{
+    margin:0;
+}
+
+.spoolRow input[type="number"]{
+    width:64px;
+    background:#14181b;
+    border:1px solid #2f363d;
+    border-radius:4px;
+    color:var(--text);
+    padding:4px 6px;
+    font-size:13px;
 }
 
 @media(max-width:1120px){

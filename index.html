@@ -440,18 +440,38 @@
 
                 <article class="panel amsPanel">
                     <div class="panelHeader">
-                        <span>Filament</span>
-                        <strong>AMS</strong>
+                        <span>Filament library</span>
+                        <button type="button" class="infoBtn" id="filamentAddToggle">+ Add filament</button>
                     </div>
 
                     <p class="hint">
-                        The A1's AMS-lite doesn't report how much filament is left on a
-                        spool, so usage is counted per print instead. Press "New spool"
-                        when you physically swap one to reset its running total.
+                        Your own inventory, not what's loaded right now (see AMS above).
+                        Finished prints automatically deduct their acquired weight from
+                        the matching spool.
                     </p>
 
-                    <div class="trayList" id="trayList">
-                        <div class="historyItem">Waiting for data...</div>
+                    <form class="otaForm" id="filamentAddForm" hidden>
+                        <label>
+                            Material
+                            <input type="text" id="filamentMaterial" placeholder="PLA" required>
+                        </label>
+                        <label>
+                            Color name
+                            <input type="text" id="filamentColorName" placeholder="White" required>
+                        </label>
+                        <label>
+                            Color swatch
+                            <input type="color" id="filamentColorHex" value="#ffffff">
+                        </label>
+                        <label>
+                            Brand (optional)
+                            <input type="text" id="filamentBrand" placeholder="Bambu Lab">
+                        </label>
+                        <button type="submit" class="infoBtn">Add filament</button>
+                    </form>
+
+                    <div class="filamentList" id="filamentList">
+                        <div class="historyItem">No filaments added yet.</div>
                     </div>
                 </article>
 

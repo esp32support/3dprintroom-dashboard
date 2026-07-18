@@ -474,15 +474,6 @@ function trayColorCss(hex)
     return "#" + hex.slice(0, 6);
 }
 
-function trayLabel(tray)
-{
-    if (!tray)
-        return "--";
-
-    // type is blank until the printer actually reports the tray's filament.
-    return tray.type ? `Tray ${tray.id + 1} - ${tray.type}` : `Tray ${tray.id + 1}`;
-}
-
 // Bambu's stg_cur sub-stage codes, while gcode_state is RUNNING/PREPARE.
 // Ported directly from BambuStudio's own get_stage_string() in
 // src/slic3r/GUI/DeviceManager.cpp - the actual source of the on-screen
@@ -605,70 +596,9 @@ function usageChip(entry)
     return chip;
 }
 
-function renderTrays(trays, trayNow)
-{
-    const list = byId("trayList");
-
-    if (!list)
-        return;
-
-    list.innerHTML = "";
-
-    if (!trays || trays.length === 0)
-    {
-        const empty = document.createElement("div");
-        empty.className = "historyItem";
-        empty.textContent = "No tray data yet";
-        list.appendChild(empty);
-        return;
-    }
-
-    trays.forEach(tray =>
-    {
-        const row = document.createElement("div");
-        row.className = "trayItem" + (tray.id === trayNow ? " active" : "");
-
-        const sw = document.createElement("span");
-        sw.className = "swatch";
-        sw.style.background = trayColorCss(tray.color);
-
-        const meta = document.createElement("div");
-        meta.className = "trayMeta";
-
-        const title = document.createElement("strong");
-        title.textContent = trayLabel(tray);
-
-        const sub = document.createElement("small");
-
-        if (tray.id === trayNow)
-            sub.textContent = "Currently printing";
-        else if (!tray.type)
-            sub.textContent = "No filament data";
-        else
-            sub.textContent = "Idle";
-
-        meta.appendChild(title);
-        meta.appendChild(sub);
-
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "infoBtn";
-        btn.textContent = "New spool";
-        btn.dataset.trayId = tray.id;
-        btn.addEventListener("click", () => onNewSpool(tray.id, btn));
-
-        row.appendChild(sw);
-        row.appendChild(meta);
-        row.appendChild(btn);
-
-        list.appendChild(row);
-    });
-}
-
-// Mirrors Bambu Studio's own AMS panel look (A1-A4 spool graphics), unlike
-// the plain list in the Filament card - that one's earmarked to become a
-// curated filament library later (see PLAN.md), this is just "what's
-// loaded right now."
+// Mirrors Bambu Studio's own AMS panel look (A1-A4 spool graphics). The
+// separate curated Filament card below is a manually-managed inventory,
+// not a live view of these slots - see the filament library section.
 function renderAmsGrid(trays, trayNow)
 {
     const grid = byId("amsGrid");
@@ -1052,10 +982,10 @@ function updatePrinter(data)
         ? `${primaryDetail.weight.toFixed(1)} g (${primaryDetail.type || "?"})`
         : "--");
 
-    renderTrays(trays, trayNow);
     renderAmsGrid(trays, trayNow);
     renderPrintHistory(data.history || []);
     renderTodayTotals(data.history || []);
+    processFilamentDeductions(data.history || []);
 }
 
 function setPrinterOffline(message)
@@ -1147,6 +1077,333 @@ function matchTaskForHistoryItem(item)
 
 updatePrinterTask();
 setInterval(updatePrinterTask, 60000);
+
+// ===== Filament library (manually curated inventory, KV-backed) =====
+// A separate record from "what's loaded right now" (the AMS grid above) -
+// this is the user's own stock: material+color entries, each with one or
+// more physical spools and a running remaining-weight total. Stored
+// server-side (Cloudflare KV via /api/filament-library) rather than on the
+// device or in localStorage, so it stays in sync across every browser/
+// device viewing the dashboard, and survives independently of any single
+// ESP32's NVS.
+
+let filamentLibrary = { filaments: [], processedPrints: [] };
+let filamentLibraryLoaded = false;
+
+function uid()
+{
+    return Math.random().toString(36).slice(2, 10);
+}
+
+async function loadFilamentLibrary()
+{
+    try
+    {
+        const res = await fetch("/api/filament-library");
+
+        if (res.ok)
+        {
+            const data = await res.json();
+            filamentLibrary = {
+                filaments: data.filaments || [],
+                processedPrints: data.processedPrints || [],
+            };
+        }
+    }
+    catch (err)
+    {
+        console.log("filament-library fetch failed", err);
+    }
+    finally
+    {
+        filamentLibraryLoaded = true;
+        renderFilamentLibrary();
+    }
+}
+
+async function saveFilamentLibrary()
+{
+    try
+    {
+        await fetch("/api/filament-library", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(filamentLibrary),
+        });
+    }
+    catch (err)
+    {
+        console.log("filament-library save failed", err);
+    }
+}
+
+function renderFilamentLibrary()
+{
+    const list = byId("filamentList");
+
+    if (!list)
+        return;
+
+    list.innerHTML = "";
+
+    if (filamentLibrary.filaments.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No filaments added yet.";
+        list.appendChild(empty);
+        return;
+    }
+
+    filamentLibrary.filaments.forEach(f =>
+    {
+        const entry = document.createElement("div");
+        entry.className = "filamentEntry";
+
+        const head = document.createElement("div");
+        head.className = "filamentEntryHead";
+
+        const sw = document.createElement("span");
+        sw.className = "swatch";
+        sw.style.background = trayColorCss(f.colorHex || "");
+
+        const meta = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = `${f.material} - ${f.color}`;
+        meta.appendChild(title);
+
+        if (f.brand)
+        {
+            const sub = document.createElement("small");
+            sub.textContent = f.brand;
+            meta.appendChild(sub);
+        }
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "infoBtn";
+        removeBtn.textContent = "Remove";
+        removeBtn.addEventListener("click", () => onRemoveFilament(f.id));
+
+        head.appendChild(sw);
+        head.appendChild(meta);
+        head.appendChild(removeBtn);
+        entry.appendChild(head);
+
+        const spoolList = document.createElement("div");
+        spoolList.className = "spoolList";
+
+        (f.spools || []).forEach(spool =>
+        {
+            const row = document.createElement("div");
+            row.className = "spoolRow";
+
+            const input = document.createElement("input");
+            input.type = "number";
+            input.min = "0";
+            input.step = "1";
+            input.value = Math.max(0, Math.round(spool.remaining));
+            input.title = "Edit remaining weight - e.g. correct a partial spool";
+            input.addEventListener("change", () => onEditSpoolRemaining(f.id, spool.id, input.value));
+
+            const totalLabel = document.createElement("span");
+            totalLabel.textContent = `/ ${spool.total}g`;
+
+            const delBtn = document.createElement("button");
+            delBtn.type = "button";
+            delBtn.className = "infoBtn";
+            delBtn.textContent = "Remove spool";
+            delBtn.addEventListener("click", () => onRemoveSpool(f.id, spool.id));
+
+            row.appendChild(input);
+            row.appendChild(totalLabel);
+            row.appendChild(delBtn);
+            spoolList.appendChild(row);
+        });
+
+        entry.appendChild(spoolList);
+
+        const newSpoolBtn = document.createElement("button");
+        newSpoolBtn.type = "button";
+        newSpoolBtn.className = "infoBtn";
+        newSpoolBtn.style.marginTop = "8px";
+        newSpoolBtn.textContent = "New spool";
+        newSpoolBtn.addEventListener("click", () => onNewLibrarySpool(f.id));
+
+        entry.appendChild(newSpoolBtn);
+        list.appendChild(entry);
+    });
+}
+
+function onRemoveFilament(filamentId)
+{
+    if (!window.confirm("Remove this filament and all its spools?"))
+        return;
+
+    filamentLibrary.filaments = filamentLibrary.filaments.filter(f => f.id !== filamentId);
+    renderFilamentLibrary();
+    saveFilamentLibrary();
+}
+
+function onRemoveSpool(filamentId, spoolId)
+{
+    const f = filamentLibrary.filaments.find(x => x.id === filamentId);
+
+    if (!f)
+        return;
+
+    f.spools = f.spools.filter(s => s.id !== spoolId);
+    renderFilamentLibrary();
+    saveFilamentLibrary();
+}
+
+function onEditSpoolRemaining(filamentId, spoolId, value)
+{
+    const f = filamentLibrary.filaments.find(x => x.id === filamentId);
+    const spool = f && f.spools.find(s => s.id === spoolId);
+
+    if (!spool)
+        return;
+
+    const n = Number(value);
+
+    if (!Number.isFinite(n) || n < 0)
+        return;
+
+    spool.remaining = n;
+    saveFilamentLibrary();
+}
+
+function onNewLibrarySpool(filamentId)
+{
+    const f = filamentLibrary.filaments.find(x => x.id === filamentId);
+
+    if (!f)
+        return;
+
+    const input = window.prompt("New spool weight in grams:", "1000");
+
+    if (input === null)
+        return;
+
+    const total = Number(input);
+
+    if (!Number.isFinite(total) || total <= 0)
+        return;
+
+    f.spools.push({ id: uid(), total, remaining: total, createdAt: new Date().toISOString() });
+    renderFilamentLibrary();
+    saveFilamentLibrary();
+}
+
+// Auto-deducts each finished print's acquired weight from the matching
+// library spool, using the same Task API match used to enrich print
+// history (see matchTaskForHistoryItem). processedPrints - persisted in KV
+// alongside the library itself - stops the same print being deducted twice
+// across repeated polls or page reloads.
+function processFilamentDeductions(items)
+{
+    if (!filamentLibraryLoaded || !items || items.length === 0)
+        return;
+
+    let changed = false;
+
+    items.forEach(item =>
+    {
+        if (!item.start || !item.end)
+            return;   // still running, or timestamps missing - nothing to settle yet
+
+        const key = `${item.name}__${item.start}`;
+
+        if (filamentLibrary.processedPrints.includes(key))
+            return;
+
+        const usage = parseTrayUsage(item.trays);
+        const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
+        const details = matchedTask ? matchedTask.amsDetail : [];
+
+        if (details.length === 0)
+            return;   // Task API hasn't surfaced this print yet - retry on a later poll
+
+        details.forEach(d =>
+        {
+            const hex = (d.color || "").slice(0, 6).toUpperCase();
+            const material = (d.type || "").toUpperCase();
+
+            const filament = filamentLibrary.filaments.find(f =>
+                f.material.toUpperCase() === material && (f.colorHex || "").toUpperCase() === hex);
+
+            if (!filament || !filament.spools || filament.spools.length === 0)
+                return;
+
+            // Draw down whichever spool has the least left first - mirrors
+            // finishing an already-opened spool before starting a fresh one.
+            const target = filament.spools
+                .filter(s => s.remaining > 0)
+                .sort((a, b) => a.remaining - b.remaining)[0];
+
+            if (!target)
+                return;
+
+            target.remaining = Math.max(0, target.remaining - d.weight);
+            changed = true;
+        });
+
+        filamentLibrary.processedPrints.push(key);
+        changed = true;
+    });
+
+    if (!changed)
+        return;
+
+    if (filamentLibrary.processedPrints.length > 200)
+        filamentLibrary.processedPrints = filamentLibrary.processedPrints.slice(-200);
+
+    renderFilamentLibrary();
+    saveFilamentLibrary();
+}
+
+loadFilamentLibrary();
+
+const filamentAddToggle = byId("filamentAddToggle");
+const filamentAddForm = byId("filamentAddForm");
+
+if (filamentAddToggle && filamentAddForm)
+{
+    filamentAddToggle.addEventListener("click", () =>
+    {
+        const hidden = filamentAddForm.hasAttribute("hidden");
+
+        if (hidden)
+            filamentAddForm.removeAttribute("hidden");
+        else
+            filamentAddForm.setAttribute("hidden", "");
+
+        filamentAddToggle.textContent = hidden ? "Cancel" : "+ Add filament";
+    });
+
+    filamentAddForm.addEventListener("submit", (event) =>
+    {
+        event.preventDefault();
+
+        const material = byId("filamentMaterial").value.trim();
+        const color = byId("filamentColorName").value.trim();
+        const colorHex = byId("filamentColorHex").value.replace("#", "").toUpperCase();
+        const brand = byId("filamentBrand").value.trim();
+
+        if (!material || !color)
+            return;
+
+        filamentLibrary.filaments.push({ id: uid(), material, color, colorHex, brand, spools: [] });
+
+        filamentAddForm.reset();
+        filamentAddForm.setAttribute("hidden", "");
+        filamentAddToggle.textContent = "+ Add filament";
+
+        renderFilamentLibrary();
+        saveFilamentLibrary();
+    });
+}
 
 // ===== MQTT (browser, over Secure WebSockets) =====
 
@@ -1306,46 +1563,6 @@ if (logoutBtn)
             window.location.href = "/login.html";
         }
     });
-}
-
-// ===== New spool =====
-
-async function onNewSpool(trayId, btn)
-{
-    if (!window.confirm(`Reset the running total for tray ${trayId + 1}?`))
-        return;
-
-    const original = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "...";
-
-    try
-    {
-        const res = await fetch("/api/printer-command", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ command: "newSpool", trayId }),
-        });
-
-        const data = await res.json();
-        btn.textContent = res.ok ? "Reset!" : "Failed";
-
-        if (!res.ok)
-            window.alert(`Error: ${data.error || res.statusText}`);
-    }
-    catch (err)
-    {
-        btn.textContent = "Failed";
-        window.alert(`Request failed: ${err.message}`);
-    }
-    finally
-    {
-        setTimeout(() =>
-        {
-            btn.disabled = false;
-            btn.textContent = original;
-        }, 1500);
-    }
 }
 
 // Mobile browsers (and backgrounded desktop tabs) suspend long-lived
