@@ -246,6 +246,10 @@ h1{
     margin:18px 0 0;
 }
 
+.subgrid .spanFull{
+    grid-column:1/-1;
+}
+
 .subgrid div,
 .statusList div{
     min-width:0;

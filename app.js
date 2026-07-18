@@ -772,12 +772,24 @@ function renderPrintHistory(items)
         detail.hidden = true;
 
         const usage = parseTrayUsage(item.trays);
+        const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
 
         if (usage.length > 0)
         {
             const chips = document.createElement("div");
             chips.className = "usageChips";
             usage.forEach(e => chips.appendChild(usageChip(e)));
+            detail.appendChild(chips);
+        }
+        else if (matchedTask)
+        {
+            const chips = document.createElement("div");
+            chips.className = "usageChips";
+            matchedTask.amsDetail.forEach(d => chips.appendChild(usageChip({
+                color: d.color,
+                type: d.type,
+                amount: `${d.weight.toFixed(1)}g`,
+            })));
             detail.appendChild(chips);
         }
         else
@@ -1033,6 +1045,13 @@ function updatePrinter(data)
     const remainingMin = Number(data.remainingTime) || 0;
     setText("printerEta", running && remainingMin > 0 ? formatTime(remainingMin * 60) : "--");
 
+    // Confirmed live against a print that was still ~2h from finishing -
+    // the Task API's weight/amsDetail is populated from the slicer's own
+    // estimate as soon as the job starts, not filled in only on completion.
+    setText("printerFilamentUsed", preparing && primaryDetail
+        ? `${primaryDetail.weight.toFixed(1)} g (${primaryDetail.type || "?"})`
+        : "--");
+
     renderTrays(trays, trayNow);
     renderAmsGrid(trays, trayNow);
     renderPrintHistory(data.history || []);
@@ -1056,6 +1075,7 @@ function setPrinterOffline(message)
 // ===== Bambu Cloud Task API (weight/AMS detail - MQTT can't provide this) =====
 
 let latestPrinterTask = null;
+let latestPrinterTasks = [];
 
 async function updatePrinterTask()
 {
@@ -1068,11 +1088,61 @@ async function updatePrinterTask()
 
         const data = await res.json();
         latestPrinterTask = data.task || null;
+        latestPrinterTasks = data.tasks || [];
     }
     catch (err)
     {
         console.log("printer-task fetch failed", err);
     }
+}
+
+// The device's own history (histName/histStart/...) and Bambu Cloud's task
+// list are two unrelated records of the same prints, with no shared ID -
+// match them by title plus how close their start times are. Task startTime
+// is the slice/upload time, which lands within a couple minutes of the
+// physical start (confirmed live), so a tight window plus a title match is
+// enough to avoid false matches across unrelated prints with the same name.
+function matchTaskForHistoryItem(item)
+{
+    const itemStart = parseDeviceTime(item.start);
+
+    if (!itemStart || latestPrinterTasks.length === 0)
+        return null;
+
+    let best = null;
+    let bestDiff = Infinity;
+
+    for (const task of latestPrinterTasks)
+    {
+        if (!task.amsDetail || task.amsDetail.length === 0)
+            continue;
+
+        // task.startTime is a proper UTC ISO string ("...Z") straight from
+        // Bambu Cloud - unlike the device's own local, timezone-less
+        // timestamps (see parseDeviceTime), so parse it directly rather
+        // than routing it through that local-time parser, which would
+        // silently misinterpret it and throw the match off by the local
+        // UTC offset (confirmed ~2h against live data).
+        if (!task.startTime)
+            continue;
+
+        const taskStart = new Date(task.startTime);
+
+        if (isNaN(taskStart.getTime()))
+            continue;
+
+        const diff = Math.abs(taskStart - itemStart);
+        const titleMatches = task.title && item.name && task.title === item.name;
+        const withinWindow = diff < (titleMatches ? 30 * 60 * 1000 : 10 * 60 * 1000);
+
+        if (withinWindow && diff < bestDiff)
+        {
+            best = task;
+            bestDiff = diff;
+        }
+    }
+
+    return best;
 }
 
 updatePrinterTask();

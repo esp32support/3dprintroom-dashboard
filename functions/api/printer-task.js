@@ -6,6 +6,12 @@
 // currently loaded" source than MQTT's sparse tray_now field, since it's
 // the AMS slot the print job was actually assigned to.
 //
+// Fetches the last 10 tasks (not just the latest) so the dashboard can
+// match weight/AMS data onto older print-history entries too, not only the
+// current job - the device's own history has no weight data at all (its
+// remain% never moves on this AMS-lite printer), so this is the only
+// source for it once a print has finished.
+//
 // Needs a Bambu Cloud access token as a Pages secret (BAMBU_ACCESS_TOKEN) -
 // obtained via the same account-login + emailed 2FA flow used to set up
 // the printer's cloud MQTT connection. Tokens run out after ~90 days and
@@ -25,7 +31,7 @@ export async function onRequestGet(context) {
     }
 
     const deviceId = env.BAMBU_DEVICE_ID || "";
-    const url = `https://api.bambulab.com/v1/user-service/my/tasks?limit=1&deviceId=${encodeURIComponent(deviceId)}`;
+    const url = `https://api.bambulab.com/v1/user-service/my/tasks?limit=10&deviceId=${encodeURIComponent(deviceId)}`;
 
     let res;
     try {
@@ -45,26 +51,27 @@ export async function onRequestGet(context) {
     }
 
     const data = await res.json();
-    const task = (data.hits || [])[0];
+    const hits = data.hits || [];
 
-    if (!task) {
-        return jsonResponse({ task: null });
-    }
+    const simplify = (task) => ({
+        title: task.title || "",
+        weight: task.weight || 0,
+        length: task.length || 0,
+        startTime: task.startTime || "",
+        endTime: task.endTime || "",
+        amsDetail: (task.amsDetailMapping || []).map((d) => ({
+            amsId: d.amsId,
+            slotId: d.slotId,
+            color: d.sourceColor || d.targetColor || "",
+            type: d.filamentType || "",
+            weight: d.weight || 0,
+        })),
+    });
+
+    const tasks = hits.map(simplify);
 
     return jsonResponse({
-        task: {
-            title: task.title || "",
-            weight: task.weight || 0,
-            length: task.length || 0,
-            startTime: task.startTime || "",
-            endTime: task.endTime || "",
-            amsDetail: (task.amsDetailMapping || []).map((d) => ({
-                amsId: d.amsId,
-                slotId: d.slotId,
-                color: d.sourceColor || d.targetColor || "",
-                type: d.filamentType || "",
-                weight: d.weight || 0,
-            })),
-        },
+        task: tasks[0] || null,
+        tasks,
     });
 }
