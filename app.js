@@ -688,7 +688,7 @@ function renderPrintHistory(items)
         left.appendChild(title);
 
         const sub = document.createElement("small");
-        sub.textContent = `${item.layers || 0} layers - ${item.start || "?"}`;
+        sub.textContent = `${item.layers || 0} layers - ${formatDeviceDate(item.start)}`;
         left.appendChild(sub);
 
         const time = document.createElement("span");
@@ -730,7 +730,7 @@ function renderPrintHistory(items)
         }
 
         const times = document.createElement("p");
-        times.textContent = `Started ${item.start || "?"} - Ended ${item.end || "?"}`;
+        times.textContent = `Started ${formatDeviceDate(item.start)} - Ended ${formatDeviceDate(item.end)}`;
         detail.appendChild(times);
 
         row.appendChild(detail);
@@ -764,6 +764,23 @@ function parseDeviceTime(s)
 
     const d = new Date(s.replace(" ", "T"));
     return isNaN(d.getTime()) ? null : d;
+}
+
+// The device's raw "YYYY-MM-DD HH:MM:SS" is only reformatted for display -
+// matching (processedPrints keys, matchTaskForHistoryItem, printDuration)
+// keeps using the raw string untouched.
+function formatDeviceDate(s)
+{
+    if (!s || s === "unknown" || s === "pending")
+        return s || "?";
+
+    const [datePart, timePart] = s.split(" ");
+    const [year, month, day] = (datePart || "").split("-");
+
+    if (!year || !month || !day)
+        return s;
+
+    return `${day}.${month}.${year}${timePart ? " " + timePart : ""}`;
 }
 
 function printDuration(start, end)
@@ -966,8 +983,8 @@ function updatePrinter(data)
     // a NEW print starts, so this naturally covers both cases.
     const hasCurrentPrint = Boolean(data.currentStart);
 
-    setText("printerStarted", hasCurrentPrint ? data.currentStart : "--");
-    setText("printerEnded", data.currentEnd || "--");
+    setText("printerStarted", hasCurrentPrint ? formatDeviceDate(data.currentStart) : "--");
+    setText("printerEnded", data.currentEnd ? formatDeviceDate(data.currentEnd) : "--");
     setText("printerElapsed", hasCurrentPrint
         ? printDuration(data.currentStart, data.currentEnd || data.now)
         : "--");
@@ -1422,7 +1439,9 @@ if (filamentAddToggle && filamentAddForm)
 
 let lastMessageAt = 0;
 let lastPrinterMessageAt = 0;
+let lastStaleReconnectAt = 0;
 const STALE_AFTER_MS = 30000; // SEND_INTERVAL is 5s; 30s silence => treat as offline
+const STALE_RECONNECT_COOLDOWN_MS = 20000;
 
 // The printer monitor (3dprinterinfo, separate device) publishes to a
 // subtopic of the room monitor's topic.
@@ -1519,6 +1538,24 @@ setInterval(() =>
         const silentFor = Math.round((Date.now() - lastMessageAt) / 1000);
         connectionLog(`Room data stale - ${silentFor}s since last message (client.connected=${client.connected})`);
         setOffline();
+
+        // A rebooted device and a still-red dashboard together means the
+        // device's connection to the broker was never the problem - this
+        // tab's own WebSocket died silently (no close/error event fired,
+        // mqtt.js's `connected` flag still reads true) without ever being
+        // backgrounded, so the visibilitychange handler below - the only
+        // place that previously forced a reconnect - never ran. This
+        // covers the same zombie-connection recovery for a tab that's
+        // been sitting in the foreground the whole time. Cooldown-gated
+        // so a still-recovering connection doesn't get torn down again
+        // every 5s while it's mid-reconnect.
+        if (Date.now() - lastStaleReconnectAt > STALE_RECONNECT_COOLDOWN_MS)
+        {
+            lastStaleReconnectAt = Date.now();
+            connectionLog(`Forcing reconnect after ${silentFor}s of silence`);
+            setDot("brokerDot", false);
+            client.end(true, {}, () => client.reconnect());
+        }
     }
 
     if (lastPrinterMessageAt && Date.now() - lastPrinterMessageAt > STALE_AFTER_MS)
