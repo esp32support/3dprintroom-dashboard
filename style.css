@@ -34,7 +34,7 @@ body{
 
 .topbar{
     display:grid;
-    grid-template-columns:1fr minmax(320px,520px);
+    grid-template-columns:1fr minmax(320px,660px);
     gap:18px;
     align-items:stretch;
     margin-bottom:18px;
@@ -668,32 +668,23 @@ dd{
     font-weight:700;
 }
 
-.printerThumbnail{
-    position:relative;
-    width:110px;
-    height:110px;
-    margin-top:6px;
-    border-radius:8px;
-    overflow:hidden;
-    background:#0c0f11;
-    border:1px solid var(--line);
+.activeFilament{
     display:flex;
     align-items:center;
-    justify-content:center;
+    gap:10px;
+    margin-top:6px;
+    justify-content:flex-end;
 }
 
-.printerThumbnail img{
-    width:100%;
-    height:100%;
-    object-fit:cover;
+.activeFilament strong{
+    display:block;
+    font-size:20px;
 }
 
-#printerThumbnailPlaceholder{
+.activeFilament small{
+    display:block;
     color:var(--muted);
-    font-size:11px;
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:.03em;
+    font-size:12px;
 }
 
 .swatch{

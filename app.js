@@ -407,6 +407,62 @@ function setOffline()
     setText("connectionState", "OFFLINE");
 }
 
+// This browser tab's own MQTT connection lifecycle - separate from the
+// device's own System Events log. Kept in memory only (resets on reload);
+// exists specifically to give real evidence next time the status dots go
+// red and don't self-recover, instead of guessing after the fact.
+const connectionLogEntries = [];
+
+function connectionLog(msg)
+{
+    connectionLogEntries.unshift({
+        time: new Date().toLocaleTimeString([], { hour12: false }),
+        msg,
+    });
+
+    if (connectionLogEntries.length > 30)
+        connectionLogEntries.length = 30;
+
+    renderConnectionLog();
+}
+
+function renderConnectionLog()
+{
+    const list = byId("connectionLogList");
+
+    if (!list)
+        return;
+
+    list.innerHTML = "";
+
+    if (connectionLogEntries.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No events yet this session.";
+        list.appendChild(empty);
+        return;
+    }
+
+    connectionLogEntries.forEach(entry =>
+    {
+        const row = document.createElement("div");
+        row.className = "historyItem";
+        row.style.borderLeftColor = "var(--cyan)";
+
+        const title = document.createElement("strong");
+        title.textContent = entry.msg;
+
+        const time = document.createElement("span");
+        time.textContent = entry.time;
+
+        row.appendChild(title);
+        row.appendChild(time);
+
+        list.appendChild(row);
+    });
+}
+
 // ===== Printer tab =====
 
 // The printer reports tray colours as hex RRGGBBAA; CSS wants #RRGGBB.
@@ -427,48 +483,91 @@ function trayLabel(tray)
     return tray.type ? `Tray ${tray.id + 1} - ${tray.type}` : `Tray ${tray.id + 1}`;
 }
 
-// Bambu's stg_cur sub-stage codes, while gcode_state is RUNNING/PREPARE -
-// same table used by Home Assistant's Bambu integration (community
-// reverse-engineered, not officially documented by Bambu). -1 and 255 both
-// mean "idle/no stage" depending on printer generation; not shown here
-// since the caller only displays this while actively running/preparing.
+// Bambu's stg_cur sub-stage codes, while gcode_state is RUNNING/PREPARE.
+// Ported directly from BambuStudio's own get_stage_string() in
+// src/slic3r/GUI/DeviceManager.cpp - the actual source of the on-screen
+// text, not a reverse-engineered guess. -1 and 255 both mean "idle/no
+// stage" depending on printer generation; not shown here since the caller
+// only displays this while actively running/preparing.
 const STAGE_TEXT = {
     0: "Printing",
     1: "Auto bed leveling",
-    2: "Heating bed",
-    3: "Sweeping XY mech mode",
+    2: "Heatbed preheating",
+    3: "Vibration compensation",
     4: "Changing filament",
     5: "M400 pause",
-    6: "Paused - filament runout",
-    7: "Heating hotend",
-    8: "Calibrating extrusion",
+    6: "Paused (filament ran out)",
+    7: "Heating nozzle",
+    8: "Calibrating dynamic flow",
     9: "Scanning bed surface",
     10: "Inspecting first layer",
-    11: "Identifying build plate",
-    12: "Calibrating micro lidar",
+    11: "Identifying build plate type",
+    12: "Calibrating Micro Lidar",
     13: "Homing toolhead",
     14: "Cleaning nozzle tip",
     15: "Checking extruder temperature",
-    16: "Paused by user",
-    17: "Paused - front cover open",
-    18: "Calibrating micro lidar",
-    19: "Calibrating extrusion flow",
-    20: "Paused - nozzle temp malfunction",
-    21: "Paused - bed temp malfunction",
-    22: "Unloading filament",
-    23: "Paused - step skipped",
-    24: "Loading filament",
-    25: "Calibrating motor noise",
-    26: "Paused - AMS lost",
-    27: "Paused - low fan speed",
-    28: "Paused - chamber temp error",
+    16: "Paused by the user",
+    17: "Pause (front cover fall off)",
+    18: "Calibrating the micro lidar",
+    19: "Calibrating flow ratio",
+    20: "Pause (nozzle temperature malfunction)",
+    21: "Pause (heatbed temperature malfunction)",
+    22: "Filament unloading",
+    23: "Pause (step loss)",
+    24: "Filament loading",
+    25: "Motor noise cancellation",
+    26: "Pause (AMS offline)",
+    27: "Pause (low speed of the heatbreak fan)",
+    28: "Pause (chamber temperature control problem)",
     29: "Cooling chamber",
-    30: "Paused by G-code",
-    31: "Motor noise calibration",
-    32: "Paused - nozzle covered",
-    33: "Paused - cutter error",
-    34: "Paused - first layer error",
-    35: "Paused - nozzle clog",
+    30: "Pause (Gcode inserted by user)",
+    31: "Motor noise showoff",
+    32: "Pause (nozzle clumping)",
+    33: "Pause (cutter error)",
+    34: "Pause (first layer error)",
+    35: "Pause (nozzle clog)",
+    36: "Measuring motion precision",
+    37: "Enhancing motion precision",
+    38: "Measure motion accuracy",
+    39: "Nozzle offset calibration",
+    40: "High temperature auto bed levelling",
+    41: "Auto Check: Quick Release Lever",
+    42: "Auto Check: Door and Upper Cover",
+    43: "Laser Calibration",
+    44: "Auto Check: Platform",
+    45: "Confirming BirdsEye Camera location",
+    46: "Calibrating BirdsEye Camera",
+    47: "Auto bed leveling - phase 1",
+    48: "Auto bed leveling - phase 2",
+    49: "Heating chamber",
+    50: "Adjusting heatbed temperature",
+    51: "Printing calibration lines",
+    52: "Auto Check: Material",
+    53: "Live View Camera Calibration",
+    54: "Waiting for heatbed to reach target temperature",
+    55: "Auto Check: Material Position",
+    56: "Cutting Module Offset Calibration",
+    57: "Measuring Surface",
+    58: "Thermal preconditioning for first layer optimization",
+    59: "Homing Blade Holder",
+    60: "Calibrating Camera Offset",
+    61: "Calibrating Blade Holder Position",
+    62: "Hotend Pick and Place Test",
+    63: "Waiting for the Chamber temperature to equalize",
+    64: "Preparing Hotend",
+    65: "Calibrating the detection position of nozzle clumping",
+    66: "Purifying the chamber air",
+    67: "Measuring Rotary Attachment",
+    68: "The toolhead moves above the purge chute",
+    69: "Cooling down the nozzle",
+    70: "The toolhead moves to the center of the heatbed",
+    71: "Active Arc Fitting",
+    72: "Hotend Type Detection",
+    73: "Build plate alignment detection",
+    74: "Heatbed surface foreign object detection",
+    75: "Heatbed underside foreign object detection",
+    76: "Pre-extrusion before printing",
+    77: "Preparing AMS",
 };
 
 function stageText(stgCur)
@@ -827,7 +926,10 @@ function updatePrinter(data)
     // when the printer is really just idle again.
     const displayState = state === "FINISH" ? "IDLE" : state;
     setText("printerState", bambuOk ? displayState : "PRINTER UNREACHABLE");
-    setText("printerProject", data.subtaskName || "No project");
+    // The firmware doesn't clear subtask_name on its own (Bambu doesn't
+    // send an explicit "cleared" message for it) - once idle there's no
+    // "current project" to show, regardless of what the last one was.
+    setText("printerProject", displayState === "IDLE" ? "No project" : (data.subtaskName || "No project"));
 
     const hero = byId("printerHero");
 
@@ -863,13 +965,46 @@ function updatePrinter(data)
     setText("printerFan", bambuOk ? `${Number(data.fanSpeedPct) || 0}%` : "--%");
 
     const trays = data.trays || [];
-    const trayNow = data.trayNow;
+    const running = bambuOk && state === "RUNNING";
+    const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
+
+    // MQTT's tray_now is too sparse to rely on (confirmed live - it's often
+    // just absent from the report stream entirely). The Task API's
+    // amsDetailMapping tells us which slot the job was actually assigned
+    // to, which is available as soon as printing starts and doesn't depend
+    // on catching the right MQTT message. Falls back to tray_now if no
+    // task data is available yet.
+    const primaryDetail = latestPrinterTask && latestPrinterTask.amsDetail && latestPrinterTask.amsDetail.length > 0
+        ? latestPrinterTask.amsDetail[0]
+        : null;
+
+    const trayNow = preparing && primaryDetail
+        ? (primaryDetail.amsId * 4) + primaryDetail.slotId
+        : data.trayNow;
+
+    const swatch = byId("activeSwatch");
+
+    if (preparing && primaryDetail)
+    {
+        if (swatch)
+            swatch.style.background = trayColorCss(primaryDetail.color);
+
+        setText("activeFilamentText", primaryDetail.type || "--");
+        setText("activeFilamentWeight", `${primaryDetail.weight.toFixed(1)} g`);
+    }
+    else
+    {
+        if (swatch)
+            swatch.style.background = "#2a3136";
+
+        setText("activeFilamentText", "--");
+        setText("activeFilamentWeight", "");
+    }
 
     // Started/Ended/Elapsed describe whichever print is most recent -
     // still running, or just finished - not just "while running", so you
     // can see what happened after it's done. currentStart only resets when
     // a NEW print starts, so this naturally covers both cases.
-    const running = bambuOk && state === "RUNNING";
     const hasCurrentPrint = Boolean(data.currentStart);
 
     setText("printerStarted", hasCurrentPrint ? data.currentStart : "--");
@@ -901,6 +1036,31 @@ function setPrinterOffline(message)
         hero.className = "printerHero panel offline";
 }
 
+// ===== Bambu Cloud Task API (weight/AMS detail - MQTT can't provide this) =====
+
+let latestPrinterTask = null;
+
+async function updatePrinterTask()
+{
+    try
+    {
+        const res = await fetch("/api/printer-task");
+
+        if (!res.ok)
+            return;
+
+        const data = await res.json();
+        latestPrinterTask = data.task || null;
+    }
+    catch (err)
+    {
+        console.log("printer-task fetch failed", err);
+    }
+}
+
+updatePrinterTask();
+setInterval(updatePrinterTask, 60000);
+
 // ===== MQTT (browser, over Secure WebSockets) =====
 
 let lastMessageAt = 0;
@@ -922,11 +1082,15 @@ const client = mqtt.connect(`wss://${BROKER_CONFIG.host}:${BROKER_CONFIG.port}/m
 client.on("connect", () =>
 {
     setDot("brokerDot", true);
+    connectionLog("Connected to broker");
 
     client.subscribe(BROKER_CONFIG.topic, (err) =>
     {
         if (err)
+        {
             setDot("brokerDot", false);
+            connectionLog(`Room topic subscribe failed: ${err.message}`);
+        }
     });
 
     // Subscribed separately rather than with a "#" wildcard, so the viewer
@@ -942,17 +1106,20 @@ client.on("connect", () =>
 client.on("reconnect", () =>
 {
     setDot("brokerDot", false);
+    connectionLog("Reconnecting to broker...");
 });
 
 client.on("close", () =>
 {
     setDot("brokerDot", false);
+    connectionLog("Broker connection closed");
     setOffline();
 });
 
-client.on("error", () =>
+client.on("error", (err) =>
 {
     setDot("brokerDot", false);
+    connectionLog(`Broker error: ${(err && err.message) || String(err)}`);
 });
 
 client.on("message", (topic, payload) =>
@@ -980,6 +1147,7 @@ client.on("message", (topic, payload) =>
     }
     catch (err)
     {
+        connectionLog(`Bad payload on room topic: ${err.message}`);
         setOffline();
     }
 });
@@ -990,7 +1158,11 @@ setPrinterOffline("Waiting for the printer monitor...");
 setInterval(() =>
 {
     if (lastMessageAt && Date.now() - lastMessageAt > STALE_AFTER_MS)
+    {
+        const silentFor = Math.round((Date.now() - lastMessageAt) / 1000);
+        connectionLog(`Room data stale - ${silentFor}s since last message (client.connected=${client.connected})`);
         setOffline();
+    }
 
     if (lastPrinterMessageAt && Date.now() - lastPrinterMessageAt > STALE_AFTER_MS)
         setPrinterOffline("Printer monitor has not published in over 30s");
@@ -1099,15 +1271,20 @@ document.addEventListener("visibilitychange", () =>
     if (document.visibilityState !== "visible")
         return;
 
+    const silentFor = lastMessageAt ? Math.round((Date.now() - lastMessageAt) / 1000) : null;
+    connectionLog(`Tab visible again (client.connected=${client.connected}, ${silentFor === null ? "no messages yet" : silentFor + "s since last message"})`);
+
     // mqtt.js's own `connected` flag can still read true even when a
     // backgrounded tab's connection has effectively died (the browser
     // throttled it enough that neither side noticed the drop) - trusting
     // that flag here is what let this go stale until a full page reload.
-    // Reconnecting unconditionally is cheap when already healthy (mqtt.js
-    // just cycles the connection) and is the only way to reliably recover
-    // the actually-broken case.
+    // client.reconnect() alone turned out not to be enough to recover that
+    // case reliably (still seen going stale after it) - forcing a hard
+    // end() first guarantees a clean break regardless of what the
+    // `connected` flag currently claims, rather than relying on
+    // reconnect()'s own judgment of whether one is needed.
     setDot("brokerDot", false);
-    client.reconnect();
+    client.end(true, {}, () => client.reconnect());
 });
 
 const bootInfoToggle = byId("bootInfoToggle");
@@ -1161,6 +1338,24 @@ if (systemEventsToggle && systemEventsPanel)
             systemEventsPanel.setAttribute("hidden", "");
 
         systemEventsToggle.textContent = hidden ? "Hide" : "Events";
+    });
+}
+
+const connectionLogToggle = byId("connectionLogToggle");
+const connectionLogPanel = byId("connectionLogPanel");
+
+if (connectionLogToggle && connectionLogPanel)
+{
+    connectionLogToggle.addEventListener("click", () =>
+    {
+        const hidden = connectionLogPanel.hasAttribute("hidden");
+
+        if (hidden)
+            connectionLogPanel.removeAttribute("hidden");
+        else
+            connectionLogPanel.setAttribute("hidden", "");
+
+        connectionLogToggle.textContent = hidden ? "Hide" : "Connection Log";
     });
 }
 

@@ -251,6 +251,19 @@
                     <button type="button" class="infoBtn" id="bootInfoToggle">History</button>
                     <button type="button" class="infoBtn" id="otaTriggerToggle">Update</button>
                     <button type="button" class="infoBtn" id="systemEventsToggle">Events</button>
+                    <button type="button" class="infoBtn" id="connectionLogToggle">Connection Log</button>
+                </div>
+
+                <div class="bootInfoPanel" id="connectionLogPanel" hidden>
+                    <p class="hint">
+                        This browser tab's own MQTT connection lifecycle (not the
+                        device's) - connect/reconnect/close/error/staleness events,
+                        kept for this page load only. Useful evidence next time the
+                        status dots go red and don't recover on their own.
+                    </p>
+                    <div class="historyList" id="connectionLogList">
+                        <div class="historyItem">No events yet this session.</div>
+                    </div>
                 </div>
 
                 <div class="bootInfoPanel" id="bootInfoPanel" hidden>
@@ -342,10 +355,13 @@
                     <p id="printerProject">No project</p>
                 </div>
                 <div class="printerHeroSide">
-                    <span class="label">Project preview</span>
-                    <div class="printerThumbnail" id="printerThumbnailWrap">
-                        <img id="printerThumbnail" alt="" hidden>
-                        <span id="printerThumbnailPlaceholder">No preview</span>
+                    <span class="label">Active filament</span>
+                    <div class="activeFilament">
+                        <span class="swatch" id="activeSwatch"></span>
+                        <div>
+                            <strong id="activeFilamentText">--</strong>
+                            <small id="activeFilamentWeight"></small>
+                        </div>
                     </div>
                 </div>
             </section>
