@@ -460,8 +460,11 @@
                             <input type="text" id="filamentColorName" placeholder="White" required>
                         </label>
                         <label>
-                            Color swatch
-                            <input type="color" id="filamentColorHex" value="#ffffff">
+                            Color hex (RRGGBB)
+                            <span class="hexInputRow">
+                                <input type="text" id="filamentColorHex" placeholder="FFFFFF" maxlength="6" pattern="[0-9A-Fa-f]{6}" value="FFFFFF">
+                                <span class="hexPreview" id="filamentColorPreview"></span>
+                            </span>
                         </label>
                         <label>
                             Brand (optional)

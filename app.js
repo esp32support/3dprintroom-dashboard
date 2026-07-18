@@ -1367,6 +1367,19 @@ loadFilamentLibrary();
 
 const filamentAddToggle = byId("filamentAddToggle");
 const filamentAddForm = byId("filamentAddForm");
+const filamentColorHexInput = byId("filamentColorHex");
+const filamentColorPreview = byId("filamentColorPreview");
+
+// Windows' native <input type=color> picker was unreliable to confirm a
+// choice in, so this is a plain hex text field instead (also lets a Bambu
+// color hex be pasted in directly for exact auto-deduction matches) - this
+// just keeps the little preview swatch next to it in sync as you type.
+if (filamentColorHexInput && filamentColorPreview)
+{
+    const updatePreview = () => { filamentColorPreview.style.background = trayColorCss(filamentColorHexInput.value); };
+    filamentColorHexInput.addEventListener("input", updatePreview);
+    updatePreview();
+}
 
 if (filamentAddToggle && filamentAddForm)
 {
