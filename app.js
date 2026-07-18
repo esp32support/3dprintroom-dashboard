@@ -1252,52 +1252,61 @@ function renderFilamentLibrary()
     });
 }
 
+// Refetches from KV immediately before applying a change, rather than
+// mutating whatever this tab happened to load at page-open time. This
+// dashboard gets left open in multiple tabs at once - without this, an
+// old tab (or an automatic background deduction, see
+// processFilamentDeductions) blindly saving its own stale in-memory copy
+// would silently overwrite filaments/spools added from another tab since
+// this one was last loaded. Doesn't fully eliminate the race (two saves
+// within the same round-trip can still collide), but closes the common
+// case of "left a tab open for a while, then it clobbers a recent edit."
+async function withFreshLibrary(mutatorFn)
+{
+    await loadFilamentLibrary();
+    mutatorFn(filamentLibrary);
+    renderFilamentLibrary();
+    await saveFilamentLibrary();
+}
+
 function onRemoveFilament(filamentId)
 {
     if (!window.confirm("Remove this filament and all its spools?"))
         return;
 
-    filamentLibrary.filaments = filamentLibrary.filaments.filter(f => f.id !== filamentId);
-    renderFilamentLibrary();
-    saveFilamentLibrary();
+    withFreshLibrary(lib => { lib.filaments = lib.filaments.filter(f => f.id !== filamentId); });
 }
 
 function onRemoveSpool(filamentId, spoolId)
 {
-    const f = filamentLibrary.filaments.find(x => x.id === filamentId);
+    withFreshLibrary(lib =>
+    {
+        const f = lib.filaments.find(x => x.id === filamentId);
 
-    if (!f)
-        return;
-
-    f.spools = f.spools.filter(s => s.id !== spoolId);
-    renderFilamentLibrary();
-    saveFilamentLibrary();
+        if (f)
+            f.spools = f.spools.filter(s => s.id !== spoolId);
+    });
 }
 
 function onEditSpoolRemaining(filamentId, spoolId, value)
 {
-    const f = filamentLibrary.filaments.find(x => x.id === filamentId);
-    const spool = f && f.spools.find(s => s.id === spoolId);
-
-    if (!spool)
-        return;
-
     const n = Number(value);
 
     if (!Number.isFinite(n) || n < 0)
         return;
 
-    spool.remaining = n;
-    saveFilamentLibrary();
+    withFreshLibrary(lib =>
+    {
+        const f = lib.filaments.find(x => x.id === filamentId);
+        const spool = f && f.spools.find(s => s.id === spoolId);
+
+        if (spool)
+            spool.remaining = n;
+    });
 }
 
 function onNewLibrarySpool(filamentId)
 {
-    const f = filamentLibrary.filaments.find(x => x.id === filamentId);
-
-    if (!f)
-        return;
-
     const input = window.prompt("New spool weight in grams:", "1000");
 
     if (input === null)
@@ -1308,9 +1317,13 @@ function onNewLibrarySpool(filamentId)
     if (!Number.isFinite(total) || total <= 0)
         return;
 
-    f.spools.push({ id: uid(), total, remaining: total, createdAt: new Date().toISOString() });
-    renderFilamentLibrary();
-    saveFilamentLibrary();
+    withFreshLibrary(lib =>
+    {
+        const f = lib.filaments.find(x => x.id === filamentId);
+
+        if (f)
+            f.spools.push({ id: uid(), total, remaining: total, createdAt: new Date().toISOString() });
+    });
 }
 
 // Auto-deducts each finished print's acquired weight from the matching
@@ -1318,14 +1331,28 @@ function onNewLibrarySpool(filamentId)
 // history (see matchTaskForHistoryItem). processedPrints - persisted in KV
 // alongside the library itself - stops the same print being deducted twice
 // across repeated polls or page reloads.
-function processFilamentDeductions(items)
+async function processFilamentDeductions(items)
 {
     if (!filamentLibraryLoaded || !items || items.length === 0)
         return;
 
+    const candidates = items.filter(item => item.start && item.end);
+    const hasUnprocessed = candidates.some(item =>
+        !filamentLibrary.processedPrints.includes(`${item.name}__${item.start}`));
+
+    if (!hasUnprocessed)
+        return;
+
+    // This runs automatically on every poll, with no user action involved -
+    // refresh right before mutating so it can't silently clobber a filament
+    // or spool added from another tab since this one last loaded (see
+    // withFreshLibrary above). Gated on hasUnprocessed so it's not doing a
+    // KV read every 5s, only when there's actually a finished print to settle.
+    await loadFilamentLibrary();
+
     let changed = false;
 
-    items.forEach(item =>
+    candidates.forEach(item =>
     {
         if (!item.start || !item.end)
             return;   // still running, or timestamps missing - nothing to settle yet
@@ -1377,7 +1404,7 @@ function processFilamentDeductions(items)
         filamentLibrary.processedPrints = filamentLibrary.processedPrints.slice(-200);
 
     renderFilamentLibrary();
-    saveFilamentLibrary();
+    await saveFilamentLibrary();
 }
 
 loadFilamentLibrary();
@@ -1424,14 +1451,11 @@ if (filamentAddToggle && filamentAddForm)
         if (!material || !color)
             return;
 
-        filamentLibrary.filaments.push({ id: uid(), material, color, colorHex, brand, spools: [] });
-
         filamentAddForm.reset();
         filamentAddForm.setAttribute("hidden", "");
         filamentAddToggle.textContent = "+ Add filament";
 
-        renderFilamentLibrary();
-        saveFilamentLibrary();
+        withFreshLibrary(lib => { lib.filaments.push({ id: uid(), material, color, colorHex, brand, spools: [] }); });
     });
 }
 
