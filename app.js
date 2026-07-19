@@ -1743,14 +1743,36 @@ client.on("error", (err) =>
     connectionLog(`Broker error: ${(err && err.message) || String(err)}`);
 });
 
+// Both devices publish with retain=true on every message, not just the
+// first - so the MQTT retain flag can't tell a genuinely fresh publish
+// apart from the same old snapshot getting redelivered, which happens on
+// every (re)subscribe. That includes mqtt.js's own automatic reconnect
+// after any transient WebSocket drop, which happens far more often than
+// an actual device outage on a tab left open a while. Blindly stamping
+// lastMessageAt/lastPrinterMessageAt on every "message" event meant each
+// of those reconnects "refreshed" the staleness clock with stale data,
+// masking a genuinely offline device indefinitely - the status dots could
+// stay green forever even with zero real data since the device went dark.
+// Only count it as fresh if the device's own reported clock actually
+// moved since the last message seen.
+let lastSeenUptime = null;
+let lastSeenPrinterNow = null;
+
 client.on("message", (topic, payload) =>
 {
     if (topic === PRINTER_TOPIC)
     {
         try
         {
-            lastPrinterMessageAt = Date.now();
-            updatePrinter(JSON.parse(payload.toString()));
+            const data = JSON.parse(payload.toString());
+
+            if (data.now !== lastSeenPrinterNow)
+            {
+                lastSeenPrinterNow = data.now;
+                lastPrinterMessageAt = Date.now();
+            }
+
+            updatePrinter(data);
         }
         catch (err)
         {
@@ -1763,7 +1785,13 @@ client.on("message", (topic, payload) =>
     try
     {
         const data = JSON.parse(payload.toString());
-        lastMessageAt = Date.now();
+
+        if (data.uptime !== lastSeenUptime)
+        {
+            lastSeenUptime = data.uptime;
+            lastMessageAt = Date.now();
+        }
+
         updateStatus(data);
     }
     catch (err)
