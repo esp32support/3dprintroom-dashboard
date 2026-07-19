@@ -1007,23 +1007,30 @@ function updatePrinter(data)
             stageEl.textContent = stageText(data.stageCur);
     }
 
+    const trays = data.trays || [];
+    const running = bambuOk && state === "RUNNING";
+    const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
+
+    // The device doesn't reset layerNum/totalLayerNum on its own once a
+    // print finishes (same "doesn't clear on its own" behavior as
+    // subtask_name above) - gating this on total > 0 alone meant the
+    // Progress card kept showing the last completed print's numbers
+    // indefinitely, even a full day later. Only show it while a print is
+    // actually active.
     const layer = Number(data.layerNum) || 0;
     const total = Number(data.totalLayerNum) || 0;
+    const showProgress = preparing && total > 0;
 
-    setText("printerLayer", total > 0 ? String(layer) : "--");
-    setText("printerLayerTotal", total > 0 ? ` / ${total}` : " / --");
+    setText("printerLayer", showProgress ? String(layer) : "--");
+    setText("printerLayerTotal", showProgress ? ` / ${total}` : " / --");
 
-    const pct = total > 0 ? Math.round((layer / total) * 100) : 0;
-    setText("printerProgressPct", total > 0 ? `${pct}%` : "--%");
+    const pct = showProgress ? Math.round((layer / total) * 100) : 0;
+    setText("printerProgressPct", showProgress ? `${pct}%` : "--%");
     setBar("printerProgressBar", pct, 100, "var(--cyan)");
 
     setText("printerNozzle", `${Number(data.nozzleTemp || 0).toFixed(1)} °C`);
     setText("printerBed", `${Number(data.bedTemp || 0).toFixed(1)} °C`);
     setText("printerFan", bambuOk ? `${Number(data.fanSpeedPct) || 0}%` : "--%");
-
-    const trays = data.trays || [];
-    const running = bambuOk && state === "RUNNING";
-    const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
 
     // MQTT's tray_now is the printer's own live, direct report of which
     // slot is physically engaged right now - that's the only thing that
@@ -1064,15 +1071,16 @@ function updatePrinter(data)
         setText("activeFilamentWeight", "");
     }
 
-    // Started/Ended/Elapsed describe whichever print is most recent -
-    // still running, or just finished - not just "while running", so you
-    // can see what happened after it's done. currentStart only resets when
-    // a NEW print starts, so this naturally covers both cases.
-    const hasCurrentPrint = Boolean(data.currentStart);
-
-    setText("printerStarted", hasCurrentPrint ? formatDeviceDate(data.currentStart) : "--");
-    setText("printerEnded", data.currentEnd ? formatDeviceDate(data.currentEnd) : "--");
-    setText("printerElapsed", hasCurrentPrint
+    // Previously shown whenever currentStart was set, on the theory of
+    // "still running, or just finished, so you can see what happened after
+    // it's done" - in practice that meant a finished print's Started/
+    // Ended/Elapsed lingered here indefinitely (a full day later, in one
+    // case), since currentStart only ever changes when a NEW print starts.
+    // The finished print's own summary already lives in Print history -
+    // this card is specifically about what's happening right now.
+    setText("printerStarted", preparing ? formatDeviceDate(data.currentStart) : "--");
+    setText("printerEnded", preparing && data.currentEnd ? formatDeviceDate(data.currentEnd) : "--");
+    setText("printerElapsed", preparing
         ? printDuration(data.currentStart, data.currentEnd || data.now)
         : "--");
 
