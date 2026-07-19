@@ -1100,7 +1100,7 @@ function setPrinterOffline(message)
     setDot("printerWifiDot", false);
     setDot("printerMqttDot", false);
 
-    setText("printerState", "NO DATA");
+    setText("printerState", "DISCONNECTED");
     setText("printerProject", message || "Monitor not reporting");
 
     const hero = byId("printerHero");
@@ -1765,14 +1765,22 @@ client.on("message", (topic, payload) =>
         try
         {
             const data = JSON.parse(payload.toString());
+            const isFresh = data.now !== lastSeenPrinterNow;
 
-            if (data.now !== lastSeenPrinterNow)
+            if (isFresh)
             {
                 lastSeenPrinterNow = data.now;
                 lastPrinterMessageAt = Date.now();
+                updatePrinter(data);
             }
 
-            updatePrinter(data);
+            // A stale redelivery has nothing new to show - previously this
+            // still called updatePrinter(data), repainting the display
+            // from that old payload's own content (e.g. "IDLE" from
+            // whatever gcode_state it last legitimately reported) even
+            // though the staleness watchdog's dots had already gone red.
+            // Leaving the "gone stale" display entirely to that watchdog
+            // (setPrinterOffline, below) keeps the two from fighting.
         }
         catch (err)
         {
@@ -1785,14 +1793,14 @@ client.on("message", (topic, payload) =>
     try
     {
         const data = JSON.parse(payload.toString());
+        const isFresh = data.uptime !== lastSeenUptime;
 
-        if (data.uptime !== lastSeenUptime)
+        if (isFresh)
         {
             lastSeenUptime = data.uptime;
             lastMessageAt = Date.now();
+            updateStatus(data);
         }
-
-        updateStatus(data);
     }
     catch (err)
     {
