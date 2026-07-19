@@ -474,6 +474,61 @@ function trayColorCss(hex)
     return "#" + hex.slice(0, 6);
 }
 
+// Rough hue-bucket approximation for auto-created filament library entries
+// (see syncAmsToLibrary) - there's no API for Bambu's own color names, so
+// this is just a reasonable starting label the user can rename via Edit.
+function guessColorName(hex)
+{
+    if (!hex || hex.length < 6)
+        return "Unknown";
+
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+
+    if (max < 40)
+        return "Black";
+
+    if (min > 215 && delta < 25)
+        return "White";
+
+    if (delta < 20)
+        return "Gray";
+
+    let hue = 0;
+
+    if (max === r)
+        hue = 60 * (((g - b) / delta) % 6);
+    else if (max === g)
+        hue = 60 * ((b - r) / delta + 2);
+    else
+        hue = 60 * ((r - g) / delta + 4);
+
+    if (hue < 0)
+        hue += 360;
+
+    if (hue < 15 || hue >= 345)
+        return "Red";
+    if (hue < 45)
+        return "Orange";
+    if (hue < 70)
+        return "Yellow";
+    if (hue < 160)
+        return "Green";
+    if (hue < 200)
+        return "Cyan";
+    if (hue < 255)
+        return "Blue";
+    if (hue < 290)
+        return "Purple";
+
+    return "Pink";
+}
+
 // Bambu's stg_cur sub-stage codes, while gcode_state is RUNNING/PREPARE.
 // Ported directly from BambuStudio's own get_stage_string() in
 // src/slic3r/GUI/DeviceManager.cpp - the actual source of the on-screen
@@ -653,8 +708,12 @@ function renderAmsGrid(trays, trayNow)
     });
 }
 
+let lastHistoryItems = [];
+
 function renderPrintHistory(items)
 {
+    lastHistoryItems = items || [];
+
     const list = byId("printHistoryList");
 
     if (!list)
@@ -701,10 +760,30 @@ function renderPrintHistory(items)
         detail.className = "historyDetail";
         detail.hidden = true;
 
+        const historyKey = `${item.name}__${item.start}`;
+        const override = filamentLibrary.historyOverrides[historyKey];
         const usage = parseTrayUsage(item.trays);
         const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
 
-        if (usage.length > 0)
+        // Manual corrections win over everything else - Bambu's own Task
+        // API is confirmed unreliable for jobs whose AMS slot wasn't
+        // explicitly set during slicing (Bambu Handy jobs, or auto-assigned
+        // on the printer's own screen): it falls back to a placeholder
+        // (slot 0, or a hardcoded default color) rather than the tray
+        // actually used, and there's no way to recover the true value from
+        // that API after the fact.
+        if (override)
+        {
+            const chips = document.createElement("div");
+            chips.className = "usageChips";
+            chips.appendChild(usageChip({
+                color: override.colorHex,
+                type: override.material,
+                amount: matchedTask ? `${matchedTask.weight.toFixed(1)}g` : "",
+            }));
+            detail.appendChild(chips);
+        }
+        else if (usage.length > 0)
         {
             const chips = document.createElement("div");
             chips.className = "usageChips";
@@ -728,6 +807,18 @@ function renderPrintHistory(items)
             none.textContent = "No filament usage recorded for this print - the A1's AMS-lite doesn't report enough data to measure it.";
             detail.appendChild(none);
         }
+
+        const fixBtn = document.createElement("button");
+        fixBtn.type = "button";
+        fixBtn.className = "infoBtn";
+        fixBtn.style.marginTop = "8px";
+        fixBtn.textContent = override ? "Edit correction" : "Fix filament";
+        fixBtn.addEventListener("click", (event) =>
+        {
+            event.stopPropagation();
+            onFixHistoryFilament(item, matchedTask);
+        });
+        detail.appendChild(fixBtn);
 
         const times = document.createElement("p");
         times.textContent = `Started ${formatDeviceDate(item.start)} - Ended ${formatDeviceDate(item.end)}`;
@@ -934,39 +1025,35 @@ function updatePrinter(data)
     const running = bambuOk && state === "RUNNING";
     const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
 
-    // The Task API's amsDetailMapping tells us which slot the job was
-    // actually assigned to, plus its weight - MQTT alone can't give us the
-    // weight at all. But if the Task API isn't available (secret not set
-    // up yet, fetch failed, still loading), fall back to MQTT's tray_now +
-    // the trays array so the hero still shows *something* rather than
-    // going blank just because the bonus data source is down.
-    const primaryDetail = latestPrinterTask && latestPrinterTask.amsDetail && latestPrinterTask.amsDetail.length > 0
-        ? latestPrinterTask.amsDetail[0]
-        : null;
-
-    const trayNow = preparing && primaryDetail
-        ? (primaryDetail.amsId * 4) + primaryDetail.slotId
-        : data.trayNow;
-
+    // MQTT's tray_now is the printer's own live, direct report of which
+    // slot is physically engaged right now - that's the only thing that
+    // should ever decide "which slot is active." Previously this was
+    // overridden by (Task API amsId*4+slotId) whenever any Task API match
+    // existed, which broke in two ways: the arithmetic assumes amsId=0
+    // and a specific slotId convention that isn't verified, and - more
+    // fundamentally - a Studio-desktop-sliced job's Task record can get
+    // matched (by title+time, see matchTaskForHistoryItem) even when the
+    // job actually printed was submitted a completely different way (e.g.
+    // Bambu Handy), pointing the "active" highlight at whatever slot that
+    // unrelated Task record happened to reference. The Task API is now
+    // only ever used to annotate weight onto whichever slot MQTT already
+    // says is active - it can no longer redirect which slot that is.
+    const trayNow = data.trayNow;
     const mqttActiveTray = trays.find(t => t.id === trayNow);
+
+    const matchingDetail = latestPrinterTask && latestPrinterTask.amsDetail
+        ? latestPrinterTask.amsDetail.find(d => (d.amsId * 4) + d.slotId === trayNow)
+        : null;
 
     const swatch = byId("activeSwatch");
 
-    if (preparing && primaryDetail)
-    {
-        if (swatch)
-            swatch.style.background = trayColorCss(primaryDetail.color);
-
-        setText("activeFilamentText", primaryDetail.type || "--");
-        setText("activeFilamentWeight", `${primaryDetail.weight.toFixed(1)} g`);
-    }
-    else if (preparing && mqttActiveTray && mqttActiveTray.type)
+    if (preparing && mqttActiveTray && mqttActiveTray.type)
     {
         if (swatch)
             swatch.style.background = trayColorCss(mqttActiveTray.color);
 
         setText("activeFilamentText", mqttActiveTray.type);
-        setText("activeFilamentWeight", "");
+        setText("activeFilamentWeight", matchingDetail ? `${matchingDetail.weight.toFixed(1)} g` : "");
     }
     else
     {
@@ -995,14 +1082,17 @@ function updatePrinter(data)
     // Confirmed live against a print that was still ~2h from finishing -
     // the Task API's weight/amsDetail is populated from the slicer's own
     // estimate as soon as the job starts, not filled in only on completion.
-    setText("printerFilamentUsed", preparing && primaryDetail
-        ? `${primaryDetail.weight.toFixed(1)} g (${primaryDetail.type || "?"})`
+    // Only trusted here when it matches the slot MQTT says is actually
+    // active (see matchingDetail above) - same reasoning as the hero.
+    setText("printerFilamentUsed", preparing && matchingDetail
+        ? `${matchingDetail.weight.toFixed(1)} g (${matchingDetail.type || "?"})`
         : "--");
 
     renderAmsGrid(trays, trayNow);
     renderPrintHistory(data.history || []);
     renderTodayTotals(data.history || []);
     processFilamentDeductions(data.history || []);
+    syncAmsToLibrary(trays);
 }
 
 function setPrinterOffline(message)
@@ -1104,7 +1194,7 @@ setInterval(updatePrinterTask, 60000);
 // device viewing the dashboard, and survives independently of any single
 // ESP32's NVS.
 
-let filamentLibrary = { filaments: [], processedPrints: [] };
+let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {} };
 let filamentLibraryLoaded = false;
 
 function uid()
@@ -1124,6 +1214,7 @@ async function loadFilamentLibrary()
             filamentLibrary = {
                 filaments: data.filaments || [],
                 processedPrints: data.processedPrints || [],
+                historyOverrides: data.historyOverrides || {},
             };
         }
     }
@@ -1196,15 +1287,27 @@ function renderFilamentLibrary()
             meta.appendChild(sub);
         }
 
+        const actions = document.createElement("div");
+        actions.className = "filamentEntryActions";
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "infoBtn";
+        editBtn.textContent = "Edit";
+        editBtn.addEventListener("click", () => onEditFilament(f.id));
+
         const removeBtn = document.createElement("button");
         removeBtn.type = "button";
         removeBtn.className = "infoBtn";
         removeBtn.textContent = "Remove";
         removeBtn.addEventListener("click", () => onRemoveFilament(f.id));
 
+        actions.appendChild(editBtn);
+        actions.appendChild(removeBtn);
+
         head.appendChild(sw);
         head.appendChild(meta);
-        head.appendChild(removeBtn);
+        head.appendChild(actions);
         entry.appendChild(head);
 
         const spoolList = document.createElement("div");
@@ -1326,6 +1429,115 @@ function onNewLibrarySpool(filamentId)
     });
 }
 
+// Manually corrects a history entry's recorded material/color when Bambu's
+// own Task API got it wrong - confirmed happening for jobs whose AMS slot
+// wasn't explicitly set during slicing (Bambu Handy jobs, or auto-assigned
+// on the printer's own screen): the API falls back to a placeholder rather
+// than the tray actually used, with no way to recover the true value
+// after the fact. Grams are left alone (matchedTask.weight is accurate),
+// only material/color get overridden.
+async function onFixHistoryFilament(item, matchedTask)
+{
+    const key = `${item.name}__${item.start}`;
+    const existing = filamentLibrary.historyOverrides[key];
+    const guess = matchedTask && matchedTask.amsDetail && matchedTask.amsDetail[0];
+
+    const material = window.prompt(
+        "Actual material used:",
+        existing ? existing.material : (guess ? guess.type : "PLA"));
+
+    if (material === null || !material.trim())
+        return;
+
+    const colorHexInput = window.prompt(
+        "Actual color hex (RRGGBB):",
+        existing ? existing.colorHex : (guess ? guess.color.slice(0, 6) : ""));
+
+    if (colorHexInput === null)
+        return;
+
+    await withFreshLibrary(lib =>
+    {
+        lib.historyOverrides[key] = {
+            material: material.trim(),
+            colorHex: colorHexInput.replace("#", "").toUpperCase(),
+        };
+    });
+
+    renderPrintHistory(lastHistoryItems);
+}
+
+// Bambu is the controller, this dashboard just listens - the library
+// shouldn't require manually re-typing what's already loaded. Whenever the
+// AMS reports a material/color combo with no matching library entry yet,
+// create one automatically (default single 1000g spool - editable via the
+// spool weight field, or Edit if it's actually a partial spool). Only ever
+// adds; never touches or removes anything you've entered by hand.
+let lastAmsSyncKey = "";
+
+async function syncAmsToLibrary(trays)
+{
+    if (!filamentLibraryLoaded || !trays || trays.length === 0)
+        return;
+
+    const detected = trays.filter(t => t.type && t.color && t.color.length >= 6);
+
+    if (detected.length === 0)
+        return;
+
+    // Cheap fingerprint of what's currently loaded, so this doesn't do a
+    // KV read every 5s once everything currently in the AMS already has a
+    // library entry - only re-checks when the AMS contents actually change.
+    const syncKey = detected.map(t => `${t.id}:${t.type}:${t.color.slice(0, 6)}`).sort().join("|");
+
+    if (syncKey === lastAmsSyncKey)
+        return;
+
+    const missing = detected.filter(t =>
+    {
+        const hex = t.color.slice(0, 6).toUpperCase();
+        const material = t.type.toUpperCase();
+        return !filamentLibrary.filaments.some(f =>
+            f.material.toUpperCase() === material && (f.colorHex || "").toUpperCase() === hex);
+    });
+
+    lastAmsSyncKey = syncKey;
+
+    if (missing.length === 0)
+        return;
+
+    await loadFilamentLibrary();
+
+    let changed = false;
+
+    missing.forEach(t =>
+    {
+        const hex = t.color.slice(0, 6).toUpperCase();
+        const material = t.type.toUpperCase();
+        const alreadyThere = filamentLibrary.filaments.some(f =>
+            f.material.toUpperCase() === material && (f.colorHex || "").toUpperCase() === hex);
+
+        if (alreadyThere)
+            return;   // added by another tab between the pre-check above and this refresh
+
+        filamentLibrary.filaments.push({
+            id: uid(),
+            material: t.type,
+            color: guessColorName(hex),
+            colorHex: hex,
+            brand: "",
+            spools: [{ id: uid(), total: 1000, remaining: 1000, createdAt: new Date().toISOString() }],
+        });
+        changed = true;
+    });
+
+    if (!changed)
+        return;
+
+    renderFilamentLibrary();
+    await saveFilamentLibrary();
+}
+
 // Auto-deducts each finished print's acquired weight from the matching
 // library spool, using the same Task API match used to enrich print
 // history (see matchTaskForHistoryItem). processedPrints - persisted in KV
@@ -1364,7 +1576,16 @@ async function processFilamentDeductions(items)
 
         const usage = parseTrayUsage(item.trays);
         const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
-        const details = matchedTask ? matchedTask.amsDetail : [];
+        const override = filamentLibrary.historyOverrides[key];
+
+        // A manual correction (see onFixHistoryFilament) means Bambu's own
+        // per-tray breakdown is known wrong for this print - deduct the
+        // task's total weight against the corrected material/color as a
+        // single entry instead of trusting amsDetail's (possibly multiple,
+        // possibly wrong) trays.
+        const details = override
+            ? (matchedTask ? [{ color: override.colorHex, type: override.material, weight: matchedTask.weight }] : [])
+            : (matchedTask ? matchedTask.amsDetail : []);
 
         if (details.length === 0)
             return;   // Task API hasn't surfaced this print yet - retry on a later poll

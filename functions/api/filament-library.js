@@ -19,7 +19,7 @@ function jsonResponse(obj, status = 200) {
 }
 
 function emptyLibrary() {
-    return { filaments: [], processedPrints: [] };
+    return { filaments: [], processedPrints: [], historyOverrides: {} };
 }
 
 export async function onRequestGet(context) {
@@ -30,7 +30,15 @@ export async function onRequestGet(context) {
     }
 
     const raw = await env.FILAMENT_KV.get(KV_KEY);
-    return jsonResponse(raw ? JSON.parse(raw) : emptyLibrary());
+
+    if (!raw) {
+        return jsonResponse(emptyLibrary());
+    }
+
+    // historyOverrides was added after this had already been in use -
+    // default it in for anything saved before that so old data still loads.
+    const stored = JSON.parse(raw);
+    return jsonResponse({ ...emptyLibrary(), ...stored });
 }
 
 export async function onRequestPost(context) {
@@ -47,8 +55,9 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
-    if (!Array.isArray(body.filaments) || !Array.isArray(body.processedPrints)) {
-        return jsonResponse({ error: "body must have filaments[] and processedPrints[]" }, 400);
+    if (!Array.isArray(body.filaments) || !Array.isArray(body.processedPrints) ||
+        typeof body.historyOverrides !== "object" || body.historyOverrides === null) {
+        return jsonResponse({ error: "body must have filaments[], processedPrints[], historyOverrides{}" }, 400);
     }
 
     await env.FILAMENT_KV.put(KV_KEY, JSON.stringify(body));

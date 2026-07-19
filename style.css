@@ -872,6 +872,11 @@ dd{
     padding:4px 8px;
 }
 
+.filamentEntryActions{
+    display:flex;
+    gap:6px;
+}
+
 .spoolList{
     display:grid;
     gap:6px;
