@@ -1616,6 +1616,29 @@ async function processFilamentDeductions(items)
 
         const key = `${item.name}__${item.start}`;
 
+        // The Task API's weight is a full-print slice estimate, fixed at
+        // whatever the whole job was planned to use - it doesn't shrink to
+        // match how far a cancelled/failed print actually got. Deducting
+        // it anyway would over-charge the spool for material that was
+        // never actually extruded. item.outcome is the device's own
+        // gcode_state at the moment it stopped running ("FINISH" for a
+        // normal completion); anything else is treated as not fully
+        // trustworthy for weight purposes and skipped, marked processed so
+        // it doesn't get silently retried forever with equally-wrong data
+        // once (or if) the Task API happens to answer. History display
+        // and manual "Fix filament" corrections aren't affected by this -
+        // only the automatic deduction is.
+        if (item.outcome && item.outcome !== "FINISH")
+        {
+            if (!filamentLibrary.processedPrints.includes(key))
+            {
+                filamentLibrary.processedPrints.push(key);
+                changed = true;
+            }
+
+            return;
+        }
+
         if (filamentLibrary.processedPrints.includes(key))
             return;
 
