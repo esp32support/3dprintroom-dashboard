@@ -1056,7 +1056,6 @@ function updatePrinter(data)
     // only ever used to annotate weight onto whichever slot MQTT already
     // says is active - it can no longer redirect which slot that is.
     const trayNow = data.trayNow;
-    const mqttActiveTray = trays.find(t => t.id === trayNow);
 
     // The Task API's slotId is confirmed unreliable even for jobs sliced
     // and sent normally from Studio (live-verified: a task's amsDetail
@@ -1071,25 +1070,6 @@ function updatePrinter(data)
     const matchingDetail = amsDetail.length === 1
         ? amsDetail[0]
         : amsDetail.find(d => (d.amsId * 4) + d.slotId === trayNow) || null;
-
-    const swatch = byId("activeSwatch");
-
-    if (preparing && mqttActiveTray && mqttActiveTray.type)
-    {
-        if (swatch)
-            swatch.style.background = trayColorCss(mqttActiveTray.color);
-
-        setText("activeFilamentText", mqttActiveTray.type);
-        setText("activeFilamentWeight", matchingDetail ? `${matchingDetail.weight.toFixed(1)} g` : "");
-    }
-    else
-    {
-        if (swatch)
-            swatch.style.background = "#2a3136";
-
-        setText("activeFilamentText", "--");
-        setText("activeFilamentWeight", "");
-    }
 
     // Previously shown whenever currentStart was set, on the theory of
     // "still running, or just finished, so you can see what happened after
@@ -1111,7 +1091,9 @@ function updatePrinter(data)
     // the Task API's weight/amsDetail is populated from the slicer's own
     // estimate as soon as the job starts, not filled in only on completion.
     // Only trusted here when it matches the slot MQTT says is actually
-    // active (see matchingDetail above) - same reasoning as the hero.
+    // active (see matchingDetail above) - this is the only place that
+    // weight/color surfaces now that the hero's own duplicate "Active
+    // filament" readout was removed.
     setText("printerFilamentUsed", preparing && matchingDetail
         ? `${matchingDetail.weight.toFixed(1)} g (${matchingDetail.type || "?"})`
         : "--");

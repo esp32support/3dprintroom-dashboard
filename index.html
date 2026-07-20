@@ -355,14 +355,20 @@
                     <p id="printerProject">No project</p>
                 </div>
                 <div class="printerHeroSide">
-                    <span class="label">Active filament</span>
-                    <div class="activeFilament">
-                        <span class="swatch" id="activeSwatch"></span>
+                    <dl class="heroTempGrid">
                         <div>
-                            <strong id="activeFilamentText">--</strong>
-                            <small id="activeFilamentWeight"></small>
+                            <dt>Nozzle</dt>
+                            <dd id="printerNozzle">--.- &deg;C</dd>
                         </div>
-                    </div>
+                        <div>
+                            <dt>Bed</dt>
+                            <dd id="printerBed">--.- &deg;C</dd>
+                        </div>
+                        <div>
+                            <dt>Fan</dt>
+                            <dd id="printerFan">--%</dd>
+                        </div>
+                    </dl>
                 </div>
             </section>
 
@@ -411,25 +417,6 @@
 
                 <article class="panel">
                     <div class="panelHeader">
-                        <span>Temperatures</span>
-                    </div>
-
-                    <dl class="subgrid tempGrid">
-                        <div>
-                            <dt>Nozzle</dt>
-                            <dd id="printerNozzle">--.- &deg;C</dd>
-                        </div>
-                        <div>
-                            <dt>Bed</dt>
-                            <dd id="printerBed">--.- &deg;C</dd>
-                        </div>
-                        <div>
-                            <dt>Fan</dt>
-                            <dd id="printerFan">--%</dd>
-                        </div>
-                    </dl>
-
-                    <div class="panelHeader amsSubhead">
                         <span>AMS</span>
                     </div>
 

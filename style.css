@@ -696,23 +696,20 @@ dd{
     font-weight:700;
 }
 
-.activeFilament{
-    display:flex;
-    align-items:center;
-    gap:10px;
+.heroTempGrid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:16px;
     margin-top:6px;
-    justify-content:flex-end;
 }
 
-.activeFilament strong{
-    display:block;
-    font-size:20px;
+.heroTempGrid dt{
+    font-size:11px;
 }
 
-.activeFilament small{
-    display:block;
-    color:var(--muted);
-    font-size:12px;
+.heroTempGrid dd{
+    margin-top:2px;
+    font-size:22px;
 }
 
 .swatch{
@@ -729,14 +726,6 @@ dd{
     color:var(--muted);
     font-size:13px;
     line-height:1.5;
-}
-
-.tempGrid dd{
-    font-size:28px;
-}
-
-.amsSubhead{
-    margin-top:18px;
 }
 
 .amsGrid{
