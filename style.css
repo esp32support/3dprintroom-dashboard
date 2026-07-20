@@ -834,6 +834,18 @@ dd{
     border-width:1px;
 }
 
+.filamentUsedRow{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.filamentUsedRow .swatch{
+    width:16px;
+    height:16px;
+    border-width:1px;
+}
+
 .filamentList{
     display:grid;
     gap:10px;

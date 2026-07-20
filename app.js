@@ -1070,6 +1070,11 @@ function updatePrinter(data)
     // says is active - it can no longer redirect which slot that is.
     const trayNow = data.trayNow;
 
+    // For display only (which color swatch to show next to "Filament
+    // used") - sourced from MQTT's own live tray data, not the Task API's
+    // color field, for the same reliability reasons as trayNow itself.
+    const mqttActiveTray = trays.find(t => t.id === trayNow);
+
     // The Task API's slotId is confirmed unreliable even for jobs sliced
     // and sent normally from Studio (live-verified: a task's amsDetail
     // claimed slotId 0 while MQTT's tray_now correctly showed 3 was
@@ -1105,11 +1110,28 @@ function updatePrinter(data)
     // estimate as soon as the job starts, not filled in only on completion.
     // Only trusted here when it matches the slot MQTT says is actually
     // active (see matchingDetail above) - this is the only place that
-    // weight/color surfaces now that the hero's own duplicate "Active
-    // filament" readout was removed.
-    setText("printerFilamentUsed", preparing && matchingDetail
-        ? `${matchingDetail.weight.toFixed(1)} g (${matchingDetail.type || "?"})`
-        : "--");
+    // weight surfaces now that the hero's own duplicate "Active filament"
+    // readout was removed. Color was missing here entirely before - shown
+    // via swatch + name (guessed from hex, same as the filament library's
+    // auto-created entries) since on a multi-color print this changes
+    // mid-print and needs to be obvious which color the grams belong to.
+    const filamentUsedSwatch = byId("filamentUsedSwatch");
+
+    if (preparing && matchingDetail && mqttActiveTray)
+    {
+        if (filamentUsedSwatch)
+            filamentUsedSwatch.style.background = trayColorCss(mqttActiveTray.color);
+
+        const colorName = guessColorName((mqttActiveTray.color || "").slice(0, 6));
+        setText("printerFilamentUsed", `${matchingDetail.weight.toFixed(1)} g (${colorName} ${matchingDetail.type || "?"})`);
+    }
+    else
+    {
+        if (filamentUsedSwatch)
+            filamentUsedSwatch.style.background = "#2a3136";
+
+        setText("printerFilamentUsed", "--");
+    }
 
     renderAmsGrid(trays, trayNow);
     renderPrintHistory(data.history || []);
