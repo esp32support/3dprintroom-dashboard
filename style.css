@@ -502,6 +502,11 @@ dd{
     margin-bottom:0;
 }
 
+.gcodeVerified{
+    color:var(--green) !important;
+    font-weight:700;
+}
+
 .stateValue{
     min-height:72px;
     font-size:30px;

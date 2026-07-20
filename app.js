@@ -786,12 +786,25 @@ function renderPrintHistory(items)
         {
             const chips = document.createElement("div");
             chips.className = "usageChips";
-            chips.appendChild(usageChip({
-                color: override.colorHex,
-                type: override.material,
-                amount: matchedTask ? `${matchedTask.weight.toFixed(1)}g` : "",
-            }));
+            // A gcode-sourced override (see /api/gcode-sync) carries its own
+            // weight straight from the slicer's header - more authoritative
+            // than the Task API's, which this override already exists
+            // because Bambu's own data was wrong. Manual "Fix filament"
+            // corrections have no weight of their own, so those still fall
+            // back to whatever the Task API says the total was.
+            const amount = typeof override.weight === "number"
+                ? `${override.weight.toFixed(1)}g`
+                : (matchedTask ? `${matchedTask.weight.toFixed(1)}g` : "");
+            chips.appendChild(usageChip({ color: override.colorHex, type: override.material, amount }));
             detail.appendChild(chips);
+
+            if (override.source === "gcode")
+            {
+                const verified = document.createElement("p");
+                verified.className = "gcodeVerified";
+                verified.textContent = "Verified from printer's gcode";
+                detail.appendChild(verified);
+            }
         }
         else if (usage.length > 0)
         {
@@ -1592,9 +1605,15 @@ async function processFilamentDeductions(items)
         // per-tray breakdown is known wrong for this print - deduct the
         // task's total weight against the corrected material/color as a
         // single entry instead of trusting amsDetail's (possibly multiple,
-        // possibly wrong) trays.
+        // possibly wrong) trays. A gcode-sourced override (see
+        // /api/gcode-sync) already carries its own authoritative weight -
+        // no need to wait on a Task API match at all in that case. A
+        // manual "Fix filament" override has no weight of its own, so
+        // that still needs the Task API's total to deduct against.
         const details = override
-            ? (matchedTask ? [{ color: override.colorHex, type: override.material, weight: matchedTask.weight }] : [])
+            ? (typeof override.weight === "number"
+                ? [{ color: override.colorHex, type: override.material, weight: override.weight }]
+                : (matchedTask ? [{ color: override.colorHex, type: override.material, weight: matchedTask.weight }] : []))
             : (matchedTask ? matchedTask.amsDetail : []);
 
         if (details.length === 0)
