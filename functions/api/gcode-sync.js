@@ -68,6 +68,17 @@ export async function onRequestPost(context) {
         source: "gcode",
     };
 
+    // Same reasoning as the manual "Fix filament" path: if deduction
+    // already ran against the (wrong) Task API color and found no
+    // matching library entry, the print is stuck marked "processed"
+    // forever - a correction landing after that would just sit there
+    // without ever actually charging the spool. Un-mark it so the
+    // dashboard's next poll picks it back up and deducts for real.
+    const processedIdx = lib.processedPrints.indexOf(key);
+
+    if (processedIdx !== -1)
+        lib.processedPrints.splice(processedIdx, 1);
+
     await env.FILAMENT_KV.put(KV_KEY, JSON.stringify(lib));
     return jsonResponse({ ok: true, key });
 }
