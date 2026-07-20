@@ -793,8 +793,8 @@ function renderPrintHistory(items)
             // corrections have no weight of their own, so those still fall
             // back to whatever the Task API says the total was.
             const amount = typeof override.weight === "number"
-                ? `${override.weight.toFixed(1)}g`
-                : (matchedTask ? `${matchedTask.weight.toFixed(1)}g` : "");
+                ? `${override.weight.toFixed(2)}g`
+                : (matchedTask ? `${matchedTask.weight.toFixed(2)}g` : "");
             chips.appendChild(usageChip({ color: override.colorHex, type: override.material, amount }));
             detail.appendChild(chips);
 
@@ -820,7 +820,7 @@ function renderPrintHistory(items)
             matchedTask.amsDetail.forEach(d => chips.appendChild(usageChip({
                 color: d.color,
                 type: d.type,
-                amount: `${d.weight.toFixed(1)}g`,
+                amount: `${d.weight.toFixed(2)}g`,
             })));
             detail.appendChild(chips);
         }
@@ -1123,7 +1123,7 @@ function updatePrinter(data)
             filamentUsedSwatch.style.background = trayColorCss(mqttActiveTray.color);
 
         const colorName = guessColorName((mqttActiveTray.color || "").slice(0, 6));
-        setText("printerFilamentUsed", `${matchingDetail.weight.toFixed(1)} g (${colorName} ${matchingDetail.type || "?"})`);
+        setText("printerFilamentUsed", `${matchingDetail.weight.toFixed(2)} g (${colorName} ${matchingDetail.type || "?"})`);
     }
     else
     {
