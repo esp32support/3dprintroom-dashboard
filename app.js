@@ -1992,8 +1992,22 @@ document.addEventListener("visibilitychange", () =>
     // end() first guarantees a clean break regardless of what the
     // `connected` flag currently claims, rather than relying on
     // reconnect()'s own judgment of whether one is needed.
-    setDot("brokerDot", false);
-    client.end(true, {}, () => client.reconnect());
+    //
+    // But this was previously unconditional - firing the same disruptive
+    // teardown+reconnect on every single visibility change, even ones
+    // where a message had arrived a second or two earlier (confirmed live:
+    // "0s since last message" logged right before a forced reconnect).
+    // That's not a backgrounded-tab recovery, it's just churn - and on
+    // mobile, where the OS suspends/resumes background tabs frequently,
+    // it produced exactly the rapid-fire reconnect clusters seen in the
+    // Connection Log. Only force it when there's actual evidence of
+    // staleness (same threshold as the periodic watchdog); a connection
+    // that was fine a few seconds ago doesn't need tearing down.
+    if (silentFor === null || silentFor > STALE_AFTER_MS / 1000)
+    {
+        setDot("brokerDot", false);
+        client.end(true, {}, () => client.reconnect());
+    }
 });
 
 const bootInfoToggle = byId("bootInfoToggle");
