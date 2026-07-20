@@ -672,7 +672,17 @@ function renderAmsGrid(trays, trayNow)
         return;
     }
 
-    trays.forEach(tray =>
+    // Visual position only - matches Bambu Studio's own AMS panel layout
+    // (A1/A4 on top, A2/A3 on bottom), which doesn't read left-to-right in
+    // slot-number order. The 2-column grid auto-flows in DOM order, so
+    // this reorders which tray gets appended when, not which data belongs
+    // to which slot (that's still purely driven by tray.id, untouched).
+    const DISPLAY_ORDER = [0, 3, 1, 2];
+    const orderedTrays = DISPLAY_ORDER
+        .map(id => trays.find(t => t.id === id))
+        .filter(Boolean);
+
+    orderedTrays.forEach(tray =>
     {
         const isActive = tray.id === trayNow;
 
