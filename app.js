@@ -1507,6 +1507,17 @@ async function onFixHistoryFilament(item, matchedTask)
             material: material.trim(),
             colorHex: colorHexInput.replace("#", "").toUpperCase(),
         };
+
+        // A correction made after the fact is pointless if deduction
+        // already ran (and found no matching filament, since the wrong
+        // color never matched anything) and marked this print processed -
+        // it would just sit there "fixed" on screen while the spool never
+        // actually got charged. Un-mark it so the next poll picks it back
+        // up and deducts using the corrected material/color.
+        const idx = lib.processedPrints.indexOf(key);
+
+        if (idx !== -1)
+            lib.processedPrints.splice(idx, 1);
     });
 
     renderPrintHistory(lastHistoryItems);
