@@ -1048,9 +1048,19 @@ function updatePrinter(data)
     const trayNow = data.trayNow;
     const mqttActiveTray = trays.find(t => t.id === trayNow);
 
-    const matchingDetail = latestPrinterTask && latestPrinterTask.amsDetail
-        ? latestPrinterTask.amsDetail.find(d => (d.amsId * 4) + d.slotId === trayNow)
-        : null;
+    // The Task API's slotId is confirmed unreliable even for jobs sliced
+    // and sent normally from Studio (live-verified: a task's amsDetail
+    // claimed slotId 0 while MQTT's tray_now correctly showed 3 was
+    // engaged) - only its weight and color/material are trustworthy. For
+    // a single-material print there's no ambiguity about which entry
+    // applies regardless of what slot it claims, so withholding the
+    // weight over a slot mismatch only hides a number that's actually
+    // fine. Multi-tray prints still need the slot match to know which
+    // entry corresponds to what's active right now.
+    const amsDetail = (latestPrinterTask && latestPrinterTask.amsDetail) || [];
+    const matchingDetail = amsDetail.length === 1
+        ? amsDetail[0]
+        : amsDetail.find(d => (d.amsId * 4) + d.slotId === trayNow) || null;
 
     const swatch = byId("activeSwatch");
 
