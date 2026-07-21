@@ -1,0 +1,33 @@
+name: Filament library relay
+
+# Fetches the dashboard's filament inventory and republishes it to HiveMQ
+# so the CYD display can read it - see scripts/filament_relay.py for why
+# this can't just be a direct pull from the device itself. Runs on
+# GitHub's own infrastructure instead of needing a PC left on.
+#
+# GitHub doesn't run schedules reliably below ~5 minutes (and may delay
+# even this under load) - the PC daemon this replaces relayed every 30s,
+# so updates here will be noticeably less frequent. Also runnable by hand
+# via the Actions tab (workflow_dispatch) for testing.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install paho-mqtt
+
+      - run: python scripts/filament_relay.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
