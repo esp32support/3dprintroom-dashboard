@@ -10,11 +10,12 @@ import { verifySessionCookie } from "./_lib/session.js";
 // to /login.html -> Cloudflare canonicalises to /login -> middleware sees
 // /login (not allowlisted) -> redirects to /login.html again -> ...
 //
-// /api/gcode-sync is meant to be called by a script running on the LAN
-// (no browser, no session cookie) - it enforces its own X-Sync-Secret
-// check internally, so it's allowlisted here purely to let the request
-// reach that check at all, not to skip authentication entirely.
-const PUBLIC_PATHS = new Set(["/login", "/login.html", "/api/login", "/api/gcode-sync"]);
+// /api/gcode-sync and /api/device-filament are meant to be called by
+// scripts/devices with no browser session cookie - both enforce their own
+// X-Sync-Secret check internally, so they're allowlisted here purely to
+// let the request reach that check at all, not to skip authentication
+// entirely.
+const PUBLIC_PATHS = new Set(["/login", "/login.html", "/api/login", "/api/gcode-sync", "/api/device-filament"]);
 
 export async function onRequest(context) {
     const { request, next, env } = context;
