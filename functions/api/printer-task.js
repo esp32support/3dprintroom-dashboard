@@ -16,6 +16,15 @@
 // obtained via the same account-login + emailed 2FA flow used to set up
 // the printer's cloud MQTT connection. Tokens run out after ~90 days and
 // need to be regenerated the same way.
+//
+// Dual auth: the dashboard's own UI calls this with a session cookie
+// (already verified by _middleware.js in the normal case), but this path
+// is ALSO allowlisted as public so the LAN-free print-watch job
+// (scripts/print_watch.py, no browser session) can reach it with an
+// X-Sync-Secret header instead - checked here explicitly since the
+// middleware skips its own cookie check for allowlisted paths.
+import { verifySessionCookie } from "../_lib/session.js";
+
 function jsonResponse(obj, status = 200) {
     return new Response(JSON.stringify(obj), {
         status,
@@ -23,8 +32,23 @@ function jsonResponse(obj, status = 200) {
     });
 }
 
+async function checkAuth(request, env) {
+    const provided = request.headers.get("X-Sync-Secret");
+
+    if (provided) {
+        return provided === env.LOCAL_SYNC_SECRET;
+    }
+
+    const cookie = request.headers.get("Cookie");
+    return verifySessionCookie(cookie, env.ADMIN_USERNAME, env.SESSION_SECRET);
+}
+
 export async function onRequestGet(context) {
-    const { env } = context;
+    const { request, env } = context;
+
+    if (!(await checkAuth(request, env))) {
+        return jsonResponse({ error: "unauthorized" }, 401);
+    }
 
     if (!env.BAMBU_ACCESS_TOKEN) {
         return jsonResponse({ error: "BAMBU_ACCESS_TOKEN not configured" }, 501);
