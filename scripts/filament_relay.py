@@ -13,6 +13,7 @@ version of this same job.
 import json
 import os
 import sys
+import time
 import urllib.request
 
 import paho.mqtt.client as mqtt
@@ -70,9 +71,15 @@ def main():
             log(f"connect failed rc={rc}")
             c.disconnect()
             return
-        result = c.publish(FILAMENT_TOPIC, payload, retain=True, qos=1)
-        result.wait_for_publish(timeout=10)
-        published["ok"] = result.is_published()
+        # QoS 0 (fire-and-forget), matching every other working publish in
+        # this project (PC daemon, direct test scripts) - QoS 1 here timed
+        # out waiting for a PUBACK that never arrived, while QoS 0 doesn't
+        # wait for one at all.
+        c.publish(FILAMENT_TOPIC, payload, retain=True, qos=0)
+        published["ok"] = True
+        # Give the network loop a moment to actually flush the queued
+        # PUBLISH before tearing down the connection.
+        time.sleep(1)
         c.disconnect()
 
     client = mqtt.Client(client_id="gh-actions-filament-relay", protocol=mqtt.MQTTv311)
