@@ -1381,8 +1381,8 @@ function renderFilamentLibrary()
             const input = document.createElement("input");
             input.type = "number";
             input.min = "0";
-            input.step = "1";
-            input.value = Math.max(0, Math.round(spool.remaining));
+            input.step = "0.01";
+            input.value = Math.max(0, spool.remaining).toFixed(2);
             input.title = "Edit remaining weight - e.g. correct a partial spool";
             input.addEventListener("change", () => onEditSpoolRemaining(f.id, spool.id, input.value));
 
