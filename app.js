@@ -720,6 +720,14 @@ function renderAmsGrid(trays, trayNow)
 
 let lastHistoryItems = [];
 
+// renderPrintHistory rebuilds the whole list from scratch on every call
+// (list.innerHTML = "") - it's invoked on every incoming printer MQTT
+// message (~5s), so without tracking which items the user had open
+// separately from the DOM itself, an expanded item would collapse again
+// within a few seconds of opening it, before anyone could actually read
+// the detail they just clicked to see.
+const expandedHistoryKeys = new Set();
+
 function renderPrintHistory(items)
 {
     lastHistoryItems = items || [];
@@ -748,7 +756,6 @@ function renderPrintHistory(items)
         row.style.borderLeftColor = "var(--cyan)";
         row.tabIndex = 0;
         row.setAttribute("role", "button");
-        row.setAttribute("aria-expanded", "false");
 
         const left = document.createElement("div");
 
@@ -766,11 +773,14 @@ function renderPrintHistory(items)
         row.appendChild(left);
         row.appendChild(time);
 
+        const historyKey = `${item.name}__${item.start}`;
+        const isExpanded = expandedHistoryKeys.has(historyKey);
+
         const detail = document.createElement("div");
         detail.className = "historyDetail";
-        detail.hidden = true;
+        detail.hidden = !isExpanded;
+        row.setAttribute("aria-expanded", isExpanded ? "true" : "false");
 
-        const historyKey = `${item.name}__${item.start}`;
         const override = filamentLibrary.historyOverrides[historyKey];
         const usage = parseTrayUsage(item.trays);
         const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
@@ -854,6 +864,11 @@ function renderPrintHistory(items)
             const hidden = detail.hidden;
             detail.hidden = !hidden;
             row.setAttribute("aria-expanded", hidden ? "true" : "false");
+
+            if (hidden)
+                expandedHistoryKeys.add(historyKey);
+            else
+                expandedHistoryKeys.delete(historyKey);
         };
 
         row.addEventListener("click", toggle);
