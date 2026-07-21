@@ -1,21 +1,27 @@
-name: Filament library relay
+name: Printer sync (filament relay + print watch)
 
-# Fetches the dashboard's filament inventory and republishes it to HiveMQ
-# so the CYD display can read it - see scripts/filament_relay.py for why
-# this can't just be a direct pull from the device itself. Runs on
-# GitHub's own infrastructure instead of needing a PC left on.
+# Two LAN-free jobs replacing what gcode_sync_daemon.py used to do on a
+# PC that had to stay on:
+#   1. filament_relay.py - fetches the dashboard's filament inventory and
+#      republishes it to HiveMQ so the CYD display can read it (a direct
+#      pull from the device itself isn't reliable - see that script and
+#      cyd-display's printer/cloud_publish.cpp for why).
+#   2. print_watch.py - detects a single-color print finishing from the
+#      printer's live MQTT status and pushes an accurate weight/color
+#      correction, using Bambu's Task API for weight (confirmed reliable)
+#      instead of FTPS-reading the gcode header off the printer's SD card.
 #
 # GitHub doesn't run schedules reliably below ~5 minutes (and may delay
-# even this under load) - the PC daemon this replaces relayed every 30s,
-# so updates here will be noticeably less frequent. Also runnable by hand
-# via the Actions tab (workflow_dispatch) for testing.
+# even this under load) - the PC daemon these replace ran continuously,
+# so updates/detections here are on a coarser cadence. Also runnable by
+# hand via the Actions tab (workflow_dispatch) for testing.
 on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:
-  relay:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +33,12 @@ jobs:
       - run: pip install paho-mqtt
 
       - run: python scripts/filament_relay.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      - run: python scripts/print_watch.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
