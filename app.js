@@ -474,6 +474,30 @@ function trayColorCss(hex)
     return "#" + hex.slice(0, 6);
 }
 
+// Euclidean RGB distance - used to match a Task API color against the
+// library tolerantly instead of requiring an exact hex string match. Task
+// API's amsDetail color is confirmed to sometimes report a generic/default
+// value rather than the precise measured AMS color (e.g. black as
+// "000000" when the library's real entry is "161616") - an exact-match
+// deduction silently skips these forever, since the library lookup just
+// finds nothing and returns. Small distances (near-black vs true black)
+// should still match; genuinely different colors (black vs blue) are far
+// enough apart that a reasonable threshold never confuses them.
+function colorDistance(hexA, hexB)
+{
+    if (!hexA || !hexB || hexA.length < 6 || hexB.length < 6)
+        return Infinity;
+
+    const a = parseInt(hexA.slice(0, 6), 16);
+    const b = parseInt(hexB.slice(0, 6), 16);
+
+    const dr = ((a >> 16) & 0xFF) - ((b >> 16) & 0xFF);
+    const dg = ((a >> 8) & 0xFF) - ((b >> 8) & 0xFF);
+    const db = (a & 0xFF) - (b & 0xFF);
+
+    return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
 // Rough hue-bucket approximation for auto-created filament library entries
 // (see syncAmsToLibrary) - there's no API for Bambu's own color names, so
 // this is just a reasonable starting label the user can rename via Edit.
@@ -1690,16 +1714,36 @@ async function processFilamentDeductions(items)
         if (details.length === 0)
             return;   // Task API hasn't surfaced this print yet - retry on a later poll
 
+        // Only mark this print fully processed if EVERY detail found a
+        // spool to deduct from - a partial failure (confirmed live: a
+        // multi-color print where one color matched and another silently
+        // didn't) used to get marked processed anyway, permanently losing
+        // that portion of the deduction with no retry. Now it's retried on
+        // the next poll instead, until every color succeeds.
+        let allMatched = true;
+
         details.forEach(d =>
         {
             const hex = (d.color || "").slice(0, 6).toUpperCase();
             const material = (d.type || "").toUpperCase();
 
-            const filament = filamentLibrary.filaments.find(f =>
-                f.material.toUpperCase() === material && (f.colorHex || "").toUpperCase() === hex);
+            // Closest color within the same material, not an exact hex
+            // match - see colorDistance()'s comment for why an exact match
+            // silently drops deductions for colors Task API reports
+            // approximately (confirmed live: black as "000000" vs the
+            // library's real "161616").
+            const COLOR_MATCH_THRESHOLD = 80;
+            const filament = filamentLibrary.filaments
+                .filter(f => f.material.toUpperCase() === material)
+                .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
+                .sort((a, b) => a.dist - b.dist)
+                .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
 
             if (!filament || !filament.spools || filament.spools.length === 0)
+            {
+                allMatched = false;
                 return;
+            }
 
             // Draw down whichever spool has the least left first - mirrors
             // finishing an already-opened spool before starting a fresh one.
@@ -1708,14 +1752,20 @@ async function processFilamentDeductions(items)
                 .sort((a, b) => a.remaining - b.remaining)[0];
 
             if (!target)
+            {
+                allMatched = false;
                 return;
+            }
 
             target.remaining = Math.max(0, target.remaining - d.weight);
             changed = true;
         });
 
-        filamentLibrary.processedPrints.push(key);
-        changed = true;
+        if (allMatched)
+        {
+            filamentLibrary.processedPrints.push(key);
+            changed = true;
+        }
     });
 
     if (!changed)
