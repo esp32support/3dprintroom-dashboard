@@ -136,13 +136,19 @@ def main():
     was_running = state.get("gcodeState") == "RUNNING"
     now_running = gcode_state == "RUNNING"
 
-    tray_seen = set(state.get("trayNowSeen", []))
+    # 255 = "no tray selected" - a transient state during warmup/pauses/
+    # filament changes, NOT a color. Counting it made genuine single-color
+    # prints look multi-color (seen live: trayNowSeen=[3,255] for a pure
+    # black print), which skipped the gcode-verification push entirely.
+    # Discarded on load too, so state polluted before this fix self-heals.
+    # 254 (external spool) is kept - that IS real filament being used.
+    tray_seen = set(state.get("trayNowSeen", [])) - {255}
 
     # New print started (or a different one resumed) - reset tracking.
     if now_running and state.get("currentStart") != current_start:
         tray_seen = set()
 
-    if now_running and tray_now is not None:
+    if now_running and tray_now is not None and tray_now != 255:
         tray_seen.add(tray_now)
 
     if was_running and not now_running and state.get("subtaskName") and state.get("currentStart"):

@@ -1123,10 +1123,19 @@ function updatePrinter(data)
     // weight over a slot mismatch only hides a number that's actually
     // fine. Multi-tray prints still need the slot match to know which
     // entry corresponds to what's active right now.
+    // Multi-tray matching tries slot first, then falls back to comparing
+    // the detail's color against the LIVE tray's color (fuzzy, same
+    // threshold as deductions) - confirmed live during a yellow+white
+    // print: the yellow amsDetail entry's slotId was wrong, so "Filament
+    // used" went blank whenever yellow was the active color even though
+    // a perfectly identifiable yellow entry was sitting right there.
     const amsDetail = (latestPrinterTask && latestPrinterTask.amsDetail) || [];
+    const liveHex = mqttActiveTray ? (mqttActiveTray.color || "").slice(0, 6).toUpperCase() : "";
     const matchingDetail = amsDetail.length === 1
         ? amsDetail[0]
-        : amsDetail.find(d => (d.amsId * 4) + d.slotId === trayNow) || null;
+        : amsDetail.find(d => (d.amsId * 4) + d.slotId === trayNow)
+            || (liveHex ? amsDetail.find(d => colorDistance((d.color || "").slice(0, 6).toUpperCase(), liveHex) <= 80) : null)
+            || null;
 
     // Previously shown whenever currentStart was set, on the theory of
     // "still running, or just finished, so you can see what happened after
@@ -1597,13 +1606,16 @@ async function syncAmsToLibrary(trays)
     if (syncKey === lastAmsSyncKey)
         return;
 
+    // Fuzzy color comparison, same threshold as deduction matching - an
+    // exact-hex check here created a duplicate whenever a manually-added
+    // entry's hex differed slightly from what the AMS reports for the
+    // same physical spool (confirmed live: user added PETG Black by hand,
+    // the AMS sync then added a second PETG Black next to it).
+    const hasCloseEntry = (material, hex) => filamentLibrary.filaments.some(f =>
+        f.material.toUpperCase() === material && colorDistance((f.colorHex || "").toUpperCase(), hex) <= 80);
+
     const missing = detected.filter(t =>
-    {
-        const hex = t.color.slice(0, 6).toUpperCase();
-        const material = t.type.toUpperCase();
-        return !filamentLibrary.filaments.some(f =>
-            f.material.toUpperCase() === material && (f.colorHex || "").toUpperCase() === hex);
-    });
+        !hasCloseEntry(t.type.toUpperCase(), t.color.slice(0, 6).toUpperCase()));
 
     lastAmsSyncKey = syncKey;
 
@@ -1618,8 +1630,11 @@ async function syncAmsToLibrary(trays)
     {
         const hex = t.color.slice(0, 6).toUpperCase();
         const material = t.type.toUpperCase();
+
+        // Same fuzzy check as the pre-filter above (hasCloseEntry closes
+        // over the pre-refresh library, so re-check against the fresh one).
         const alreadyThere = filamentLibrary.filaments.some(f =>
-            f.material.toUpperCase() === material && (f.colorHex || "").toUpperCase() === hex);
+            f.material.toUpperCase() === material && colorDistance((f.colorHex || "").toUpperCase(), hex) <= 80);
 
         if (alreadyThere)
             return;   // added by another tab between the pre-check above and this refresh
