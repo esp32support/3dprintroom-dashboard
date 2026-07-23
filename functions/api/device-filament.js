@@ -16,7 +16,7 @@ function jsonResponse(obj, status = 200) {
 }
 
 function emptyLibrary() {
-    return { filaments: [], processedPrints: [], historyOverrides: {} };
+    return { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {} };
 }
 
 export async function onRequestGet(context) {

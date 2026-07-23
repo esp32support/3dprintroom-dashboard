@@ -1278,7 +1278,15 @@ setInterval(updatePrinterTask, 60000);
 // device viewing the dashboard, and survives independently of any single
 // ESP32's NVS.
 
-let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {} };
+// deductionLog: per-print record of what was actually subtracted from
+// spools ({ printKey: { colorHex: grams } }). This is what makes
+// re-processing a print idempotent - when a gcode correction un-marks a
+// print as processed (so corrected data gets applied), the re-run
+// deducts only the DIFFERENCE vs what this log says was already taken,
+// instead of the full amount again. Confirmed live without it: Holder
+// (21.07) deducted 6.37g twice - once from the Task API match, then
+// again in full when the gcode override landed.
+let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {} };
 let filamentLibraryLoaded = false;
 
 function uid()
@@ -1299,6 +1307,7 @@ async function loadFilamentLibrary()
                 filaments: data.filaments || [],
                 processedPrints: data.processedPrints || [],
                 historyOverrides: data.historyOverrides || {},
+                deductionLog: data.deductionLog || {},
             };
         }
     }
@@ -1757,8 +1766,20 @@ async function processFilamentDeductions(items)
                 return;
             }
 
-            target.remaining = Math.max(0, target.remaining - d.weight);
-            changed = true;
+            // Deduct only what hasn't already been taken for this print+
+            // color - see deductionLog's declaration comment for the
+            // double-deduction this prevents when a print gets
+            // re-processed after a gcode correction.
+            const log = filamentLibrary.deductionLog[key] || (filamentLibrary.deductionLog[key] = {});
+            const already = log[hex] || 0;
+            const delta = d.weight - already;
+
+            if (delta > 0)
+            {
+                target.remaining = Math.max(0, target.remaining - delta);
+                log[hex] = already + delta;
+                changed = true;
+            }
         });
 
         if (allMatched)
@@ -1773,6 +1794,19 @@ async function processFilamentDeductions(items)
 
     if (filamentLibrary.processedPrints.length > 200)
         filamentLibrary.processedPrints = filamentLibrary.processedPrints.slice(-200);
+
+    // Prune deductionLog alongside - but ONLY entries that are neither
+    // marked processed nor still present in the device's live history
+    // (a partially-deducted print awaiting retry is in the log without
+    // being in processedPrints - deleting its row would forget what was
+    // already taken and re-deduct it in full on the next poll).
+    const liveKeys = new Set(items.map(it => `${it.name}__${it.start}`));
+
+    for (const logKey of Object.keys(filamentLibrary.deductionLog))
+    {
+        if (!filamentLibrary.processedPrints.includes(logKey) && !liveKeys.has(logKey))
+            delete filamentLibrary.deductionLog[logKey];
+    }
 
     renderFilamentLibrary();
     await saveFilamentLibrary();

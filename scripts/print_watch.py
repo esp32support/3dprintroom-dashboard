@@ -177,14 +177,31 @@ def main():
 
         tray_seen = set()  # reset tracking for the next print
 
-    api_post(STATE_URL, sync_secret, {
+    new_state = {
         "gcodeState": gcode_state,
         "subtaskName": subtask_name or state.get("subtaskName", ""),
         "currentStart": current_start or state.get("currentStart", ""),
         "trayNowSeen": sorted(tray_seen),
-    })
+    }
 
-    log(f"state updated: gcodeState={gcode_state!r}, trayNowSeen={sorted(tray_seen)}")
+    # Only write when something actually changed. This runs every ~2
+    # minutes (720x/day) - an unconditional write burned through most of
+    # Cloudflare KV's free-tier 1000 writes/day on idle no-op updates
+    # alone (user hit the daily cap during normal use). An idle printer
+    # produces an identical state every run, so skipping identical writes
+    # keeps the quota for writes that matter.
+    old_state = {
+        "gcodeState": state.get("gcodeState", ""),
+        "subtaskName": state.get("subtaskName", ""),
+        "currentStart": state.get("currentStart", ""),
+        "trayNowSeen": sorted(state.get("trayNowSeen", [])),
+    }
+
+    if new_state != old_state:
+        api_post(STATE_URL, sync_secret, new_state)
+        log(f"state updated: gcodeState={gcode_state!r}, trayNowSeen={sorted(tray_seen)}")
+    else:
+        log(f"state unchanged (gcodeState={gcode_state!r}) - skipping KV write")
 
 
 if __name__ == "__main__":
