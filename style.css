@@ -906,7 +906,9 @@ dd{
 }
 
 .spoolRow input[type="number"]{
-    width:64px;
+    /* Wide enough for "9999.99" plus the browser's spinner arrows - 64px
+       clipped 2-decimal values like 718.56 at the decimals. */
+    width:96px;
     background:#14181b;
     border:1px solid #2f363d;
     border-radius:4px;
