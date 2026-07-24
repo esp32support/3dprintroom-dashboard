@@ -204,9 +204,6 @@ function updateStatus(data)
     setText("bootCountTotal", data.bootCountTotal ?? "--");
     renderBootHistory(data.bootHistory);
 
-    setBar("heapBar", data.freeHeap / 1024, 320,
-        data.freeHeap < 50000 ? "var(--orange)" : "var(--green)");
-
     setText("pressureDetail", `${data.pressure.toFixed(1)} hPa`);
     setText("lastUpdate", new Date().toLocaleTimeString([], { hour12: false }));
 

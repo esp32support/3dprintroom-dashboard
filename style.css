@@ -438,10 +438,6 @@ dd{
     margin:0;
 }
 
-.heapBar{
-    margin-top:14px;
-}
-
 .watchdogReason{
     margin:14px 0 0;
     color:var(--muted);
