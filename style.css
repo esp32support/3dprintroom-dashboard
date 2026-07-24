@@ -472,6 +472,14 @@ dd{
     white-space:nowrap;
 }
 
+.historyTimestamp{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    text-align:right;
+    line-height:1.4;
+}
+
 .historyItemClickable{
     cursor:pointer;
 }

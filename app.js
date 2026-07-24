@@ -349,8 +349,32 @@ function renderBootHistory(items)
         left.appendChild(title);
         left.appendChild(detail);
 
-        const time = document.createElement("span");
-        time.textContent = item.time && item.time !== "pending" ? item.time : "syncing...";
+        // A full "YYYY-MM-DD HH:MM:SS" string as one nowrap line overflowed
+        // this column's width and got clipped mid-time ("11:57:5...") - date
+        // and time as two stacked lines each fit comfortably instead.
+        const time = document.createElement("div");
+        time.className = "historyTimestamp";
+
+        if (item.time && item.time !== "pending")
+        {
+            const [isoDate, timePart] = item.time.split(" ");
+            // Device stores/reports ISO "YYYY-MM-DD" (24h clock already, no
+            // AM/PM anywhere in the firmware's format) - reformatted here
+            // for display only, not touching the stored value itself.
+            const [y, m, d] = (isoDate || "").split("-");
+            const dateLine = document.createElement("span");
+            dateLine.textContent = (y && m && d) ? `${d}.${m}.${y}` : (isoDate || "");
+            const timeLine = document.createElement("span");
+            timeLine.textContent = timePart || "";
+            time.appendChild(dateLine);
+            time.appendChild(timeLine);
+        }
+        else
+        {
+            const line = document.createElement("span");
+            line.textContent = "syncing...";
+            time.appendChild(line);
+        }
 
         row.appendChild(left);
         row.appendChild(time);
