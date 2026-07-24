@@ -507,6 +507,13 @@ dd{
     font-weight:700;
 }
 
+.historyOutcomeBadge{
+    display:block;
+    color:var(--red);
+    font-size:11px;
+    font-weight:700;
+}
+
 .stateValue{
     min-height:72px;
     font-size:30px;

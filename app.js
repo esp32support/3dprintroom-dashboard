@@ -498,6 +498,32 @@ function colorDistance(hexA, hexB)
     return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
+// Same threshold used everywhere a Task API color needs correcting against
+// the library - single source of truth so display and deduction never
+// disagree on what counts as "close enough".
+const COLOR_MATCH_THRESHOLD = 80;
+
+// Best-effort color correction for DISPLAY - Task API's raw amsDetail
+// color is the same approximate/sometimes-wrong field the deduction logic
+// already treats with suspicion (see colorDistance's own comment above);
+// showing that raw value verbatim can visibly contradict the spool that
+// actually got decremented (confirmed live: a chip rendered orange for a
+// print that used yellow). Falls back to the raw hex when nothing in the
+// library is close enough to guess from.
+function resolveLibraryColor(hex, material)
+{
+    const h = (hex || "").slice(0, 6).toUpperCase();
+    const m = (material || "").toUpperCase();
+
+    const match = filamentLibrary.filaments
+        .filter(f => f.material.toUpperCase() === m)
+        .map(f => ({ f, dist: colorDistance(h, (f.colorHex || "").toUpperCase()) }))
+        .sort((a, b) => a.dist - b.dist)
+        .find(c => c.dist <= COLOR_MATCH_THRESHOLD);
+
+    return match ? match.f.colorHex : hex;
+}
+
 // Rough hue-bucket approximation for auto-created filament library entries
 // (see syncAmsToLibrary) - there's no API for Bambu's own color names, so
 // this is just a reasonable starting label the user can rename via Edit.
@@ -775,9 +801,23 @@ function renderPrintHistory(items)
     // Already newest-first from the device.
     items.forEach(item =>
     {
+        // item.outcome is the printer's own gcode_state at the moment it
+        // stopped running - "FINISH" for a normal completion, anything
+        // else (typically "FAILED", which Bambu's firmware also uses for
+        // a user-initiated cancel, not just a hardware failure - it
+        // doesn't distinguish the two at this level) means the print
+        // didn't run to completion. Already used to skip auto-deduction
+        // for these (see processFilamentDeductions) so a cancelled print
+        // never gets charged for filament it never fully used - but that
+        // also means whatever WAS extruded before it stopped goes
+        // untracked. There's no reliable way to measure a partial amount
+        // from any data source available here, so this only surfaces the
+        // fact that it happened rather than guessing a number.
+        const notFinished = item.outcome && item.outcome !== "FINISH";
+
         const row = document.createElement("div");
         row.className = "historyItem historyItemClickable";
-        row.style.borderLeftColor = "var(--cyan)";
+        row.style.borderLeftColor = notFinished ? "var(--red)" : "var(--cyan)";
         row.tabIndex = 0;
         row.setAttribute("role", "button");
 
@@ -786,6 +826,14 @@ function renderPrintHistory(items)
         const title = document.createElement("strong");
         title.textContent = item.name || "Untitled";
         left.appendChild(title);
+
+        if (notFinished)
+        {
+            const badge = document.createElement("span");
+            badge.className = "historyOutcomeBadge";
+            badge.textContent = "Cancelled/failed - filament used before this wasn't tracked";
+            left.appendChild(badge);
+        }
 
         const sub = document.createElement("small");
         sub.textContent = `${item.layers || 0} layers - ${formatDeviceDate(item.start)}`;
@@ -808,6 +856,7 @@ function renderPrintHistory(items)
         const override = filamentLibrary.historyOverrides[historyKey];
         const usage = parseTrayUsage(item.trays);
         const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
+        const resolvedUsage = resolveItemUsage(item);
 
         // Manual corrections win over everything else - Bambu's own Task
         // API is confirmed unreliable for jobs whose AMS slot wasn't
@@ -816,23 +865,14 @@ function renderPrintHistory(items)
         // (slot 0, or a hardcoded default color) rather than the tray
         // actually used, and there's no way to recover the true value from
         // that API after the fact.
-        if (override)
+        if (resolvedUsage.length > 0)
         {
             const chips = document.createElement("div");
             chips.className = "usageChips";
-            // A gcode-sourced override (see /api/gcode-sync) carries its own
-            // weight straight from the slicer's header - more authoritative
-            // than the Task API's, which this override already exists
-            // because Bambu's own data was wrong. Manual "Fix filament"
-            // corrections have no weight of their own, so those still fall
-            // back to whatever the Task API says the total was.
-            const amount = typeof override.weight === "number"
-                ? `${override.weight.toFixed(2)}g`
-                : (matchedTask ? `${matchedTask.weight.toFixed(2)}g` : "");
-            chips.appendChild(usageChip({ color: override.colorHex, type: override.material, amount }));
+            resolvedUsage.forEach(e => chips.appendChild(usageChip(e)));
             detail.appendChild(chips);
 
-            if (override.source === "gcode")
+            if (override && override.source === "gcode")
             {
                 const verified = document.createElement("p");
                 verified.className = "gcodeVerified";
@@ -840,28 +880,18 @@ function renderPrintHistory(items)
                 detail.appendChild(verified);
             }
         }
-        else if (usage.length > 0)
-        {
-            const chips = document.createElement("div");
-            chips.className = "usageChips";
-            usage.forEach(e => chips.appendChild(usageChip(e)));
-            detail.appendChild(chips);
-        }
-        else if (matchedTask)
-        {
-            const chips = document.createElement("div");
-            chips.className = "usageChips";
-            matchedTask.amsDetail.forEach(d => chips.appendChild(usageChip({
-                color: d.color,
-                type: d.type,
-                amount: `${d.weight.toFixed(2)}g`,
-            })));
-            detail.appendChild(chips);
-        }
         else
         {
             const none = document.createElement("p");
-            none.textContent = "No filament usage recorded for this print - the A1's AMS-lite doesn't report enough data to measure it.";
+            // Distinguish "Task API never had this print" (Bambu Handy
+            // starts sometimes don't populate amsDetail at all, or the
+            // task has aged out of Task API's rolling window) from the
+            // A1 AMS-lite's genuine reporting gap, so it's clear "Fix
+            // filament" is the only way to recover this one rather than
+            // waiting for it to resolve itself.
+            none.textContent = item.trays
+                ? "No filament usage recorded for this print - the A1's AMS-lite doesn't report enough data to measure it."
+                : "No filament usage recorded - Bambu's Task API has no per-color breakdown for this print. Use \"Fix filament\" below to correct it manually.";
             detail.appendChild(none);
         }
 
@@ -987,7 +1017,7 @@ function renderTodayTotals(items)
 
     todays.forEach(item =>
     {
-        parseTrayUsage(item.trays).forEach(e =>
+        resolveItemUsage(item).forEach(e =>
         {
             const key = `${e.color}|${e.type}`;
             const prev = groups.get(key) || { color: e.color, type: e.type, amounts: [] };
@@ -1086,7 +1116,13 @@ function updatePrinter(data)
     setText("printerLayer", showProgress ? String(layer) : "--");
     setText("printerLayerTotal", showProgress ? ` / ${total}` : " / --");
 
-    const pct = showProgress ? Math.round((layer / total) * 100) : 0;
+    // mc_percent is Bambu's own progress % (what the printer's LCD shows),
+    // not a layer-ratio we derive ourselves - the printer counts prep/
+    // heating time toward its percentage, so a layerNum/totalLayerNum
+    // ratio that only starts once real printing begins reads noticeably
+    // lower than Bambu's own screen for the same moment (confirmed live:
+    // 37% shown here vs 72% on the printer's LCD with 1h13m left).
+    const pct = showProgress ? Math.round(Number(data.mcPercent) || 0) : 0;
     setText("printerProgressPct", showProgress ? `${pct}%` : "--%");
     setBar("printerProgressBar", pct, 100, "var(--cyan)");
 
@@ -1273,6 +1309,48 @@ function matchTaskForHistoryItem(item)
     }
 
     return best;
+}
+
+// Single source of truth for "what filament did this history item use" -
+// override > device-reported trays > Task API fallback, the exact
+// precedence renderPrintHistory's own detail panel already used. Sharing
+// it here fixes renderTodayTotals, which used to read only the raw
+// device-reported trays and so showed "no filament usage recorded" for
+// any print that actually resolves through an override or the Task API
+// fallback (confirmed live: "9 print(s) today, no filament usage
+// recorded" while those same prints' own history rows displayed fine).
+// Returns entries with amount already formatted as a display string
+// ("12.34g"), matching what usageChip() and the today-totals join both
+// expect.
+function resolveItemUsage(item)
+{
+    const key = `${item.name}__${item.start}`;
+    const override = filamentLibrary.historyOverrides[key];
+
+    if (override)
+    {
+        if (typeof override.weight === "number")
+            return [{ color: override.colorHex, type: override.material, amount: `${override.weight.toFixed(2)}g` }];
+
+        const matched = matchTaskForHistoryItem(item);
+        return matched ? [{ color: override.colorHex, type: override.material, amount: `${matched.weight.toFixed(2)}g` }] : [];
+    }
+
+    const usage = parseTrayUsage(item.trays);
+    if (usage.length > 0)
+        return usage;
+
+    const matched = matchTaskForHistoryItem(item);
+    if (matched)
+    {
+        return matched.amsDetail.map(d => ({
+            color: resolveLibraryColor(d.color, d.type),
+            type: d.type,
+            amount: `${d.weight.toFixed(2)}g`,
+        }));
+    }
+
+    return [];
 }
 
 updatePrinterTask();
@@ -1756,7 +1834,6 @@ async function processFilamentDeductions(items)
             // silently drops deductions for colors Task API reports
             // approximately (confirmed live: black as "000000" vs the
             // library's real "161616").
-            const COLOR_MATCH_THRESHOLD = 80;
             const filament = filamentLibrary.filaments
                 .filter(f => f.material.toUpperCase() === material)
                 .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
