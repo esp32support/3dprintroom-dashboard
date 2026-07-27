@@ -862,6 +862,20 @@ dd{
     gap:10px;
 }
 
+.stackedColumn{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+}
+
+.filamentSection{
+    margin-top:18px;
+}
+
+.filamentGrid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+}
+
 .filamentEntry{
     padding:12px;
     border-radius:6px;
@@ -951,6 +965,10 @@ dd{
         grid-template-columns:1fr;
     }
 
+    .filamentGrid{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
     .airPanel{
         grid-template-columns:160px 1fr;
     }
@@ -959,6 +977,10 @@ dd{
 @media(max-width:620px){
     .shell{
         padding:12px;
+    }
+
+    .filamentGrid{
+        grid-template-columns:1fr;
     }
 
     .airPanel{

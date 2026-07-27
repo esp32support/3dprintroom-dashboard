@@ -426,72 +426,72 @@
                     </div>
                 </article>
 
-                <article class="panel amsPanel">
-                    <div class="panelHeader">
-                        <span>Filament library</span>
-                        <button type="button" class="infoBtn" id="filamentAddToggle">+ Add filament</button>
-                    </div>
+                <div class="stackedColumn">
 
-                    <p class="hint">
-                        Your own inventory, not what's loaded right now (see AMS above).
-                        Finished prints automatically deduct their acquired weight from
-                        the matching spool.
-                    </p>
+                    <article class="panel historyPanel">
+                        <div class="panelHeader">
+                            <span>Print history</span>
+                            <strong>Recent</strong>
+                        </div>
 
-                    <form class="otaForm" id="filamentAddForm" hidden>
-                        <label>
-                            Material
-                            <input type="text" id="filamentMaterial" placeholder="PLA" required>
-                        </label>
-                        <label>
-                            Color name
-                            <input type="text" id="filamentColorName" placeholder="White" required>
-                        </label>
-                        <label>
-                            Color hex (RRGGBB)
-                            <span class="hexInputRow">
-                                <input type="text" id="filamentColorHex" placeholder="FFFFFF" maxlength="6" pattern="[0-9A-Fa-f]{6}" value="FFFFFF">
-                                <span class="hexPreview" id="filamentColorPreview"></span>
-                            </span>
-                        </label>
-                        <label>
-                            Brand (optional)
-                            <input type="text" id="filamentBrand" placeholder="Bambu Lab">
-                        </label>
-                        <button type="submit" class="infoBtn">Add filament</button>
-                    </form>
+                        <div class="historyList" id="printHistoryList">
+                            <div class="historyItem">Waiting for data...</div>
+                        </div>
+                    </article>
 
-                    <div class="filamentList" id="filamentList">
-                        <div class="historyItem">No filaments added yet.</div>
-                    </div>
-                </article>
+                    <article class="panel">
+                        <div class="panelHeader">
+                            <span>Today</span>
+                            <strong id="todayPrintCount">0 prints</strong>
+                        </div>
+
+                        <div class="historyList" id="todayTotalsList">
+                            <div class="historyItem">No prints logged today</div>
+                        </div>
+                    </article>
+
+                </div>
 
             </section>
 
-            <section class="secondaryGrid printerGrid">
+            <section class="panel amsPanel filamentSection">
+                <div class="panelHeader">
+                    <span>Filament library</span>
+                    <button type="button" class="infoBtn" id="filamentAddToggle">+ Add filament</button>
+                </div>
 
-                <article class="panel">
-                    <div class="panelHeader">
-                        <span>Today</span>
-                        <strong id="todayPrintCount">0 prints</strong>
-                    </div>
+                <p class="hint">
+                    Your own inventory, not what's loaded right now (see AMS above).
+                    Finished prints automatically deduct their acquired weight from
+                    the matching spool.
+                </p>
 
-                    <div class="historyList" id="todayTotalsList">
-                        <div class="historyItem">No prints logged today</div>
-                    </div>
-                </article>
+                <form class="otaForm" id="filamentAddForm" hidden>
+                    <label>
+                        Material
+                        <input type="text" id="filamentMaterial" placeholder="PLA" required>
+                    </label>
+                    <label>
+                        Color name
+                        <input type="text" id="filamentColorName" placeholder="White" required>
+                    </label>
+                    <label>
+                        Color hex (RRGGBB)
+                        <span class="hexInputRow">
+                            <input type="text" id="filamentColorHex" placeholder="FFFFFF" maxlength="6" pattern="[0-9A-Fa-f]{6}" value="FFFFFF">
+                            <span class="hexPreview" id="filamentColorPreview"></span>
+                        </span>
+                    </label>
+                    <label>
+                        Brand (optional)
+                        <input type="text" id="filamentBrand" placeholder="Bambu Lab">
+                    </label>
+                    <button type="submit" class="infoBtn">Add filament</button>
+                </form>
 
-                <article class="panel historyPanel">
-                    <div class="panelHeader">
-                        <span>Print history</span>
-                        <strong>Recent</strong>
-                    </div>
-
-                    <div class="historyList" id="printHistoryList">
-                        <div class="historyItem">Waiting for data...</div>
-                    </div>
-                </article>
-
+                <div class="filamentList filamentGrid" id="filamentList">
+                    <div class="historyItem">No filaments added yet.</div>
+                </div>
             </section>
 
         </div><!-- /tab-printer -->
