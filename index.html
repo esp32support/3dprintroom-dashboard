@@ -55,6 +55,7 @@
         <nav class="tabNav" role="tablist">
             <button type="button" class="tabBtn active" id="tabBtn-room" role="tab" aria-selected="true" aria-controls="tab-room">Room</button>
             <button type="button" class="tabBtn" id="tabBtn-printer" role="tab" aria-selected="false" aria-controls="tab-printer">Printer Info</button>
+            <button type="button" class="tabBtn" id="tabBtn-power" role="tab" aria-selected="false" aria-controls="tab-power">Power</button>
             <button type="button" class="tabBtn logoutBtn" id="logoutBtn">Log out</button>
         </nav>
 
@@ -494,6 +495,42 @@
             </section>
 
         </div><!-- /tab-printer -->
+
+        <div class="tabPanel" id="tab-power" role="tabpanel" aria-labelledby="tabBtn-power" hidden>
+
+            <section class="secondaryGrid">
+
+                <article class="panel">
+
+                    <div class="panelHeader">
+                        <span>Power Plug</span>
+                        <strong id="powerState">OFFLINE</strong>
+                    </div>
+
+                    <div class="stateValue" id="powerWatts">-- W</div>
+
+                    <p class="stateMessage" id="powerVoltageCurrent">-- V, -- A</p>
+
+                    <dl class="statusList">
+                        <div>
+                            <dt>Today</dt>
+                            <dd id="powerToday">-- kWh</dd>
+                        </div>
+                        <div>
+                            <dt>Yesterday</dt>
+                            <dd id="powerYesterday">-- kWh</dd>
+                        </div>
+                        <div>
+                            <dt>Total</dt>
+                            <dd id="powerTotal">-- kWh</dd>
+                        </div>
+                    </dl>
+
+                </article>
+
+            </section>
+
+        </div><!-- /tab-power -->
 
     </main>
 

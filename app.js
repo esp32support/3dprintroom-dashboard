@@ -1111,6 +1111,16 @@ function renderTodayTotals(items)
     });
 }
 
+function updatePower(data)
+{
+    setText("powerState", "ONLINE");
+    setText("powerWatts", `${Number(data.powerW) || 0} W`);
+    setText("powerVoltageCurrent", `${Number(data.voltage) || 0} V, ${(Number(data.current) || 0).toFixed(2)} A`);
+    setText("powerToday", `${(Number(data.todayKwh) || 0).toFixed(2)} kWh`);
+    setText("powerYesterday", `${(Number(data.yesterdayKwh) || 0).toFixed(2)} kWh`);
+    setText("powerTotal", `${(Number(data.totalKwh) || 0).toFixed(2)} kWh`);
+}
+
 function updatePrinter(data)
 {
     const state = data.gcodeState || "UNKNOWN";
@@ -2107,6 +2117,11 @@ const STALE_RECONNECT_COOLDOWN_MS = 20000;
 // subtopic of the room monitor's topic.
 const PRINTER_TOPIC = `${BROKER_CONFIG.topic}/printer`;
 
+// Tasmota smart-plug telemetry, relayed onto this subtopic by the master
+// project (which polls the plug's own local HTTP status - see master's
+// config.h for why the plug can't publish here directly itself).
+const POWER_TOPIC = `${BROKER_CONFIG.topic}/power`;
+
 const client = mqtt.connect(`wss://${BROKER_CONFIG.host}:${BROKER_CONFIG.port}/mqtt`, {
     username: BROKER_CONFIG.username,
     password: BROKER_CONFIG.password,
@@ -2136,6 +2151,12 @@ client.on("connect", () =>
     {
         if (err)
             setPrinterOffline(`Subscribe failed: ${err.message}`);
+    });
+
+    client.subscribe(POWER_TOPIC, (err) =>
+    {
+        if (err)
+            connectionLog(`Power topic subscribe failed: ${err.message}`);
     });
 });
 
@@ -2175,6 +2196,20 @@ let lastSeenPrinterNow = null;
 
 client.on("message", (topic, payload) =>
 {
+    if (topic === POWER_TOPIC)
+    {
+        try
+        {
+            updatePower(JSON.parse(payload.toString()));
+        }
+        catch (err)
+        {
+            connectionLog(`Bad payload on power topic: ${err.message}`);
+        }
+
+        return;
+    }
+
     if (topic === PRINTER_TOPIC)
     {
         try
@@ -2260,7 +2295,7 @@ setInterval(() =>
 
 // ===== Tabs =====
 
-const TABS = ["room", "printer"];
+const TABS = ["room", "printer", "power"];
 
 function selectTab(name)
 {
