@@ -1475,6 +1475,75 @@ async function saveFilamentLibrary()
     }
 }
 
+// Which filament entries have their spool-history panel open - persisted
+// outside renderFilamentLibrary so it survives the periodic re-render
+// (same reasoning as expandedHistoryKeys/historyShowAll above).
+const expandedSpoolHistory = new Set();
+
+function toggleSpoolHistory(filamentId)
+{
+    if (expandedSpoolHistory.has(filamentId))
+        expandedSpoolHistory.delete(filamentId);
+    else
+        expandedSpoolHistory.add(filamentId);
+
+    renderFilamentLibrary();
+}
+
+// Every spool has always recorded createdAt (see onNewLibrarySpool); this
+// is just the first place it's ever surfaced back to the user - to answer
+// "how long did this spool actually last" and "which color/material am I
+// burning through fastest". toLocaleDateString() uses the browser's own
+// timezone, no manual offset needed.
+function buildSpoolHistoryPanel(f)
+{
+    const panel = document.createElement("div");
+    panel.className = "spoolHistoryPanel";
+
+    const spools = (f.spools || []).slice().sort((a, b) =>
+        new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    if (spools.length === 0)
+    {
+        const empty = document.createElement("p");
+        empty.textContent = "No spools recorded yet.";
+        panel.appendChild(empty);
+        return panel;
+    }
+
+    spools.forEach(spool =>
+    {
+        const row = document.createElement("div");
+        row.className = "spoolHistoryRow";
+
+        const added = spool.createdAt ? new Date(spool.createdAt) : null;
+        const removed = spool.removedAt ? new Date(spool.removedAt) : null;
+
+        const addedText = added ? added.toLocaleDateString() : "unknown date";
+        const line = document.createElement("span");
+
+        if (removed && added)
+        {
+            const days = Math.max(0, Math.round((removed - added) / 86400000));
+            line.textContent = `${spool.total}g - added ${addedText}, removed ${removed.toLocaleDateString()} (lasted ${days} day${days === 1 ? "" : "s"})`;
+        }
+        else if (added)
+        {
+            const daysSoFar = Math.max(0, Math.round((Date.now() - added.getTime()) / 86400000));
+            line.textContent = `${spool.total}g - added ${addedText} (in use ${daysSoFar} day${daysSoFar === 1 ? "" : "s"} so far)`;
+        }
+        else
+        {
+            line.textContent = `${spool.total}g - added date unknown (from before this was tracked)`;
+        }
+
+        row.appendChild(line);
+        panel.appendChild(row);
+    });
+
+    return panel;
+}
+
 function renderFilamentLibrary()
 {
     const list = byId("filamentList");
@@ -1532,18 +1601,31 @@ function renderFilamentLibrary()
         removeBtn.textContent = "Remove";
         removeBtn.addEventListener("click", () => onRemoveFilament(f.id));
 
+        const historyBtn = document.createElement("button");
+        historyBtn.type = "button";
+        historyBtn.className = "infoBtn";
+        historyBtn.textContent = "History";
+        historyBtn.addEventListener("click", () => toggleSpoolHistory(f.id));
+
         actions.appendChild(editBtn);
         actions.appendChild(removeBtn);
+        actions.appendChild(historyBtn);
 
         head.appendChild(sw);
         head.appendChild(meta);
         head.appendChild(actions);
         entry.appendChild(head);
 
+        if (expandedSpoolHistory.has(f.id))
+            entry.appendChild(buildSpoolHistoryPanel(f));
+
         const spoolList = document.createElement("div");
         spoolList.className = "spoolList";
 
-        (f.spools || []).forEach(spool =>
+        // Removed spools stay in the data (see onRemoveSpool) so the
+        // History panel above can still show when they were added/
+        // removed - just hidden from the active/editable list here.
+        (f.spools || []).filter(s => !s.removedAt).forEach(spool =>
         {
             const row = document.createElement("div");
             row.className = "spoolRow";
@@ -1615,9 +1697,16 @@ function onRemoveSpool(filamentId, spoolId)
     withFreshLibrary(lib =>
     {
         const f = lib.filaments.find(x => x.id === filamentId);
+        const spool = f && f.spools.find(s => s.id === spoolId);
 
-        if (f)
-            f.spools = f.spools.filter(s => s.id !== spoolId);
+        // Soft-delete (removedAt, not filtered out) - a hard delete here
+        // would erase the createdAt this spool has always recorded,
+        // losing the "how long did it actually last" answer the moment
+        // someone removes a spent spool - exactly the case this was
+        // asked for. Still disappears from the active/editable list (see
+        // renderFilamentLibrary's spool-list filter) - just not gone.
+        if (spool)
+            spool.removedAt = new Date().toISOString();
     });
 }
 

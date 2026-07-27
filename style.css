@@ -916,6 +916,22 @@ dd{
     margin:0;
 }
 
+.spoolHistoryPanel{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin:8px 0;
+    padding:10px;
+    border-radius:6px;
+    background:#0c0f11;
+    border:1px solid #2f363d;
+}
+
+.spoolHistoryRow{
+    font-size:13px;
+    color:var(--muted);
+}
+
 .spoolRow input[type="number"]{
     /* Wide enough for "9999.99" plus the browser's spinner arrows - 64px
        clipped 2-decimal values like 718.56 at the decimals. */
