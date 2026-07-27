@@ -799,6 +799,13 @@ let lastHistoryItems = [];
 // the detail they just clicked to see.
 const expandedHistoryKeys = new Set();
 
+// Same "survive the every-5s rebuild" reasoning as expandedHistoryKeys
+// above - persisted outside the render function so toggling "Show more"
+// doesn't get reset by the next incoming printer MQTT message.
+let historyShowAll = false;
+
+const HISTORY_COLLAPSED_COUNT = 5;
+
 function renderPrintHistory(items)
 {
     lastHistoryItems = items || [];
@@ -819,8 +826,10 @@ function renderPrintHistory(items)
         return;
     }
 
+    const visibleItems = historyShowAll ? items : items.slice(0, HISTORY_COLLAPSED_COUNT);
+
     // Already newest-first from the device.
-    items.forEach(item =>
+    visibleItems.forEach(item =>
     {
         // item.outcome is the printer's own gcode_state at the moment it
         // stopped running - "FINISH" for a normal completion, anything
@@ -958,6 +967,26 @@ function renderPrintHistory(items)
 
         list.appendChild(row);
     });
+
+    if (items.length > HISTORY_COLLAPSED_COUNT)
+    {
+        const moreBtn = document.createElement("button");
+        moreBtn.type = "button";
+        moreBtn.className = "infoBtn";
+        moreBtn.style.width = "100%";
+        moreBtn.style.marginTop = "8px";
+        moreBtn.textContent = historyShowAll
+            ? "Show less"
+            : `Show more (${items.length - HISTORY_COLLAPSED_COUNT} older)`;
+
+        moreBtn.addEventListener("click", () =>
+        {
+            historyShowAll = !historyShowAll;
+            renderPrintHistory(lastHistoryItems);
+        });
+
+        list.appendChild(moreBtn);
+    }
 }
 
 // Firmware timestamps are local "YYYY-MM-DD HH:MM:SS" strings.
