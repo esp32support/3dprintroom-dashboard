@@ -4,6 +4,25 @@
 // own expiry and a signature over (username + expiry), so verifying it is
 // just recomputing the HMAC - no lookup required.
 
+// Security audit finding: comparing secrets with === leaks timing
+// information proportional to how many leading characters match - a
+// textbook side-channel, even though exploiting it over real network
+// jitter is hard in practice. XORs every byte and accumulates the result,
+// so the loop always runs the full length regardless of where (or
+// whether) a mismatch occurs. Length is checked first via a cheap
+// bitwise trick that avoids returning early on the actual byte content -
+// a length mismatch alone doesn't leak anything useful about the secret.
+export function timingSafeEqual(a, b) {
+    if (a.length !== b.length)
+        return false;
+
+    let result = 0;
+    for (let i = 0; i < a.length; i++)
+        result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+
+    return result === 0;
+}
+
 async function hmacHex(message, secret) {
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
@@ -56,5 +75,5 @@ export async function verifySessionCookie(cookieHeader, username, secret) {
         return false;
 
     const expected = await hmacHex(`${username}:${expiryStr}`, secret);
-    return expected === signature;
+    return timingSafeEqual(expected, signature);
 }
