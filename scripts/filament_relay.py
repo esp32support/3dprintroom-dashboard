@@ -47,6 +47,13 @@ def trim_library(lib):
                 "spools": [
                     {"total": s.get("total", 0), "remaining": s.get("remaining", 0)}
                     for s in f.get("spools", [])
+                    # Removed spools are soft-deleted (removedAt set, never
+                    # filtered out of the stored array - see onRemoveSpool)
+                    # so their createdAt history survives. Relaying them
+                    # anyway inflated CYD's summed remainingG with dead
+                    # spools' leftover weight, and would also throw off the
+                    # low-filament warning's "lowest active spool" check.
+                    if not s.get("removedAt")
                 ],
             }
             for f in lib.get("filaments", [])

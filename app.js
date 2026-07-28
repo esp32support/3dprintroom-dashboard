@@ -1709,6 +1709,31 @@ function renderFilamentLibrary()
         const meta = document.createElement("div");
         const title = document.createElement("strong");
         title.textContent = `${f.material} - ${f.color}`;
+
+        // Warns against the LOWEST active (non-removed) spool of this
+        // color, not the sum across all its spools - a fresh backup spool
+        // would otherwise mask a nearly-empty one still loaded and at
+        // risk of slipping off the spool (confirmed live: ~93g remaining
+        // on the loaded spool, well past the point where that's a real
+        // risk). Fixed gram thresholds, not a percentage of that spool's
+        // own total, so a small and a large spool warn at the same
+        // physical remaining amount - same thresholds as CYD's own
+        // Filament Library screen.
+        const activeSpools = (f.spools || []).filter(s => !s.removedAt);
+
+        if (activeSpools.length > 0)
+        {
+            const lowest = Math.min(...activeSpools.map(s => s.remaining));
+
+            if (lowest <= 200)
+            {
+                const mark = document.createElement("span");
+                mark.className = lowest <= 150 ? "lowFilamentMark critical" : "lowFilamentMark";
+                mark.textContent = "!";
+                title.appendChild(mark);
+            }
+        }
+
         meta.appendChild(title);
 
         if (f.brand)

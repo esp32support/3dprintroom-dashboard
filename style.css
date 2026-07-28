@@ -921,6 +921,16 @@ dd{
     color:var(--muted);
 }
 
+.lowFilamentMark{
+    color:var(--yellow);
+    margin-left:6px;
+    font-weight:900;
+}
+
+.lowFilamentMark.critical{
+    color:var(--red);
+}
+
 .filamentEntryActions{
     display:flex;
     flex-wrap:wrap;
