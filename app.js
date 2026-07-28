@@ -1713,6 +1713,53 @@ async function withFreshLibrary(mutatorFn)
     await saveFilamentLibrary();
 }
 
+// Was wired to the Edit button (filamentEntryActions) but never actually
+// implemented - clicking it silently did nothing (a ReferenceError in the
+// console, invisible without devtools open). Confirmed live: this is
+// exactly how a filament ends up with a wrong stored color forever - the
+// Add-filament form's hex field defaults to FFFFFF (white) if left
+// untouched, and there was no way to go back and fix it afterward short
+// of removing and re-adding the whole entry (losing its spools/history).
+function onEditFilament(filamentId)
+{
+    withFreshLibrary(lib =>
+    {
+        const f = lib.filaments.find(x => x.id === filamentId);
+
+        if (!f)
+            return;
+
+        const material = window.prompt("Material:", f.material);
+        if (material === null || !material.trim())
+            return;
+
+        const color = window.prompt("Color name:", f.color);
+        if (color === null || !color.trim())
+            return;
+
+        const colorHexInput = window.prompt("Color hex (RRGGBB):", f.colorHex);
+        if (colorHexInput === null)
+            return;
+
+        const colorHex = colorHexInput.replace("#", "").toUpperCase();
+
+        if (!/^[0-9A-F]{6}$/.test(colorHex))
+        {
+            window.alert("Color hex must be exactly 6 hex digits (e.g. BBBBBB) - not saved.");
+            return;
+        }
+
+        const brand = window.prompt("Brand (optional):", f.brand || "");
+        if (brand === null)
+            return;
+
+        f.material = material.trim();
+        f.color = color.trim();
+        f.colorHex = colorHex;
+        f.brand = brand.trim();
+    });
+}
+
 function onRemoveFilament(filamentId)
 {
     if (!window.confirm("Remove this filament and all its spools?"))
@@ -2115,6 +2162,23 @@ if (filamentAddToggle && filamentAddForm)
 
         if (!material || !color)
             return;
+
+        // Confirmed live: the hex field's own FFFFFF default got left
+        // untouched when adding a filament that wasn't actually white,
+        // silently storing the wrong color - which then never fuzzy-
+        // matches Bambu's real reported color, so it never deducts, ever,
+        // for that filament. A real "White" is a legitimate choice too,
+        // so this confirms rather than blocks outright.
+        if (colorHex === "FFFFFF" && !/white/i.test(color))
+        {
+            const proceed = window.confirm(
+                `Color hex is FFFFFF (white), but the color name is "${color}" - ` +
+                "did you forget to set the actual hex? Click Cancel to go back and fix it, " +
+                "or OK to save it as white anyway.");
+
+            if (!proceed)
+                return;
+        }
 
         filamentAddForm.reset();
         filamentAddForm.setAttribute("hidden", "");
