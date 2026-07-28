@@ -1373,6 +1373,7 @@ function updatePrinter(data)
     renderPrintHistory(data.history || []);
     renderTodayTotals();
     processFilamentDeductions(data.history || []);
+    reconcileDeductionLog();
     syncAmsToLibrary(trays);
 }
 
@@ -2081,6 +2082,80 @@ async function syncAmsToLibrary(trays)
     await saveFilamentLibrary();
 }
 
+// Self-heals a confirmed bug: a gcode-verified override correcting a
+// print's color to the one actually used could land AFTER an earlier
+// (wrong) client-side deduction had already run against Task API's color
+// field before it preferred targetColor over sourceColor (see
+// printer-task.js) - the correction added its own deductionLog entry but
+// never reversed the earlier wrong one, charging TWO different spools for
+// what was genuinely one print. Confirmed live:
+// "dop_51_5mm_editž__2026-07-28 10:31:43" had deductionLog entries for
+// BOTH 0078BF (blue, wrong) and BCBCBC (gray, correct) at 17.96g each,
+// for a print that only ever used gray - blue's spool was 17.96g short of
+// what it should show. Only touches single-color overrides (a multi-color
+// print's several hex entries are legitimate by design, not stale
+// duplicates) and only refunds a hex that doesn't fuzzy-match what the
+// override says is actually correct.
+async function reconcileDeductionLog()
+{
+    if (!filamentLibraryLoaded)
+        return;
+
+    let changed = false;
+
+    for (const [key, log] of Object.entries(filamentLibrary.deductionLog || {}))
+    {
+        const override = filamentLibrary.historyOverrides[key];
+
+        if (!override || Array.isArray(override.details) || typeof override.colorHex !== "string")
+            continue;
+
+        const correctHex = override.colorHex.toUpperCase();
+
+        for (const hex of Object.keys(log))
+        {
+            if (colorDistance(hex, correctHex) <= COLOR_MATCH_THRESHOLD)
+                continue;   // this IS the correct entry (or close enough)
+
+            const grams = log[hex];
+
+            if (!grams)
+                continue;
+
+            const material = (override.material || "").toUpperCase();
+            const filament = filamentLibrary.filaments
+                .filter(f => f.material.toUpperCase() === material)
+                .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
+                .sort((a, b) => a.dist - b.dist)
+                .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
+
+            if (filament && filament.spools && filament.spools.length > 0)
+            {
+                // Refund to whichever active spool currently has the
+                // least left - the same one a fresh deduction would draw
+                // from, and the most likely one the original wrong
+                // deduction actually hit.
+                const target = filament.spools
+                    .filter(s => !s.removedAt)
+                    .sort((a, b) => a.remaining - b.remaining)[0];
+
+                if (target)
+                    target.remaining += grams;
+            }
+
+            delete log[hex];
+            changed = true;
+        }
+    }
+
+    if (!changed)
+        return;
+
+    renderFilamentLibrary();
+    renderTodayTotals();
+    await saveFilamentLibrary();
+}
+
 // Auto-deducts each finished print's acquired weight from the matching
 // library spool, using the same Task API match used to enrich print
 // history (see matchTaskForHistoryItem). processedPrints - persisted in KV
@@ -2261,7 +2336,7 @@ async function processFilamentDeductions(items)
     await saveFilamentLibrary();
 }
 
-loadFilamentLibrary();
+loadFilamentLibrary().then(reconcileDeductionLog);
 
 const filamentAddToggle = byId("filamentAddToggle");
 const filamentAddForm = byId("filamentAddForm");
