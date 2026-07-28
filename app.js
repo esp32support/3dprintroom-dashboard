@@ -1069,8 +1069,15 @@ function renderTodayTotals(items)
     {
         resolveItemUsage(item).forEach(e =>
         {
-            const key = `${e.color}|${e.type}`;
-            const prev = groups.get(key) || { color: e.color, type: e.type, amounts: [] };
+            // Different sources report slightly different raw hex for the
+            // same physical spool (live AMS tray read vs. Task API's
+            // targetColor vs. the library's own stored hex - e.g. BCBCBC
+            // vs BBBBBB, both "gray") - group by the library's CANONICAL
+            // hex, not the raw one, or the same color splits into separate
+            // rows (confirmed live: two "PLA - Gray" rows for one spool).
+            const color = resolveLibraryColor(e.color, e.type);
+            const key = `${color}|${e.type}`;
+            const prev = groups.get(key) || { color, type: e.type, amounts: [] };
             prev.amounts.push(e.amount);
             groups.set(key, prev);
         });
