@@ -50,7 +50,45 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
-    const { printName, startTime, material, colorHex, weight } = body;
+    const { printName, startTime, material, colorHex, weight, details } = body;
+
+    // Multi-color: caller sends `details` (an array of {material, colorHex,
+    // weight}) instead of the single flat material/colorHex/weight -
+    // real support for prints using more than one AMS tray, which a
+    // single {material, colorHex} override could never represent. Kept as
+    // a separate shape (not forcing every caller onto array-of-one) so
+    // every existing single-color caller keeps working unchanged.
+    if (details !== undefined) {
+        if (!printName || !startTime || !Array.isArray(details) || details.length === 0) {
+            return jsonResponse({ error: "printName, startTime, details[] are required" }, 400);
+        }
+
+        for (const d of details) {
+            if (!d.material || !d.colorHex) {
+                return jsonResponse({ error: "each detail needs material and colorHex" }, 400);
+            }
+        }
+
+        const raw = await env.FILAMENT_KV.get(KV_KEY);
+        const lib = raw ? { ...emptyLibrary(), ...JSON.parse(raw) } : emptyLibrary();
+
+        const key = `${printName}__${startTime}`;
+
+        lib.historyOverrides[key] = {
+            details: details.map((d) => ({
+                material: String(d.material).trim(),
+                colorHex: String(d.colorHex).replace("#", "").toUpperCase(),
+                weight: typeof d.weight === "number" && Number.isFinite(d.weight) ? d.weight : undefined,
+            })),
+            source: "gcode",
+        };
+
+        const processedIdx = lib.processedPrints.indexOf(key);
+        if (processedIdx !== -1) lib.processedPrints.splice(processedIdx, 1);
+
+        await env.FILAMENT_KV.put(KV_KEY, JSON.stringify(lib));
+        return jsonResponse({ ok: true, key });
+    }
 
     if (!printName || !startTime || !material || !colorHex) {
         return jsonResponse({ error: "printName, startTime, material, colorHex are required" }, 400);

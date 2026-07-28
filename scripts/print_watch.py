@@ -1,17 +1,17 @@
 """
-Watches the printer's live MQTT status for a single-color print finishing,
-then pushes an accurate color/material/weight correction to the dashboard -
-without needing LAN access to the printer's SD card.
+Watches the printer's live MQTT status for a print finishing, then pushes
+an accurate color/material/weight correction to the dashboard - without
+needing LAN access to the printer's SD card.
 
 Replaces gcode_sync_daemon.py's FTPS-based .bbl/gcode reading with two
 already-reliable cloud-only sources:
   - color/material: the live AMS tray data in the printer's own MQTT
     report (this is what the CYD's screens already trust - Bambu's Task
-    API color/slotId fields are the unreliable ones, not this).
+    API color/slotId fields are the unreliable ones for SINGLE-color
+    prints, confirmed live to sometimes fall back to a placeholder).
   - weight: Bambu Cloud's Task API (functions/api/printer-task.js), whose
-    weight field has been confirmed reliable in prior testing this
-    project - the color/slotId fields from that same API are what's
-    unreliable, which this script never reads.
+    weight field (and, per-detail, the slicer's own per-tray weight split
+    in amsDetailMapping) has been confirmed reliable in prior testing.
 
 State (was a print running last check, which AMS trays were seen active
 during it) persists in Cloudflare KV via /api/printer-watch-state - this
@@ -19,9 +19,18 @@ runs as a stateless step in a scheduled GitHub Actions job, not a
 persistent process, so there's no in-memory state between runs the way
 the old PC-resident daemon had.
 
-Scope: single-color prints only, same limitation as before - there's
-still no reliable way to split weight across colors for a genuine
-multi-color print from any data source available.
+Multi-color prints: Task API's own amsDetail already has a per-tray
+weight breakdown from the slicer - the thing that's unreliable isn't the
+WEIGHT, it's occasionally the SLOT ASSIGNMENT (which physical tray it
+thinks each detail came from). This script already has independent,
+trustworthy knowledge of which physical trays were ACTUALLY used (the
+live tray_seen set, from the printer's own MQTT report) - so before
+trusting Task API's per-tray breakdown, cross-check that the SET of
+slots it claims matches the SET actually seen live. If they agree, Task
+API's assignment for this print wasn't scrambled, and its per-tray
+weights (genuinely from the slicer) can be pushed as a real, verified
+multi-color correction. If they disagree, this stays conservative and
+skips - same as it always did for multi-color, rather than guessing.
 """
 import json
 import os
@@ -179,7 +188,40 @@ def main():
             else:
                 log("no live tray data for the active slot - skipping")
         else:
-            log("multi-color print - no reliable per-color weight split, skipping (same as before)")
+            try:
+                task_data = api_get(TASK_URL, sync_secret)
+                match = find_matching_task(task_data.get("tasks", []), state["subtaskName"], state["currentStart"])
+                ams_detail = (match or {}).get("amsDetail", [])
+                task_slots = {d.get("slotId") for d in ams_detail if d.get("slotId") is not None}
+
+                if match and ams_detail and task_slots == tray_seen:
+                    details = [
+                        {
+                            "material": d["type"],
+                            "colorHex": d["color"][:6].upper(),
+                            "weight": d["weight"],
+                        }
+                        for d in ams_detail
+                        if d.get("type") and d.get("color") and d.get("weight")
+                    ]
+
+                    if details:
+                        result = api_post(SYNC_URL, sync_secret, {
+                            "printName": state["subtaskName"],
+                            "startTime": state["currentStart"],
+                            "details": details,
+                        })
+                        log(f"pushed multi-color correction ({len(details)} colors): {result}")
+                    else:
+                        log("Task API slots matched live trays, but no usable detail weights - skipping")
+                elif match:
+                    log(f"Task API's AMS slots {sorted(task_slots)} don't match what was actually "
+                        f"seen live {sorted(tray_seen)} - assignment looks scrambled, skipping "
+                        "(same conservative behavior as before)")
+                else:
+                    log("no matching Task API task found - skipping")
+            except Exception as e:
+                log(f"multi-color correction push failed: {e}")
 
         tray_seen = set()  # reset tracking for the next print
 

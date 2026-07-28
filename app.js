@@ -1405,6 +1405,19 @@ function resolveItemUsage(item)
 
     if (override)
     {
+        // Multi-color gcode-verified override (see gcode-sync.js) - each
+        // detail already carries its own weight, unlike the single-color
+        // shape below where a missing weight falls back to Task API's
+        // total (there's no single "total" that makes sense to split
+        // across multiple details here, so a detail with no weight is
+        // just skipped rather than guessed at).
+        if (Array.isArray(override.details))
+        {
+            return override.details
+                .filter(d => typeof d.weight === "number")
+                .map(d => ({ color: d.colorHex, type: d.material, amount: `${d.weight.toFixed(2)}g` }));
+        }
+
         if (typeof override.weight === "number")
             return [{ color: override.colorHex, type: override.material, amount: `${override.weight.toFixed(2)}g` }];
 
@@ -2022,10 +2035,20 @@ async function processFilamentDeductions(items)
         // no need to wait on a Task API match at all in that case. A
         // manual "Fix filament" override has no weight of its own, so
         // that still needs the Task API's total to deduct against.
+        //
+        // Multi-color gcode-verified override: each detail already has
+        // its own weight (cross-verified against the live AMS before
+        // print_watch.py ever pushed it - see that script's own
+        // comments), so this deducts each one directly, same as trusting
+        // matchedTask.amsDetail below but from a source that's actually
+        // been checked rather than blindly trusted.
         const details = override
-            ? (typeof override.weight === "number"
-                ? [{ color: override.colorHex, type: override.material, weight: override.weight }]
-                : (matchedTask ? [{ color: override.colorHex, type: override.material, weight: matchedTask.weight }] : []))
+            ? (Array.isArray(override.details)
+                ? override.details.filter(d => typeof d.weight === "number")
+                    .map(d => ({ color: d.colorHex, type: d.material, weight: d.weight }))
+                : (typeof override.weight === "number"
+                    ? [{ color: override.colorHex, type: override.material, weight: override.weight }]
+                    : (matchedTask ? [{ color: override.colorHex, type: override.material, weight: matchedTask.weight }] : [])))
             : (matchedTask ? matchedTask.amsDetail : []);
 
         if (details.length === 0)
