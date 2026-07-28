@@ -832,22 +832,23 @@ function renderPrintHistory(items)
     visibleItems.forEach(item =>
     {
         // item.outcome is the printer's own gcode_state at the moment it
-        // stopped running - "FINISH" for a normal completion, anything
-        // else (typically "FAILED", which Bambu's firmware also uses for
-        // a user-initiated cancel, not just a hardware failure - it
-        // doesn't distinguish the two at this level) means the print
-        // didn't run to completion. Already used to skip auto-deduction
-        // for these (see processFilamentDeductions) so a cancelled print
-        // never gets charged for filament it never fully used - but that
-        // also means whatever WAS extruded before it stopped goes
-        // untracked. There's no reliable way to measure a partial amount
-        // from any data source available here, so this only surfaces the
-        // fact that it happened rather than guessing a number.
+        // stopped running - "FINISH" for a normal completion. "PAUSE" is a
+        // genuinely different situation from "FAILED"/cancelled (Bambu's
+        // firmware uses FAILED for both a real failure AND a user-
+        // initiated cancel, but PAUSE means the print is/was just paused,
+        // not abandoned - confirmed live: a 15s "PAUSE" entry immediately
+        // followed by a fresh full-length print of the same file, which a
+        // red "Cancelled/failed" badge misrepresented as filament lost to
+        // a failure). Both still skip auto-deduction (see
+        // processFilamentDeductions) since there's no reliable way to
+        // measure a partial amount from any data source available here -
+        // only the wording/color differ.
+        const isPause = item.outcome === "PAUSE";
         const notFinished = item.outcome && item.outcome !== "FINISH";
 
         const row = document.createElement("div");
         row.className = "historyItem historyItemClickable";
-        row.style.borderLeftColor = notFinished ? "var(--red)" : "var(--cyan)";
+        row.style.borderLeftColor = notFinished ? (isPause ? "var(--yellow)" : "var(--red)") : "var(--cyan)";
         row.tabIndex = 0;
         row.setAttribute("role", "button");
 
@@ -861,7 +862,9 @@ function renderPrintHistory(items)
         {
             const badge = document.createElement("span");
             badge.className = "historyOutcomeBadge";
-            badge.textContent = "Cancelled/failed - filament used before this wasn't tracked";
+            badge.textContent = isPause
+                ? "Paused - filament used before this wasn't tracked"
+                : "Cancelled/failed - filament used before this wasn't tracked";
             left.appendChild(badge);
         }
 
