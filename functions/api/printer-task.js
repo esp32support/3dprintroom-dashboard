@@ -97,7 +97,17 @@ export async function onRequestGet(context) {
         amsDetail: (task.amsDetailMapping || []).map((d) => ({
             amsId: d.amsId,
             slotId: d.slotId,
-            color: d.sourceColor || d.targetColor || "",
+            // targetColor is what the AMS mapping screen actually assigned
+            // before printing - sourceColor is just the original 3MF/slicer
+            // selection, which stays populated even after a user reassigns
+            // a different spool at print time. Preferring sourceColor here
+            // was the root cause of prints showing/deducting the color the
+            // model was ORIGINALLY sliced for instead of the one physically
+            // used (confirmed live: a print sliced for blue, reassigned to
+            // gray in the AMS mapping dialog before printing, still showed
+            // "PLA Blue" - sourceColor=0078BF, targetColor=BCBCBC, the
+            // gray actually loaded).
+            color: d.targetColor || d.sourceColor || "",
             type: d.filamentType || "",
             weight: d.weight || 0,
         })),
