@@ -1094,15 +1094,22 @@ function renderTodayTotals(items)
         const left = document.createElement("div");
 
         const title = document.createElement("strong");
-        title.textContent = g.type || "?";
+        // Same "Material - Color" convention as the Filament Library cards
+        // right below this panel, so the two sections read consistently.
+        title.textContent = `${g.type || "?"} - ${guessColorName(g.color)}`;
         left.appendChild(title);
 
         const sub = document.createElement("small");
         sub.textContent = `${g.amounts.length} print(s)`;
         left.appendChild(sub);
 
+        // Amounts arrive as pre-formatted strings ("12.34g") - sum the
+        // numeric values instead of joining the strings, which used to
+        // display as a literal "17.95g + 17.96g" chain instead of a total.
+        const sum = g.amounts.reduce((acc, a) => acc + (parseFloat(a) || 0), 0);
+
         const total = document.createElement("span");
-        total.textContent = g.amounts.join(" + ");
+        total.textContent = `${sum.toFixed(2)}g`;
 
         row.appendChild(left);
         row.appendChild(total);
