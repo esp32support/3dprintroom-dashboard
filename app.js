@@ -1330,6 +1330,22 @@ async function updatePrinterTask()
 // enough to avoid false matches across unrelated prints with the same name.
 function matchTaskForHistoryItem(item)
 {
+    // Exact match when the device reports its own taskId (subtask_id/
+    // task_id/project_id from the live MQTT report - confirmed live to be
+    // the SAME value as Task API's own "id" field for the same job). Real
+    // fix for the recurring "multiple prints share the same generic
+    // slicer title" collision the fuzzy title+time-window fallback below
+    // has to guess around - not yet populated until the device firmware
+    // sends it, so this silently falls through to that fallback for any
+    // history entry older than that update.
+    if (item.taskId)
+    {
+        const exact = latestPrinterTasks.find(t => t.id != null && String(t.id) === String(item.taskId));
+
+        if (exact && exact.amsDetail && exact.amsDetail.length > 0)
+            return exact;
+    }
+
     const itemStart = parseDeviceTime(item.start);
 
     if (!itemStart || latestPrinterTasks.length === 0)

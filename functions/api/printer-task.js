@@ -78,6 +78,17 @@ export async function onRequestGet(context) {
     const hits = data.hits || [];
 
     const simplify = (task) => ({
+        // Bambu Cloud's own unique per-job ID - the SAME value the printer's
+        // live MQTT report calls subtask_id/task_id/project_id (confirmed
+        // live: cross-checked one against the other, identical). A real fix
+        // for the recurring "multiple prints share the same generic slicer
+        // title" collision that title+time-window matching below has to
+        // guess around - once the device starts reporting its own
+        // subtask_id per history entry, matching can be exact instead of
+        // fuzzy. Kept alongside title/startTime (not replacing them yet)
+        // since older history entries predate the device having this field
+        // at all and still need the fallback.
+        id: task.id ?? null,
         title: task.title || "",
         weight: task.weight || 0,
         length: task.length || 0,
