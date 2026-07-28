@@ -135,6 +135,22 @@ def main():
         return
 
     gcode_state = snapshot.get("gcodeState") or ""
+
+    # "UNKNOWN" is the CYD's own boot-time sentinel default (printer_state.h),
+    # published the moment its HiveMQ connection comes up but before its
+    # Bambu Cloud connection has delivered a first real report - a window
+    # every device reboot passes through (OTA update, power blip, WiFi
+    # drop). Confirmed live: this GitHub Action polled during exactly that
+    # window mid-print and logged "print finished" for a print that was
+    # still running, only avoiding a bad push because the placeholder
+    # snapshot's tray data was empty too. Treating "UNKNOWN" as a real
+    # non-running state risks wiping tray_seen (multi-color tracking) or
+    # pushing a partial-weight correction on a genuine reboot-timing hit -
+    # skip the run entirely instead, same as no snapshot at all.
+    if gcode_state == "UNKNOWN":
+        log("live snapshot reports the device's own boot-time placeholder state - skipping")
+        return
+
     subtask_name = snapshot.get("subtaskName") or ""
     current_start = snapshot.get("currentStart") or ""
     tray_now = snapshot.get("trayNow")
