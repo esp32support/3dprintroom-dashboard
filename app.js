@@ -1596,34 +1596,8 @@ function renderFilamentLibrary()
             meta.appendChild(sub);
         }
 
-        const actions = document.createElement("div");
-        actions.className = "filamentEntryActions";
-
-        const editBtn = document.createElement("button");
-        editBtn.type = "button";
-        editBtn.className = "infoBtn";
-        editBtn.textContent = "Edit";
-        editBtn.addEventListener("click", () => onEditFilament(f.id));
-
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "infoBtn";
-        removeBtn.textContent = "Remove";
-        removeBtn.addEventListener("click", () => onRemoveFilament(f.id));
-
-        const historyBtn = document.createElement("button");
-        historyBtn.type = "button";
-        historyBtn.className = "infoBtn";
-        historyBtn.textContent = "History";
-        historyBtn.addEventListener("click", () => toggleSpoolHistory(f.id));
-
-        actions.appendChild(editBtn);
-        actions.appendChild(removeBtn);
-        actions.appendChild(historyBtn);
-
         head.appendChild(sw);
         head.appendChild(meta);
-        head.appendChild(actions);
         entry.appendChild(head);
 
         if (expandedSpoolHistory.has(f.id))
@@ -1665,14 +1639,43 @@ function renderFilamentLibrary()
 
         entry.appendChild(spoolList);
 
+        // All entry-level actions on one row (was Edit/Remove/History up
+        // in the header, "New spool" separate at the bottom) - consolidated
+        // per request, and frees up header space for the title/brand in
+        // the narrower 4-column grid layout.
+        const actions = document.createElement("div");
+        actions.className = "filamentEntryActions";
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "infoBtn";
+        editBtn.textContent = "Edit";
+        editBtn.addEventListener("click", () => onEditFilament(f.id));
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "infoBtn";
+        removeBtn.textContent = "Remove";
+        removeBtn.addEventListener("click", () => onRemoveFilament(f.id));
+
+        const historyBtn = document.createElement("button");
+        historyBtn.type = "button";
+        historyBtn.className = "infoBtn";
+        historyBtn.textContent = "History";
+        historyBtn.addEventListener("click", () => toggleSpoolHistory(f.id));
+
         const newSpoolBtn = document.createElement("button");
         newSpoolBtn.type = "button";
         newSpoolBtn.className = "infoBtn";
-        newSpoolBtn.style.marginTop = "8px";
         newSpoolBtn.textContent = "New spool";
         newSpoolBtn.addEventListener("click", () => onNewLibrarySpool(f.id));
 
-        entry.appendChild(newSpoolBtn);
+        actions.appendChild(editBtn);
+        actions.appendChild(removeBtn);
+        actions.appendChild(historyBtn);
+        actions.appendChild(newSpoolBtn);
+
+        entry.appendChild(actions);
         list.appendChild(entry);
     });
 }

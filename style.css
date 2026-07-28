@@ -885,7 +885,7 @@ dd{
 
 .filamentEntryHead{
     display:grid;
-    grid-template-columns:auto 1fr auto;
+    grid-template-columns:auto 1fr;
     align-items:center;
     gap:10px;
 }
@@ -898,14 +898,17 @@ dd{
     color:var(--muted);
 }
 
-.filamentEntryHead .infoBtn{
-    font-size:11px;
-    padding:4px 8px;
-}
-
 .filamentEntryActions{
     display:flex;
+    flex-wrap:wrap;
     gap:6px;
+    margin-top:10px;
+}
+
+.filamentEntryActions .infoBtn{
+    font-size:11px;
+    padding:4px 8px;
+    flex:1 1 auto;
 }
 
 .spoolList{
