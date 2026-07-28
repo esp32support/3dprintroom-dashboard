@@ -1117,14 +1117,25 @@ function renderTodayTotals()
             if (!grams)
                 continue;
 
-            // deductionLog's hex keys come from filament.colorHex exactly
-            // (see processFilamentDeductions) - an exact lookup back into
-            // the current library is enough to recover the material name,
-            // no fuzzy matching needed.
-            const filament = filamentLibrary.filaments.find(f => f.colorHex === hex);
+            // deductionLog's hex keys are the RAW source color (Task API's
+            // targetColor or the live tray reading) at the moment of
+            // deduction, not the library's own stored hex - same "BCBCBC
+            // vs BBBBBB, both gray" mismatch as elsewhere, confirmed live
+            // here too (showed "? - Gray"/"? - Blue" instead of the real
+            // material). Fuzzy-match against the library the same way,
+            // not an exact lookup. No material to pre-filter by (the log
+            // only ever stored color), so this can only mis-pick when two
+            // different materials share a near-identical color - not the
+            // case for this library today, but a real limitation of what
+            // deductionLog records.
+            const filament = filamentLibrary.filaments
+                .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
+                .sort((a, b) => a.dist - b.dist)
+                .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
             const material = filament ? filament.material : "?";
-            const gKey = `${hex}|${material}`;
-            const prev = groups.get(gKey) || { color: hex, type: material, total: 0, prints: new Set() };
+            const canonicalColor = filament ? filament.colorHex : hex;
+            const gKey = `${canonicalColor}|${material}`;
+            const prev = groups.get(gKey) || { color: canonicalColor, type: material, total: 0, prints: new Set() };
             prev.total += grams;
             prev.prints.add(key);
             groups.set(gKey, prev);
