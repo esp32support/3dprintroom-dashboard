@@ -202,6 +202,29 @@ h1{
     color:var(--text);
 }
 
+.spendPeriodTabs{
+    display:flex;
+    gap:6px;
+}
+
+.spendPeriodBtn{
+    background:transparent;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:4px 10px;
+    color:var(--muted);
+    font-size:13px;
+    font-weight:700;
+    text-transform:uppercase;
+    cursor:pointer;
+}
+
+.spendPeriodBtn.active{
+    background:var(--cyan);
+    border-color:var(--cyan);
+    color:#0b1113;
+}
+
 .metricLine{
     display:flex;
     align-items:flex-end;

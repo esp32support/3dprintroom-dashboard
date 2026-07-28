@@ -1030,20 +1030,64 @@ function printDuration(start, end)
     return formatTime(Math.max(0, Math.round((b - a) / 1000)));
 }
 
-function isToday(s)
+// ===== Historical filament spend (Today / Yesterday / This Week) =====
+// Reads filamentLibrary.deductionLog directly instead of the live device
+// history array - deductionLog is a permanent, KV-backed ledger of exactly
+// what was deducted per print (kept for the last ~200 processed prints,
+// see processFilamentDeductions), while CYD's own history is a volatile
+// ~20-slot rolling buffer. "Today" happens to always fit in that buffer,
+// but "Yesterday"/"This Week" can't - once more than ~20 prints have run
+// since the period started, older ones silently fall off the device's own
+// list and would undercount. deductionLog isn't subject to that limit.
+let selectedSpendPeriod = "today";
+
+function spendPeriodStart(period)
 {
-    const d = parseDeviceTime(s);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
 
-    if (!d)
-        return false;
+    if (period === "yesterday")
+    {
+        start.setDate(start.getDate() - 1);
+        return start;
+    }
 
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear()
-        && d.getMonth() === now.getMonth()
-        && d.getDate() === now.getDate();
+    if (period === "week")
+    {
+        // Rolling 7 days including today, not "since Monday" - avoids
+        // week-start-day ambiguity and just answers "last 7 days".
+        start.setDate(start.getDate() - 6);
+        return start;
+    }
+
+    return start;   // today
 }
 
-function renderTodayTotals(items)
+function spendPeriodEnd(period)
+{
+    if (period === "yesterday")
+    {
+        const end = new Date();
+        end.setHours(0, 0, 0, 0);
+        return end;   // exclusive - up to the start of today
+    }
+
+    const end = new Date();
+    end.setSeconds(end.getSeconds() + 1);   // inclusive of right now
+    return end;
+}
+
+// deductionLog keys are "${item.name}__${item.start}" - item.start is
+// always a fixed "YYYY-MM-DD HH:MM:SS" device timestamp with no "__" in
+// it, so the LAST "__" is always the real separator even if item.name
+// itself happens to contain one.
+function deductionKeyDate(key)
+{
+    const idx = key.lastIndexOf("__");
+    return idx === -1 ? null : parseDeviceTime(key.slice(idx + 2));
+}
+
+function renderTodayTotals()
 {
     const list = byId("todayTotalsList");
 
@@ -1052,45 +1096,50 @@ function renderTodayTotals(items)
 
     list.innerHTML = "";
 
-    const todays = (items || []).filter(i => isToday(i.start));
-    setText("todayPrintCount", `${todays.length} print${todays.length === 1 ? "" : "s"}`);
-
-    if (todays.length === 0)
-    {
-        const empty = document.createElement("div");
-        empty.className = "historyItem";
-        empty.textContent = "No prints logged today";
-        list.appendChild(empty);
-        return;
-    }
+    const start = spendPeriodStart(selectedSpendPeriod);
+    const end = spendPeriodEnd(selectedSpendPeriod);
 
     // Group by colour+material: two different "reds" (e.g. red PLA vs red
     // PETG) stay separate rather than being merged into one bogus total.
     const groups = new Map();
+    const printsInPeriod = new Set();
 
-    todays.forEach(item =>
+    for (const [key, log] of Object.entries(filamentLibrary.deductionLog || {}))
     {
-        resolveItemUsage(item).forEach(e =>
+        const d = deductionKeyDate(key);
+        if (!d || d < start || d >= end)
+            continue;
+
+        printsInPeriod.add(key);
+
+        for (const [hex, grams] of Object.entries(log || {}))
         {
-            // Different sources report slightly different raw hex for the
-            // same physical spool (live AMS tray read vs. Task API's
-            // targetColor vs. the library's own stored hex - e.g. BCBCBC
-            // vs BBBBBB, both "gray") - group by the library's CANONICAL
-            // hex, not the raw one, or the same color splits into separate
-            // rows (confirmed live: two "PLA - Gray" rows for one spool).
-            const color = resolveLibraryColor(e.color, e.type);
-            const key = `${color}|${e.type}`;
-            const prev = groups.get(key) || { color, type: e.type, amounts: [] };
-            prev.amounts.push(e.amount);
-            groups.set(key, prev);
-        });
-    });
+            if (!grams)
+                continue;
+
+            // deductionLog's hex keys come from filament.colorHex exactly
+            // (see processFilamentDeductions) - an exact lookup back into
+            // the current library is enough to recover the material name,
+            // no fuzzy matching needed.
+            const filament = filamentLibrary.filaments.find(f => f.colorHex === hex);
+            const material = filament ? filament.material : "?";
+            const gKey = `${hex}|${material}`;
+            const prev = groups.get(gKey) || { color: hex, type: material, total: 0, prints: new Set() };
+            prev.total += grams;
+            prev.prints.add(key);
+            groups.set(gKey, prev);
+        }
+    }
+
+    setText("todayPrintCount", `${printsInPeriod.size} print${printsInPeriod.size === 1 ? "" : "s"}`);
 
     if (groups.size === 0)
     {
         const empty = document.createElement("div");
         empty.className = "historyItem";
-        empty.textContent = `${todays.length} print(s) today, no filament usage recorded`;
+        empty.textContent = printsInPeriod.size === 0
+            ? "No prints logged in this period"
+            : `${printsInPeriod.size} print(s), no filament usage recorded`;
         list.appendChild(empty);
         return;
     }
@@ -1110,16 +1159,11 @@ function renderTodayTotals(items)
         left.appendChild(title);
 
         const sub = document.createElement("small");
-        sub.textContent = `${g.amounts.length} print(s)`;
+        sub.textContent = `${g.prints.size} print(s)`;
         left.appendChild(sub);
 
-        // Amounts arrive as pre-formatted strings ("12.34g") - sum the
-        // numeric values instead of joining the strings, which used to
-        // display as a literal "17.95g + 17.96g" chain instead of a total.
-        const sum = g.amounts.reduce((acc, a) => acc + (parseFloat(a) || 0), 0);
-
         const total = document.createElement("span");
-        total.textContent = `${sum.toFixed(2)}g`;
+        total.textContent = `${g.total.toFixed(2)}g`;
 
         row.appendChild(left);
         row.appendChild(total);
@@ -1127,6 +1171,26 @@ function renderTodayTotals(items)
         list.appendChild(row);
     });
 }
+
+function setSpendPeriod(period)
+{
+    if (period === selectedSpendPeriod)
+        return;
+
+    selectedSpendPeriod = period;
+
+    document.querySelectorAll(".spendPeriodBtn").forEach(btn =>
+    {
+        btn.classList.toggle("active", btn.dataset.period === period);
+    });
+
+    renderTodayTotals();
+}
+
+document.querySelectorAll(".spendPeriodBtn").forEach(btn =>
+{
+    btn.addEventListener("click", () => setSpendPeriod(btn.dataset.period));
+});
 
 function updatePower(data)
 {
@@ -1296,7 +1360,7 @@ function updatePrinter(data)
 
     renderAmsGrid(trays, trayNow);
     renderPrintHistory(data.history || []);
-    renderTodayTotals(data.history || []);
+    renderTodayTotals();
     processFilamentDeductions(data.history || []);
     syncAmsToLibrary(trays);
 }
@@ -1512,6 +1576,7 @@ async function loadFilamentLibrary()
     {
         filamentLibraryLoaded = true;
         renderFilamentLibrary();
+        renderTodayTotals();
     }
 }
 
@@ -2156,6 +2221,7 @@ async function processFilamentDeductions(items)
     }
 
     renderFilamentLibrary();
+    renderTodayTotals();
     await saveFilamentLibrary();
 }
 
