@@ -2180,6 +2180,27 @@ if (filamentAddToggle && filamentAddForm)
                 return;
         }
 
+        // Same fuzzy duplicate check already used for AMS auto-sync (see
+        // syncAmsToLibrary's own hasCloseEntry) - that path was protected,
+        // this manual form wasn't, so a same-material/near-identical-color
+        // entry could be added twice with no warning at all. Two entries
+        // this close would also make automatic deduction's "closest match"
+        // logic pick between them inconsistently.
+        const existingClose = filamentLibrary.filaments.find(f =>
+            f.material.toUpperCase() === material.toUpperCase() &&
+            colorDistance((f.colorHex || "").toUpperCase(), colorHex) <= 80);
+
+        if (existingClose)
+        {
+            const proceed = window.confirm(
+                `A similar ${existingClose.material} filament already exists: "${existingClose.color}" ` +
+                `(#${existingClose.colorHex}). Add this as a separate entry anyway, or did you mean ` +
+                "to use \"New spool\" on the existing one instead? Click Cancel to go back.");
+
+            if (!proceed)
+                return;
+        }
+
         filamentAddForm.reset();
         filamentAddForm.setAttribute("hidden", "");
         filamentAddToggle.textContent = "+ Add filament";
