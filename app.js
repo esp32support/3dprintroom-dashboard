@@ -2279,8 +2279,14 @@ async function processFilamentDeductions(items)
 
             // Draw down whichever spool has the least left first - mirrors
             // finishing an already-opened spool before starting a fresh one.
+            // Must exclude removed (soft-deleted) spools - confirmed live:
+            // a removed spool with leftover "remaining" still had the
+            // lowest value of the bunch, so it kept getting silently
+            // picked as the deduction target over the actual active spool
+            // the user had just loaded, invisibly draining a spool that
+            // was supposed to be retired instead of the one really in use.
             const target = filament.spools
-                .filter(s => s.remaining > 0)
+                .filter(s => s.remaining > 0 && !s.removedAt)
                 .sort((a, b) => a.remaining - b.remaining)[0];
 
             if (!target)
