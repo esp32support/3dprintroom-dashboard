@@ -191,9 +191,10 @@ h1{
 
 .panelHeader{
     display:flex;
+    flex-wrap:wrap;
     align-items:center;
     justify-content:space-between;
-    gap:12px;
+    gap:8px 12px;
     min-height:28px;
     margin-bottom:18px;
     color:var(--muted);
@@ -204,10 +205,12 @@ h1{
 
 .panelHeader strong{
     color:var(--text);
+    white-space:nowrap;
 }
 
 .spendPeriodTabs{
     display:flex;
+    flex-wrap:wrap;
     gap:6px;
 }
 
