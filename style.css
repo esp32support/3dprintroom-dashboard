@@ -160,6 +160,10 @@ h1{
     box-shadow:0 0 8px rgba(53,208,127,.55);
 }
 
+.statusValue{
+    color:var(--text);
+}
+
 .label{
     color:var(--muted);
     font-size:12px;

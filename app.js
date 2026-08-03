@@ -1281,6 +1281,7 @@ function updatePrinter(data)
     setText("printerNozzle", `${Number(data.nozzleTemp || 0).toFixed(1)} °C`);
     setText("printerBed", `${Number(data.bedTemp || 0).toFixed(1)} °C`);
     setText("printerFan", bambuOk ? `${Number(data.fanSpeedPct) || 0}%` : "--%");
+    setText("printerEsp32Temp", `${Number(data.esp32Temp || 0).toFixed(1)} °C`);
 
     // MQTT's tray_now is the printer's own live, direct report of which
     // slot is physically engaged right now - that's the only thing that
