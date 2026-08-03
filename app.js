@@ -1040,6 +1040,9 @@ function printDuration(start, end)
 // since the period started, older ones silently fall off the device's own
 // list and would undercount. deductionLog isn't subject to that limit.
 let selectedSpendPeriod = "today";
+// 1-12, defaults to the current calendar month - only consulted when
+// selectedSpendPeriod === "month".
+let selectedSpendMonth = new Date().getMonth() + 1;
 
 function spendPeriodStart(period)
 {
@@ -1060,6 +1063,13 @@ function spendPeriodStart(period)
         return start;
     }
 
+    if (period === "month")
+    {
+        // Current calendar year - the dropdown only picks a month (1-12),
+        // there's no year selector, so this always means "this year".
+        return new Date(start.getFullYear(), selectedSpendMonth - 1, 1);
+    }
+
     return start;   // today
 }
 
@@ -1070,6 +1080,16 @@ function spendPeriodEnd(period)
         const end = new Date();
         end.setHours(0, 0, 0, 0);
         return end;   // exclusive - up to the start of today
+    }
+
+    if (period === "month")
+    {
+        // Exclusive upper bound: the 1st of the FOLLOWING month. Works
+        // the same whether the selected month is the current one (still
+        // in progress) or a past one (already fully elapsed) - either
+        // way this correctly bounds the whole month.
+        const now = new Date();
+        return new Date(now.getFullYear(), selectedSpendMonth, 1);
     }
 
     const end = new Date();
@@ -1185,6 +1205,11 @@ function renderTodayTotals()
 
 function setSpendPeriod(period)
 {
+    const monthSelect = byId("spendMonthSelect");
+
+    if (monthSelect)
+        monthSelect.hidden = period !== "month";
+
     if (period === selectedSpendPeriod)
         return;
 
@@ -1202,6 +1227,18 @@ document.querySelectorAll(".spendPeriodBtn").forEach(btn =>
 {
     btn.addEventListener("click", () => setSpendPeriod(btn.dataset.period));
 });
+
+const spendMonthSelect = byId("spendMonthSelect");
+
+if (spendMonthSelect)
+{
+    spendMonthSelect.value = String(selectedSpendMonth);
+    spendMonthSelect.addEventListener("change", () =>
+    {
+        selectedSpendMonth = Number(spendMonthSelect.value);
+        renderTodayTotals();
+    });
+}
 
 function updatePower(data)
 {
