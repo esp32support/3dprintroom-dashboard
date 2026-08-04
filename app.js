@@ -862,9 +862,7 @@ function renderPrintHistory(items)
         {
             const badge = document.createElement("span");
             badge.className = "historyOutcomeBadge";
-            badge.textContent = isPause
-                ? "Paused - filament used before this wasn't tracked"
-                : "Cancelled/failed - filament used before this wasn't tracked";
+            badge.textContent = isPause ? "Paused" : "Cancelled/failed";
             left.appendChild(badge);
         }
 
