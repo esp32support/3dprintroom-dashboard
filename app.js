@@ -806,6 +806,24 @@ let historyShowAll = false;
 
 const HISTORY_COLLAPSED_COUNT = 5;
 
+// "Print by object" (sequential multi-copy) plates report a joined
+// "name 4 + name 5 + name 8 + ..." string at each between-object
+// transition - CYD already hard-truncates this before it ever reaches
+// here (confirmed live: "...cep_let..." mid-word), so the segment count
+// visible here can't be trusted as the true copy count. Collapse to just
+// the base name + "(multiple copies)" rather than display the raw
+// garbled/truncated string or claim a specific count that might be wrong.
+function shrinkMultiObjectName(name)
+{
+    if (!name || !name.includes(" + "))
+        return name;
+
+    const first = name.split(" + ")[0].trim();
+    const base = first.replace(/\s+\d+$/, "");
+
+    return `${base} (multiple copies)`;
+}
+
 function renderPrintHistory(items)
 {
     lastHistoryItems = items || [];
@@ -855,7 +873,7 @@ function renderPrintHistory(items)
         const left = document.createElement("div");
 
         const title = document.createElement("strong");
-        title.textContent = item.name || "Untitled";
+        title.textContent = shrinkMultiObjectName(item.name) || "Untitled";
         left.appendChild(title);
 
         if (notFinished)
