@@ -1,9 +1,10 @@
 // POST /api/trigger-power  { "state": "On" | "Off" | "Toggle" }
 // Publishes a remote plug power command over MQTT. Gated by the session
 // cookie (_middleware.js already blocks unauthenticated requests to this
-// route) - the device-side POWER_PASSWORD (a separate, lower-stakes
-// credential from OTA_USERNAME/OTA_PASSWORD/REBOOT_PASSWORD) is only ever
-// read from the Pages environment secrets, never shipped to the browser.
+// route) - reuses REBOOT_PASSWORD device-side (see mqtt_manager.cpp's
+// handlePowerCommand) rather than a dedicated secret, since both commands
+// are triggered from the same login-gated dashboard button and share the
+// same trust boundary.
 import { mqttPublishOnce } from "../_lib/mqtt-mini.js";
 
 function jsonResponse(obj, status = 200) {
@@ -30,7 +31,7 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "state must be On, Off or Toggle" }, 400);
     }
 
-    const command = JSON.stringify({ password: env.POWER_PASSWORD, state });
+    const command = JSON.stringify({ password: env.REBOOT_PASSWORD, state });
 
     try {
         await mqttPublishOnce({
