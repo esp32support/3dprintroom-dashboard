@@ -1478,18 +1478,14 @@ function drawPowerChart()
 
     resizePowerCanvas();
 
-    const emptyEl = byId("powerChartEmpty");
     const width = powerChartCanvas.width;
     const height = powerChartCanvas.height;
 
     if (powerHistory.length < 2 || width === 0 || height === 0)
     {
-        if (emptyEl) emptyEl.hidden = false;
         if (width && height) powerChartCtx.clearRect(0, 0, width, height);
         return;
     }
-
-    if (emptyEl) emptyEl.hidden = true;
 
     const padding = 10 * (window.devicePixelRatio || 1);
 

@@ -1169,17 +1169,6 @@ dd{
     height:100%;
 }
 
-.powerChartEmpty{
-    position:absolute;
-    inset:0;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    margin:0;
-    color:var(--muted);
-    font-size:13px;
-}
-
 @media(max-width:1120px){
     .topbar,
     .primaryGrid,
