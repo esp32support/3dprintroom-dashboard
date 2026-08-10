@@ -26,12 +26,41 @@ function clamp(value, min, max)
     return Math.min(max, Math.max(min, value));
 }
 
+// On mobile the status LEDs are duplicated further down the page (see
+// index.html's #mobileStatusStrip) rather than reordered via CSS, since
+// they live in a different container than the header original and CSS
+// can't reorder across containers. Centralizing the mirroring here (vs
+// touching every setDot/setText call site) keeps the two copies in sync
+// automatically wherever they're updated.
+const MOBILE_STATUS_DOT_MIRROR = {
+    wifiDot: "wifiDotMobile",
+    brokerDot: "brokerDotMobile",
+    mqttDot: "mqttDotMobile",
+    watchdogDot: "watchdogDotMobile",
+    printerWifiDot: "printerWifiDotMobile",
+    printerMqttDot: "printerMqttDotMobile",
+};
+
+const MOBILE_STATUS_TEXT_MIRROR = {
+    printerEsp32Temp: "printerEsp32TempMobile",
+};
+
 function setText(id, value)
 {
     const el = byId(id);
 
     if (el)
         el.textContent = value;
+
+    const mirrorId = MOBILE_STATUS_TEXT_MIRROR[id];
+
+    if (mirrorId)
+    {
+        const mirrorEl = byId(mirrorId);
+
+        if (mirrorEl)
+            mirrorEl.textContent = value;
+    }
 }
 
 function setBar(id, value, max, color)
@@ -124,6 +153,16 @@ function setDot(id, ok)
 
     if (el)
         el.classList.toggle("ok", !!ok);
+
+    const mirrorId = MOBILE_STATUS_DOT_MIRROR[id];
+
+    if (mirrorId)
+    {
+        const mirrorEl = byId(mirrorId);
+
+        if (mirrorEl)
+            mirrorEl.classList.toggle("ok", !!ok);
+    }
 }
 
 function setSensorState(id, name, ok)
@@ -1259,12 +1298,215 @@ if (spendMonthSelect)
 function updatePower(data)
 {
     setText("powerState", "ONLINE");
-    setText("powerWatts", `${Number(data.powerW) || 0} W`);
-    setText("powerVoltageCurrent", `${Number(data.voltage) || 0} V, ${(Number(data.current) || 0).toFixed(2)} A`);
+
+    const w = Number(data.powerW) || 0;
+    const v = Number(data.voltage) || 0;
+    const a = Number(data.current) || 0;
+
+    setText("powerWatts", w.toFixed(0));
+    setText("powerVolts", v.toFixed(0));
+    setText("powerAmps", a.toFixed(2));
+
     setText("powerToday", `${(Number(data.todayKwh) || 0).toFixed(2)} kWh`);
     setText("powerYesterday", `${(Number(data.yesterdayKwh) || 0).toFixed(2)} kWh`);
     setText("powerTotal", `${(Number(data.totalKwh) || 0).toFixed(2)} kWh`);
+
+    recordPowerSample(w, v, a);
 }
+
+// ===== Power history (Min/Max/Average + the line graph) =====
+//
+// Session-only, in memory - not persisted to Cloudflare KV. The plug
+// reports every 10s, and print_watch's own KV writes already had to be
+// throttled to stay under the free-tier daily write limit (see
+// print_watch.py), so writing every power sample would blow through that
+// same budget for comparatively little benefit. Resets on page reload,
+// same convention as the Connection Log panel elsewhere on this page.
+
+const POWER_HISTORY_MAX = 360; // ~1 hour of samples at the plug's 10s poll interval
+
+const powerHistory = []; // { w, v, a }[]
+
+const powerStats = {
+    w: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
+    v: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
+    a: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
+};
+
+function fmtPowerStat(value, digits)
+{
+    return Number.isFinite(value) ? value.toFixed(digits) : "--";
+}
+
+function renderPowerStats()
+{
+    setText("powerMinW", fmtPowerStat(powerStats.w.min, 0));
+    setText("powerMaxW", fmtPowerStat(powerStats.w.max, 0));
+    setText("powerAvgW", powerStats.w.count ? (powerStats.w.sum / powerStats.w.count).toFixed(0) : "--");
+
+    setText("powerMinV", fmtPowerStat(powerStats.v.min, 0));
+    setText("powerMaxV", fmtPowerStat(powerStats.v.max, 0));
+    setText("powerAvgV", powerStats.v.count ? (powerStats.v.sum / powerStats.v.count).toFixed(0) : "--");
+
+    setText("powerMinA", fmtPowerStat(powerStats.a.min, 2));
+    setText("powerMaxA", fmtPowerStat(powerStats.a.max, 2));
+    setText("powerAvgA", powerStats.a.count ? (powerStats.a.sum / powerStats.a.count).toFixed(2) : "--");
+}
+
+const powerChartCanvas = byId("powerChart");
+const powerChartCtx = powerChartCanvas ? powerChartCanvas.getContext("2d") : null;
+let powerChartDrawQueued = false;
+
+function schedulePowerChartDraw()
+{
+    if (!powerChartCtx || powerChartDrawQueued)
+        return;
+
+    // Coalesce bursts of updates (a new sample plus a window resize
+    // landing in the same tick) into a single redraw on the next frame,
+    // rather than repainting the canvas multiple times back to back.
+    powerChartDrawQueued = true;
+    requestAnimationFrame(() =>
+    {
+        powerChartDrawQueued = false;
+        drawPowerChart();
+    });
+}
+
+function recordPowerSample(w, v, a)
+{
+    powerHistory.push({ w, v, a });
+
+    if (powerHistory.length > POWER_HISTORY_MAX)
+        powerHistory.shift();
+
+    for (const [key, value] of [["w", w], ["v", v], ["a", a]])
+    {
+        const s = powerStats[key];
+
+        if (value < s.min) s.min = value;
+        if (value > s.max) s.max = value;
+
+        s.sum += value;
+        s.count += 1;
+    }
+
+    renderPowerStats();
+    schedulePowerChartDraw();
+}
+
+function resizePowerCanvas()
+{
+    if (!powerChartCanvas)
+        return;
+
+    const rect = powerChartCanvas.getBoundingClientRect();
+
+    if (rect.width === 0 || rect.height === 0)
+        return; // hidden tab - nothing to size against yet
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+
+    if (powerChartCanvas.width !== w || powerChartCanvas.height !== h)
+    {
+        powerChartCanvas.width = w;
+        powerChartCanvas.height = h;
+    }
+}
+
+function smoothLinePath(ctx, points)
+{
+    // Quadratic curve through each pair's midpoint - a cheap way to get a
+    // smooth line without jagged straight segments, without pulling in a
+    // charting library for one graph.
+    if (points.length < 2)
+        return;
+
+    ctx.moveTo(points[0].x, points[0].y);
+
+    for (let i = 1; i < points.length - 1; i++)
+    {
+        const mx = (points[i].x + points[i + 1].x) / 2;
+        const my = (points[i].y + points[i + 1].y) / 2;
+        ctx.quadraticCurveTo(points[i].x, points[i].y, mx, my);
+    }
+
+    const last = points[points.length - 1];
+    ctx.lineTo(last.x, last.y);
+}
+
+function drawPowerSeries(ctx, values, width, height, padding, color)
+{
+    if (values.length < 2)
+        return;
+
+    let min = Math.min(...values);
+    let max = Math.max(...values);
+
+    if (min === max)
+    {
+        // Flat reading (plug idle at a constant draw) - give it headroom
+        // so it still draws as a visible line instead of a hairline
+        // pinned to one edge.
+        min -= 1;
+        max += 1;
+    }
+
+    const innerW = width - padding * 2;
+    const innerH = height - padding * 2;
+
+    const points = values.map((value, i) => ({
+        x: padding + (innerW * i) / (values.length - 1),
+        y: padding + innerH - ((value - min) / (max - min)) * innerH,
+    }));
+
+    ctx.beginPath();
+    smoothLinePath(ctx, points);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 * (window.devicePixelRatio || 1);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+}
+
+function drawPowerChart()
+{
+    if (!powerChartCtx || !powerChartCanvas)
+        return;
+
+    resizePowerCanvas();
+
+    const emptyEl = byId("powerChartEmpty");
+    const width = powerChartCanvas.width;
+    const height = powerChartCanvas.height;
+
+    if (powerHistory.length < 2 || width === 0 || height === 0)
+    {
+        if (emptyEl) emptyEl.hidden = false;
+        if (width && height) powerChartCtx.clearRect(0, 0, width, height);
+        return;
+    }
+
+    if (emptyEl) emptyEl.hidden = true;
+
+    const padding = 10 * (window.devicePixelRatio || 1);
+
+    powerChartCtx.clearRect(0, 0, width, height);
+
+    const rootStyle = getComputedStyle(document.documentElement);
+
+    // Each series is scaled to its OWN min/max range, not a shared axis -
+    // Watts/Volts/Amps live on wildly different scales (a couple of watts
+    // and well under 1 amp next to ~230 volts), so a shared axis would
+    // flatten two of the three lines to a near-invisible sliver.
+    drawPowerSeries(powerChartCtx, powerHistory.map(p => p.w), width, height, padding, rootStyle.getPropertyValue("--green").trim());
+    drawPowerSeries(powerChartCtx, powerHistory.map(p => p.v), width, height, padding, rootStyle.getPropertyValue("--yellow").trim());
+    drawPowerSeries(powerChartCtx, powerHistory.map(p => p.a), width, height, padding, rootStyle.getPropertyValue("--blue").trim());
+}
+
+window.addEventListener("resize", schedulePowerChartDraw);
 
 function updatePrinter(data)
 {
@@ -2700,6 +2942,12 @@ function selectTab(name)
                 panel.setAttribute("hidden", "");
         }
     });
+
+    // The chart canvas reads getBoundingClientRect() to size itself, which
+    // returns 0x0 while its tab is hidden - redraw once the Power tab
+    // actually becomes visible so it picks up its real size.
+    if (name === "power")
+        schedulePowerChartDraw();
 }
 
 TABS.forEach(t =>

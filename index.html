@@ -17,7 +17,7 @@
                 <h1>3DPrintRoomMonitor</h1>
             </div>
 
-            <div class="statusStripStack">
+            <div class="statusStripStack" id="headerStatusStrip">
                 <section class="statusStrip" id="statusStrip" aria-live="polite">
                     <span class="stripLabel">Master</span>
                     <div class="statusPill">
@@ -60,7 +60,6 @@
             <button type="button" class="tabBtn active" id="tabBtn-room" role="tab" aria-selected="true" aria-controls="tab-room">Room</button>
             <button type="button" class="tabBtn" id="tabBtn-printer" role="tab" aria-selected="false" aria-controls="tab-printer">Printer Info</button>
             <button type="button" class="tabBtn" id="tabBtn-power" role="tab" aria-selected="false" aria-controls="tab-power">Power</button>
-            <button type="button" class="tabBtn logoutBtn" id="logoutBtn">Log out</button>
         </nav>
 
         <div class="tabPanel" id="tab-room" role="tabpanel" aria-labelledby="tabBtn-room">
@@ -336,6 +335,44 @@
 
         </section>
 
+        <section class="statusStripStack mobileStatusStrip" id="mobileStatusStrip" aria-live="polite">
+            <section class="statusStrip">
+                <span class="stripLabel">Master</span>
+                <div class="statusPill">
+                    <span class="statusDot" id="wifiDotMobile"></span>
+                    <span>WiFi</span>
+                </div>
+                <div class="statusPill">
+                    <span class="statusDot" id="brokerDotMobile"></span>
+                    <span>Broker</span>
+                </div>
+                <div class="statusPill">
+                    <span class="statusDot" id="mqttDotMobile"></span>
+                    <span>MQTT</span>
+                </div>
+                <div class="statusPill">
+                    <span class="statusDot" id="watchdogDotMobile"></span>
+                    <span>Watchdog</span>
+                </div>
+            </section>
+
+            <section class="statusStrip">
+                <span class="stripLabel">Printer</span>
+                <div class="statusPill">
+                    <span class="statusDot" id="printerWifiDotMobile"></span>
+                    <span>WiFi</span>
+                </div>
+                <div class="statusPill">
+                    <span class="statusDot" id="printerMqttDotMobile"></span>
+                    <span>MQTT</span>
+                </div>
+                <div class="statusPill">
+                    <span>ESP32</span>
+                    <span class="statusValue" id="printerEsp32TempMobile">--.- &deg;C</span>
+                </div>
+            </section>
+        </section>
+
         <section class="dangerZone">
             <div>
                 <strong>Reboot device</strong>
@@ -343,6 +380,10 @@
             </div>
             <button type="button" id="rebootBtn">Reboot</button>
             <p class="watchdogReason" id="rebootResult"></p>
+        </section>
+
+        <section class="logoutZone">
+            <button type="button" class="logoutBtn" id="logoutBtn">Log out</button>
         </section>
 
         </div><!-- /tab-room -->
@@ -521,7 +562,7 @@
 
         <div class="tabPanel" id="tab-power" role="tabpanel" aria-labelledby="tabBtn-power" hidden>
 
-            <section class="secondaryGrid">
+            <section class="secondaryGrid powerGrid">
 
                 <article class="panel">
 
@@ -530,9 +571,20 @@
                         <strong id="powerState">OFFLINE</strong>
                     </div>
 
-                    <div class="stateValue" id="powerWatts">-- W</div>
-
-                    <p class="stateMessage" id="powerVoltageCurrent">-- V, -- A</p>
+                    <div class="powerMetrics">
+                        <div class="powerMetric">
+                            <strong id="powerWatts">--</strong>
+                            <span>W</span>
+                        </div>
+                        <div class="powerMetric">
+                            <strong id="powerVolts">--</strong>
+                            <span>V</span>
+                        </div>
+                        <div class="powerMetric">
+                            <strong id="powerAmps">--</strong>
+                            <span>A</span>
+                        </div>
+                    </div>
 
                     <dl class="statusList">
                         <div>
@@ -548,6 +600,62 @@
                             <dd id="powerTotal">-- kWh</dd>
                         </div>
                     </dl>
+
+                </article>
+
+                <article class="panel">
+
+                    <div class="panelHeader">
+                        <span>Min / Max / Average</span>
+                        <strong>This session</strong>
+                    </div>
+
+                    <div class="powerStatsTable">
+                        <div class="powerStatsHead">
+                            <span></span>
+                            <span>Min</span>
+                            <span>Max</span>
+                            <span>Avg</span>
+                        </div>
+                        <div class="powerStatsRow">
+                            <span class="powerStatsLabel"><i class="powerDot powerDotW"></i>W</span>
+                            <span id="powerMinW">--</span>
+                            <span id="powerMaxW">--</span>
+                            <span id="powerAvgW">--</span>
+                        </div>
+                        <div class="powerStatsRow">
+                            <span class="powerStatsLabel"><i class="powerDot powerDotV"></i>V</span>
+                            <span id="powerMinV">--</span>
+                            <span id="powerMaxV">--</span>
+                            <span id="powerAvgV">--</span>
+                        </div>
+                        <div class="powerStatsRow">
+                            <span class="powerStatsLabel"><i class="powerDot powerDotA"></i>A</span>
+                            <span id="powerMinA">--</span>
+                            <span id="powerMaxA">--</span>
+                            <span id="powerAvgA">--</span>
+                        </div>
+                    </div>
+
+                    <p class="hint powerStatsHint">Tracked since this page was opened - resets on reload.</p>
+
+                </article>
+
+                <article class="panel powerChartPanel">
+
+                    <div class="panelHeader">
+                        <span>Power History</span>
+                        <div class="powerLegend">
+                            <span class="powerLegendItem"><i class="powerDot powerDotW"></i>W</span>
+                            <span class="powerLegendItem"><i class="powerDot powerDotV"></i>V</span>
+                            <span class="powerLegendItem"><i class="powerDot powerDotA"></i>A</span>
+                        </div>
+                    </div>
+
+                    <div class="powerChartWrap">
+                        <canvas id="powerChart"></canvas>
+                        <p class="powerChartEmpty" id="powerChartEmpty">Waiting for data...</p>
+                    </div>
 
                 </article>
 

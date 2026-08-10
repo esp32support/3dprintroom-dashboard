@@ -12,6 +12,7 @@
     --darkred:#b8283f;
     --black:#4a0e18;
     --cyan:#40c4d8;
+    --blue:#4f8cff;
 }
 
 *{
@@ -67,13 +68,34 @@ body{
     color:var(--text);
 }
 
+.logoutZone{
+    display:flex;
+    justify-content:flex-end;
+    margin-top:14px;
+}
+
 .logoutBtn{
-    margin-left:auto;
+    padding:8px 20px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:transparent;
     color:var(--muted);
+    font-family:inherit;
+    font-size:13px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    cursor:pointer;
 }
 
 .logoutBtn:hover{
+    border-color:var(--red);
     color:var(--red);
+}
+
+/* ID selector so this reliably wins over the later, source-order .statusStripStack{display:flex} base rule regardless of where either is declared in the file. */
+#mobileStatusStrip{
+    display:none;
 }
 
 .tabBtn.active{
@@ -1011,10 +1033,148 @@ dd{
     font-size:13px;
 }
 
+/* ===== Power tab ===== */
+
+.powerGrid{
+    grid-template-columns:1fr 1fr 1.4fr;
+}
+
+.powerMetrics{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:10px;
+    margin-bottom:16px;
+}
+
+.powerMetric{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    padding:14px 4px;
+    background:#14181b;
+    border:1px solid #2f363d;
+    border-radius:6px;
+}
+
+.powerMetric strong{
+    font-size:40px;
+    line-height:1;
+    font-weight:900;
+}
+
+.powerMetric span{
+    color:var(--muted);
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+}
+
+.powerDot{
+    display:inline-block;
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:var(--muted);
+}
+
+.powerDotW{
+    background:var(--green);
+}
+
+.powerDotV{
+    background:var(--yellow);
+}
+
+.powerDotA{
+    background:var(--blue);
+}
+
+.powerStatsTable{
+    display:grid;
+    grid-template-columns:auto repeat(3,minmax(0,1fr));
+    gap:8px 10px;
+    align-items:center;
+}
+
+.powerStatsHead,
+.powerStatsRow{
+    display:contents;
+}
+
+.powerStatsHead span{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    text-align:center;
+}
+
+.powerStatsLabel{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-weight:800;
+}
+
+.powerStatsRow span:not(.powerStatsLabel){
+    padding:10px 6px;
+    text-align:center;
+    background:#14181b;
+    border:1px solid #2f363d;
+    border-radius:6px;
+    font-size:16px;
+    font-weight:800;
+}
+
+.powerStatsHint{
+    margin:14px 0 0;
+    font-size:12px;
+}
+
+.powerLegend{
+    display:flex;
+    gap:12px;
+}
+
+.powerLegendItem{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:800;
+}
+
+.powerChartWrap{
+    position:relative;
+    width:100%;
+    height:220px;
+}
+
+#powerChart{
+    display:block;
+    width:100%;
+    height:100%;
+}
+
+.powerChartEmpty{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:0;
+    color:var(--muted);
+    font-size:13px;
+}
+
 @media(max-width:1120px){
     .topbar,
     .primaryGrid,
-    .secondaryGrid{
+    .secondaryGrid,
+    .powerGrid{
         grid-template-columns:1fr;
     }
 
@@ -1052,5 +1212,86 @@ dd{
     .statusList,
     .subgrid{
         grid-template-columns:1fr;
+    }
+
+    /* Status LEDs move out of the header and reappear further down the
+       Room tab (between Alarm History and Reboot device) - the header
+       copy is redundant screen space on a phone-width layout, and this
+       keeps the LEDs near the troubleshooting tools instead of pinned
+       above the fold. */
+    #headerStatusStrip{
+        display:none;
+    }
+
+    #mobileStatusStrip{
+        display:flex;
+        margin:18px 0;
+    }
+
+    .statusStrip{
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
+    .stripLabel{
+        grid-column:1/-1;
+    }
+
+    .statusPill{
+        min-width:0;
+        padding:0 10px;
+        font-size:12px;
+    }
+
+    .tabNav{
+        flex-wrap:nowrap;
+        overflow-x:auto;
+        -webkit-overflow-scrolling:touch;
+    }
+
+    .tabBtn{
+        flex:none;
+        padding:9px 16px;
+        font-size:13px;
+    }
+
+    .panel{
+        padding:14px;
+    }
+
+    .panelHeader{
+        font-size:13px;
+    }
+
+    .dangerZone{
+        flex-direction:column;
+        align-items:stretch;
+        text-align:center;
+    }
+
+    .dangerZone button{
+        width:100%;
+    }
+
+    .logoutZone{
+        justify-content:stretch;
+    }
+
+    .logoutBtn{
+        width:100%;
+    }
+
+    .powerMetric strong{
+        font-size:32px;
+    }
+
+    .powerChartWrap{
+        height:180px;
+    }
+
+    .spoolRow{
+        grid-template-columns:1fr;
+        justify-items:stretch;
+        text-align:left;
     }
 }
