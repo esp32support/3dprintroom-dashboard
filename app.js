@@ -1599,6 +1599,95 @@ function drawPowerChart()
 
 window.addEventListener("resize", schedulePowerChartDraw);
 
+// ===== Power History card (week/month, server-side via scripts/power_watch.py) =====
+
+let powerHistoryPeriod = "week";
+
+async function loadPowerHistoryCard()
+{
+    const days = powerHistoryPeriod === "month" ? 30 : 7;
+    let data;
+
+    try
+    {
+        const res = await fetch(`/api/power-history?days=${days}`);
+        data = await res.json();
+    }
+    catch (err)
+    {
+        return;
+    }
+
+    renderPowerHistoryCard(Array.isArray(data.days) ? data.days : []);
+}
+
+function renderPowerHistoryCard(dayRecords)
+{
+    const agg = {
+        w: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
+        v: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
+        a: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
+    };
+    let totalKwh = 0;
+
+    for (const day of dayRecords)
+    {
+        for (const [key, upper] of [["w", "W"], ["v", "V"], ["a", "A"]])
+        {
+            const min = day[`min${upper}`];
+            const max = day[`max${upper}`];
+
+            if (min !== null && min < agg[key].min) agg[key].min = min;
+            if (max !== null && max > agg[key].max) agg[key].max = max;
+
+            agg[key].sum += Number(day[`sum${upper}`]) || 0;
+            agg[key].count += Number(day[`count${upper}`]) || 0;
+        }
+
+        totalKwh += Number(day.kwh) || 0;
+    }
+
+    const fmt = (agg, digits) => ({
+        min: Number.isFinite(agg.min) ? agg.min.toFixed(digits) : "--",
+        max: Number.isFinite(agg.max) ? agg.max.toFixed(digits) : "--",
+        avg: agg.count ? (agg.sum / agg.count).toFixed(digits) : "--",
+    });
+
+    const w = fmt(agg.w, 0);
+    const v = fmt(agg.v, 0);
+    const a = fmt(agg.a, 2);
+
+    setText("powerHistMinW", w.min);
+    setText("powerHistMaxW", w.max);
+    setText("powerHistAvgW", w.avg);
+
+    setText("powerHistMinV", v.min);
+    setText("powerHistMaxV", v.max);
+    setText("powerHistAvgV", v.avg);
+
+    setText("powerHistMinA", a.min);
+    setText("powerHistMaxA", a.max);
+    setText("powerHistAvgA", a.avg);
+
+    setText("powerHistTotalKwh", `${totalKwh.toFixed(2)} kWh`);
+    setText("powerHistDayCount", String(dayRecords.length));
+
+    const hintEl = byId("powerHistHint");
+
+    if (hintEl)
+        hintEl.hidden = dayRecords.length > 0;
+}
+
+document.querySelectorAll("[data-power-period]").forEach(btn =>
+{
+    btn.addEventListener("click", () =>
+    {
+        document.querySelectorAll("[data-power-period]").forEach(b => b.classList.toggle("active", b === btn));
+        powerHistoryPeriod = btn.dataset.powerPeriod;
+        loadPowerHistoryCard();
+    });
+});
+
 // Restore any history saved by a previous page load - must happen after
 // powerChartCanvas/powerChartCtx above are declared, since
 // schedulePowerChartDraw()/drawPowerChart() read them.
@@ -3057,9 +3146,15 @@ function selectTab(name)
 
     // The chart canvas reads getBoundingClientRect() to size itself, which
     // returns 0x0 while its tab is hidden - redraw once the Power tab
-    // actually becomes visible so it picks up its real size.
+    // actually becomes visible so it picks up its real size. Also refresh
+    // the History card here rather than on an interval - it only changes
+    // hourly (see power_watch.py), so "whenever you open the tab" is
+    // plenty fresh.
     if (name === "power")
+    {
         schedulePowerChartDraw();
+        loadPowerHistoryCard();
+    }
 }
 
 TABS.forEach(t =>

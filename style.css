@@ -1081,6 +1081,7 @@ dd{
     letter-spacing:.04em;
 }
 
+.powerHistoryCard,
 .powerControlPanel{
     margin-top:18px;
 }

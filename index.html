@@ -660,6 +660,58 @@
 
             </section>
 
+            <section class="panel powerHistoryCard">
+
+                <div class="panelHeader">
+                    <span>Usage History</span>
+                    <div class="spendPeriodTabs">
+                        <button type="button" class="spendPeriodBtn active" data-power-period="week">Week</button>
+                        <button type="button" class="spendPeriodBtn" data-power-period="month">Month</button>
+                    </div>
+                </div>
+
+                <div class="powerStatsTable">
+                    <div class="powerStatsHead">
+                        <span></span>
+                        <span>Min</span>
+                        <span>Max</span>
+                        <span>Avg</span>
+                    </div>
+                    <div class="powerStatsRow">
+                        <span class="powerStatsLabel"><i class="powerDot powerDotW"></i>W</span>
+                        <span id="powerHistMinW">--</span>
+                        <span id="powerHistMaxW">--</span>
+                        <span id="powerHistAvgW">--</span>
+                    </div>
+                    <div class="powerStatsRow">
+                        <span class="powerStatsLabel"><i class="powerDot powerDotV"></i>V</span>
+                        <span id="powerHistMinV">--</span>
+                        <span id="powerHistMaxV">--</span>
+                        <span id="powerHistAvgV">--</span>
+                    </div>
+                    <div class="powerStatsRow">
+                        <span class="powerStatsLabel"><i class="powerDot powerDotA"></i>A</span>
+                        <span id="powerHistMinA">--</span>
+                        <span id="powerHistMaxA">--</span>
+                        <span id="powerHistAvgA">--</span>
+                    </div>
+                </div>
+
+                <dl class="statusList">
+                    <div>
+                        <dt>Total energy</dt>
+                        <dd id="powerHistTotalKwh">-- kWh</dd>
+                    </div>
+                    <div>
+                        <dt>Days recorded</dt>
+                        <dd id="powerHistDayCount">0</dd>
+                    </div>
+                </dl>
+
+                <p class="hint" id="powerHistHint">Collecting data - check back once a few days have passed.</p>
+
+            </section>
+
             <section class="panel powerControlPanel">
 
                 <div class="panelHeader">

@@ -1,6 +1,6 @@
 name: Printer sync (filament relay + print watch)
 
-# Two LAN-free jobs replacing what gcode_sync_daemon.py used to do on a
+# Three LAN-free jobs replacing what gcode_sync_daemon.py used to do on a
 # PC that had to stay on:
 #   1. filament_relay.py - fetches the dashboard's filament inventory and
 #      republishes it to HiveMQ so the CYD display can read it (a direct
@@ -10,6 +10,10 @@ name: Printer sync (filament relay + print watch)
 #      printer's live MQTT status and pushes an accurate weight/color
 #      correction, using Bambu's Task API for weight (confirmed reliable)
 #      instead of FTPS-reading the gcode header off the printer's SD card.
+#   3. power_watch.py - samples the smart plug's relayed reading (see
+#      /api/power-history) to build day/week/month min/max/average history
+#      for the dashboard's Power tab History card - throttles its own KV
+#      writes to once/hour internally, see that script's docstring.
 #
 # GitHub doesn't run schedules reliably below ~5 minutes (and may delay
 # even this under load) - the PC daemon these replace ran continuously,
@@ -39,6 +43,12 @@ jobs:
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
 
       - run: python scripts/print_watch.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      - run: python scripts/power_watch.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
