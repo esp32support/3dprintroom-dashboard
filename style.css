@@ -19,6 +19,16 @@
     box-sizing:border-box;
 }
 
+html{
+    /* Reserves the vertical scrollbar's width permanently, whether or not
+       the current tab's content is tall enough to need it - without this,
+       switching to a shorter tab (e.g. Power) removes the scrollbar,
+       clientWidth grows by the scrollbar's width, and the centered .shell
+       below (width:min(1480px,100%); margin:0 auto) visibly shifts a few
+       pixels sideways since it re-centers against a wider viewport. */
+    scrollbar-gutter:stable;
+}
+
 body{
     margin:0;
     min-height:100vh;
