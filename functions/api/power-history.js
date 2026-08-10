@@ -1,5 +1,12 @@
-// GET  /api/power-history?days=7   - dashboard UI reads daily rollups (session-cookie gated by _middleware.js)
-// POST /api/power-history          - scripts/power_watch.py pushes one reading per run (X-Sync-Secret gated)
+// GET  /api/power-history?days=7   - dashboard UI reads daily rollups
+// POST /api/power-history          - scripts/power_watch.py pushes one reading per run
+//
+// This path is allowlisted as public in _middleware.js (the middleware
+// skips its own session-cookie check for allowlisted paths), so both
+// handlers below check auth themselves: GET accepts EITHER a session
+// cookie (the dashboard UI) or X-Sync-Secret, POST requires X-Sync-Secret
+// only (script-only, nothing in the browser ever writes this) - same
+// dual-auth pattern as printer-task.js.
 //
 // Daily granularity only, in the same FILAMENT_KV namespace everything
 // else in this project already uses (a dedicated namespace would need
@@ -8,6 +15,8 @@
 // N day records on read rather than maintaining separate week/month
 // keys - simpler, and 31 KV reads per page load is nothing against the
 // free tier's 100k/day read limit.
+import { verifySessionCookie } from "../_lib/session.js";
+
 const KV_PREFIX = "power-day:";
 
 function jsonResponse(obj, status = 200) {
@@ -48,6 +57,17 @@ function mergeSample(day, w, v, a) {
         day[sumKey] += value;
         day[countKey] += 1;
     }
+}
+
+async function checkSessionOrSyncAuth(request, env) {
+    const provided = request.headers.get("X-Sync-Secret");
+
+    if (provided) {
+        return provided === env.LOCAL_SYNC_SECRET;
+    }
+
+    const cookie = request.headers.get("Cookie");
+    return verifySessionCookie(cookie, env.ADMIN_USERNAME, env.SESSION_SECRET);
 }
 
 export async function onRequestPost(context) {
@@ -95,6 +115,10 @@ export async function onRequestPost(context) {
 
 export async function onRequestGet(context) {
     const { env, request } = context;
+
+    if (!(await checkSessionOrSyncAuth(request, env))) {
+        return jsonResponse({ error: "unauthorized" }, 401);
+    }
 
     if (!env.FILAMENT_KV) {
         return jsonResponse({ error: "FILAMENT_KV not bound" }, 501);
