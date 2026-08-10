@@ -1333,14 +1333,17 @@ function updatePower(data)
 
 // ===== Power history (Min/Max/Average + the line graph) =====
 //
-// Persisted to this browser's localStorage, NOT to Cloudflare KV - the
-// plug reports every 10s, and print_watch's own KV writes already had to
-// be throttled to stay under the free-tier daily write limit (see
-// print_watch.py), so writing every power sample server-side would blow
-// through that same budget for comparatively little benefit. localStorage
-// has no such quota concern (it's local to this browser/device), so a
-// write per sample is fine - it just means the history is per-device, not
-// shared across browsers or synced anywhere else.
+// Scoped to the CURRENT PRINT, not an open-ended session - resets
+// whenever data.currentStart (the printer's own per-print start
+// timestamp, stable across pause/resume, see updatePrinter() below)
+// changes to a new value. Persisted to this browser's localStorage, NOT
+// to Cloudflare KV - the plug reports every 10s, and print_watch's own KV
+// writes already had to be throttled to stay under the free-tier daily
+// write limit (see print_watch.py), so writing every power sample
+// server-side would blow through that same budget for comparatively
+// little benefit. localStorage has no such quota concern (it's local to
+// this browser/device), so a write per sample is fine - it just means
+// the history is per-device, not shared across browsers.
 
 const POWER_HISTORY_MAX = 360; // ~1 hour of samples at the plug's 10s poll interval
 const POWER_HISTORY_STORAGE_KEY = "powerHistoryV1";
@@ -1353,6 +1356,10 @@ const powerHistory = []; // { w, v, a }[]
 // rather than only through this dashboard.
 let lastRelayState = null;
 
+// The print (by its data.currentStart value) the current powerStats/
+// powerHistory belong to - null until the first print start is seen.
+let lastPrintStart = null;
+
 const powerStats = {
     w: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
     v: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
@@ -1363,7 +1370,7 @@ function savePowerHistory()
 {
     try
     {
-        localStorage.setItem(POWER_HISTORY_STORAGE_KEY, JSON.stringify({ history: powerHistory, stats: powerStats }));
+        localStorage.setItem(POWER_HISTORY_STORAGE_KEY, JSON.stringify({ history: powerHistory, stats: powerStats, printStart: lastPrintStart }));
     }
     catch (err)
     {
@@ -1399,6 +1406,20 @@ function loadPowerHistory()
             Object.assign(powerStats[key], saved.stats[key]);
     }
 
+    lastPrintStart = saved.printStart || null;
+
+    renderPowerStats();
+    schedulePowerChartDraw();
+}
+
+function resetPowerStatsForNewPrint()
+{
+    powerHistory.length = 0;
+
+    for (const key of ["w", "v", "a"])
+        Object.assign(powerStats[key], { min: Infinity, max: -Infinity, sum: 0, count: 0 });
+
+    savePowerHistory();
     renderPowerStats();
     schedulePowerChartDraw();
 }
@@ -1454,7 +1475,10 @@ function recordPowerSample(w, v, a)
     {
         const s = powerStats[key];
 
-        if (value < s.min) s.min = value;
+        // 0 means the plug is idle/off, not a real minimum worth
+        // recording - a printer briefly reading 0W shouldn't permanently
+        // pin "min" at 0 for the rest of the print once real draw resumes.
+        if (value > 0 && value < s.min) s.min = value;
         if (value > s.max) s.max = value;
 
         s.sum += value;
@@ -1590,6 +1614,16 @@ function updatePrinter(data)
     const bambuOk = data.bambuConnected === true;
 
     printerIsRunning = bambuOk && state === "RUNNING";
+
+    // currentStart is stable across pause/resume for the SAME print (see
+    // print_history.cpp's historyOnPrintStart()) - only changes when a
+    // genuinely new print begins, which is exactly the "start fresh"
+    // signal the Power tab's Min/Max/Average card needs.
+    if (data.currentStart && data.currentStart !== lastPrintStart)
+    {
+        lastPrintStart = data.currentStart;
+        resetPowerStatsForNewPrint();
+    }
 
     setDot("printerWifiDot", data.wifiConnected === true);
     setDot("printerMqttDot", bambuOk);
