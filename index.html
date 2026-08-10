@@ -586,12 +586,6 @@
                         </div>
                     </div>
 
-                    <div class="powerToggleRow">
-                        <span>Plug relay: <strong id="powerRelayState">--</strong></span>
-                        <button type="button" class="infoBtn" id="powerToggleBtn" disabled>Turn OFF</button>
-                    </div>
-                    <p class="watchdogReason" id="powerToggleResult"></p>
-
                     <dl class="statusList">
                         <div>
                             <dt>Today</dt>
@@ -665,6 +659,22 @@
                 </article>
 
             </section>
+
+            <section class="panel powerControlPanel">
+
+                <div class="panelHeader">
+                    <span>Plug Control</span>
+                </div>
+
+                <div class="powerToggleRow">
+                    <span>Plug relay: <strong id="powerRelayState">--</strong></span>
+                    <button type="button" class="infoBtn" id="powerToggleBtn" disabled>Turn OFF</button>
+                </div>
+                <p class="watchdogReason" id="powerToggleResult"></p>
+
+            </section>
+
+            <p class="hint powerDeviceInfo">Smartplug-A29341-4929 &middot; Tasmota 12.4.0.3 (2025-10-08)</p>
 
         </div><!-- /tab-power -->
 

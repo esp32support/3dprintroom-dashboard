@@ -1081,16 +1081,28 @@ dd{
     letter-spacing:.04em;
 }
 
+.powerControlPanel{
+    margin-top:18px;
+}
+
 .powerToggleRow{
     display:flex;
     align-items:center;
     justify-content:space-between;
     gap:10px;
-    margin-bottom:16px;
     padding:10px 12px;
     background:#14181b;
     border:1px solid #2f363d;
     border-radius:6px;
+}
+
+.powerControlPanel .watchdogReason{
+    margin:14px 0 0;
+}
+
+.powerDeviceInfo{
+    margin:14px 0 0;
+    text-align:center;
 }
 
 .powerToggleRow span{
