@@ -1311,27 +1311,97 @@ function updatePower(data)
     setText("powerYesterday", `${(Number(data.yesterdayKwh) || 0).toFixed(2)} kWh`);
     setText("powerTotal", `${(Number(data.totalKwh) || 0).toFixed(2)} kWh`);
 
+    // relayState is best-effort on the device side (a separate lightweight
+    // poll from the wattage/voltage/current numbers above) - absent if
+    // that particular request failed, not necessarily if the relay is off.
+    if (data.relayState === "ON" || data.relayState === "OFF")
+    {
+        lastRelayState = data.relayState;
+        setText("powerRelayState", data.relayState);
+
+        const toggleBtn = byId("powerToggleBtn");
+
+        if (toggleBtn)
+        {
+            toggleBtn.disabled = false;
+            toggleBtn.textContent = data.relayState === "ON" ? "Turn OFF" : "Turn ON";
+        }
+    }
+
     recordPowerSample(w, v, a);
 }
 
 // ===== Power history (Min/Max/Average + the line graph) =====
 //
-// Session-only, in memory - not persisted to Cloudflare KV. The plug
-// reports every 10s, and print_watch's own KV writes already had to be
-// throttled to stay under the free-tier daily write limit (see
-// print_watch.py), so writing every power sample would blow through that
-// same budget for comparatively little benefit. Resets on page reload,
-// same convention as the Connection Log panel elsewhere on this page.
+// Persisted to this browser's localStorage, NOT to Cloudflare KV - the
+// plug reports every 10s, and print_watch's own KV writes already had to
+// be throttled to stay under the free-tier daily write limit (see
+// print_watch.py), so writing every power sample server-side would blow
+// through that same budget for comparatively little benefit. localStorage
+// has no such quota concern (it's local to this browser/device), so a
+// write per sample is fine - it just means the history is per-device, not
+// shared across browsers or synced anywhere else.
 
 const POWER_HISTORY_MAX = 360; // ~1 hour of samples at the plug's 10s poll interval
+const POWER_HISTORY_STORAGE_KEY = "powerHistoryV1";
 
 const powerHistory = []; // { w, v, a }[]
+
+// Last relay state actually reported by the device - the toggle button
+// below sends the OPPOSITE of this, so it always reflects reality even if
+// someone flips the plug by hand (Tasmota's own web UI, physical button)
+// rather than only through this dashboard.
+let lastRelayState = null;
 
 const powerStats = {
     w: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
     v: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
     a: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
 };
+
+function savePowerHistory()
+{
+    try
+    {
+        localStorage.setItem(POWER_HISTORY_STORAGE_KEY, JSON.stringify({ history: powerHistory, stats: powerStats }));
+    }
+    catch (err)
+    {
+        // Storage full/disabled (private browsing, quota exceeded) - the
+        // graph just won't survive a reload this time, not worth surfacing.
+    }
+}
+
+function loadPowerHistory()
+{
+    let saved;
+
+    try
+    {
+        saved = JSON.parse(localStorage.getItem(POWER_HISTORY_STORAGE_KEY));
+    }
+    catch (err)
+    {
+        return;
+    }
+
+    if (!saved || !Array.isArray(saved.history))
+        return;
+
+    // Mutate the existing array/object in place rather than reassigning -
+    // both are declared const and already captured by reference in the
+    // functions below.
+    powerHistory.push(...saved.history.slice(-POWER_HISTORY_MAX));
+
+    for (const key of ["w", "v", "a"])
+    {
+        if (saved.stats && saved.stats[key])
+            Object.assign(powerStats[key], saved.stats[key]);
+    }
+
+    renderPowerStats();
+    schedulePowerChartDraw();
+}
 
 function fmtPowerStat(value, digits)
 {
@@ -1391,6 +1461,7 @@ function recordPowerSample(w, v, a)
         s.count += 1;
     }
 
+    savePowerHistory();
     renderPowerStats();
     schedulePowerChartDraw();
 }
@@ -1504,10 +1575,21 @@ function drawPowerChart()
 
 window.addEventListener("resize", schedulePowerChartDraw);
 
+// Restore any history saved by a previous page load - must happen after
+// powerChartCanvas/powerChartCtx above are declared, since
+// schedulePowerChartDraw()/drawPowerChart() read them.
+loadPowerHistory();
+
+// Read by the power-toggle confirm dialog, so turning the plug off while
+// a print is actively running gets an extra, more specific warning.
+let printerIsRunning = false;
+
 function updatePrinter(data)
 {
     const state = data.gcodeState || "UNKNOWN";
     const bambuOk = data.bambuConnected === true;
+
+    printerIsRunning = bambuOk && state === "RUNNING";
 
     setDot("printerWifiDot", data.wifiConnected === true);
     setDot("printerMqttDot", bambuOk);
@@ -3156,6 +3238,59 @@ if (rebootBtn)
         finally
         {
             rebootBtn.disabled = false;
+        }
+    });
+}
+
+const powerToggleBtn = byId("powerToggleBtn");
+
+if (powerToggleBtn)
+{
+    powerToggleBtn.addEventListener("click", async () =>
+    {
+        // Always send the opposite of the last REPORTED state (not just
+        // flip a locally-tracked flag), so this stays correct even if the
+        // plug was switched by hand since the last poll.
+        const nextState = lastRelayState === "ON" ? "Off" : "On";
+
+        let confirmMsg = `Turn the plug ${nextState.toUpperCase()}?`;
+
+        if (nextState === "Off" && printerIsRunning)
+            confirmMsg = "A print is currently RUNNING - turning the plug off will cut power to the printer immediately and ruin the print. Are you sure?";
+
+        if (!window.confirm(confirmMsg))
+            return;
+
+        const resultEl = byId("powerToggleResult");
+
+        powerToggleBtn.disabled = true;
+        resultEl.textContent = "Publishing command...";
+
+        try
+        {
+            const res = await fetch("/api/trigger-power", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ state: nextState }),
+            });
+            const data = await res.json();
+
+            resultEl.textContent = res.ok
+                ? data.message
+                : `Error: ${data.error || res.statusText}`;
+        }
+        catch (err)
+        {
+            resultEl.textContent = `Request failed: ${err.message}`;
+        }
+        finally
+        {
+            // The button's label ("Turn ON"/"Turn OFF") only actually
+            // flips once the device's next poll reports the new
+            // relayState back through updatePower() - powerClientSetState
+            // forces that poll to happen right away rather than waiting
+            // out the normal interval, so this is a ~1s wait in practice.
+            powerToggleBtn.disabled = false;
         }
     });
 }

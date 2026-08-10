@@ -586,6 +586,12 @@
                         </div>
                     </div>
 
+                    <div class="powerToggleRow">
+                        <span>Plug relay: <strong id="powerRelayState">--</strong></span>
+                        <button type="button" class="infoBtn" id="powerToggleBtn" disabled>Turn OFF</button>
+                    </div>
+                    <p class="watchdogReason" id="powerToggleResult"></p>
+
                     <dl class="statusList">
                         <div>
                             <dt>Today</dt>
@@ -637,7 +643,7 @@
                         </div>
                     </div>
 
-                    <p class="hint powerStatsHint">Tracked since this page was opened - resets on reload.</p>
+                    <p class="hint powerStatsHint">Saved on this device/browser - clearing site data resets it.</p>
 
                 </article>
 
