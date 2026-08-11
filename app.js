@@ -350,9 +350,9 @@ function colorForResetReason(reason)
     return "var(--green)";  // Power-on, Software (ESP.restart), Deep sleep wake
 }
 
-function renderBootHistory(items)
+function renderBootHistory(items, listId = "bootHistoryList")
 {
-    const list = byId("bootHistoryList");
+    const list = byId(listId);
 
     if (!list)
         return;
@@ -1778,6 +1778,10 @@ function updatePrinter(data)
     setText("printerBed", `${Number(data.bedTemp || 0).toFixed(1)} °C`);
     setText("printerFan", bambuOk ? `${Number(data.fanSpeedPct) || 0}%` : "--%");
     setText("printerEsp32Temp", `${Number(data.esp32Temp || 0).toFixed(1)} °C`);
+
+    setText("printerResetReason", data.resetReason || "--");
+    setText("printerBootCountTotal", data.bootCountTotal ?? "--");
+    renderBootHistory(data.bootHistory, "printerBootHistoryList");
 
     // MQTT's tray_now is the printer's own live, direct report of which
     // slot is physically engaged right now - that's the only thing that
@@ -3237,6 +3241,24 @@ if (bootInfoToggle && bootInfoPanel)
             bootInfoPanel.setAttribute("hidden", "");
 
         bootInfoToggle.textContent = hidden ? "Hide" : "History";
+    });
+}
+
+const printerBootInfoToggle = byId("printerBootInfoToggle");
+const printerBootInfoPanel = byId("printerBootInfoPanel");
+
+if (printerBootInfoToggle && printerBootInfoPanel)
+{
+    printerBootInfoToggle.addEventListener("click", () =>
+    {
+        const hidden = printerBootInfoPanel.hasAttribute("hidden");
+
+        if (hidden)
+            printerBootInfoPanel.removeAttribute("hidden");
+        else
+            printerBootInfoPanel.setAttribute("hidden", "");
+
+        printerBootInfoToggle.textContent = hidden ? "Hide" : "History";
     });
 }
 

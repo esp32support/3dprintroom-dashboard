@@ -415,6 +415,19 @@
                 </div>
             </section>
 
+            <section class="panel toolsPanel">
+                <div class="panelHeader">
+                    <span>Device</span>
+                    <button type="button" class="infoBtn" id="printerBootInfoToggle">History</button>
+                </div>
+
+                <div class="bootInfoPanel" id="printerBootInfoPanel" hidden>
+                    <p class="compact">Last reset reason: <strong id="printerResetReason">--</strong></p>
+                    <p class="compact">Total boots (all-time): <strong id="printerBootCountTotal">--</strong></p>
+                    <div class="historyList" id="printerBootHistoryList"></div>
+                </div>
+            </section>
+
             <section class="primaryGrid">
 
                 <article class="panel">

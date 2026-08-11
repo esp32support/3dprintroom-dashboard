@@ -372,6 +372,10 @@ dd{
     margin-top:0;
 }
 
+.printerHero + .toolsPanel{
+    margin-bottom:18px;
+}
+
 .bootInfoPanel{
     margin-top:12px;
 }
