@@ -530,29 +530,6 @@
                     the matching spool.
                 </p>
 
-                <form class="otaForm" id="filamentAddForm" hidden>
-                    <label>
-                        Material
-                        <input type="text" id="filamentMaterial" placeholder="PLA" required>
-                    </label>
-                    <label>
-                        Color name
-                        <input type="text" id="filamentColorName" placeholder="White" required>
-                    </label>
-                    <label>
-                        Color hex (RRGGBB)
-                        <span class="hexInputRow">
-                            <input type="text" id="filamentColorHex" placeholder="FFFFFF" maxlength="6" pattern="[0-9A-Fa-f]{6}" value="FFFFFF">
-                            <span class="hexPreview" id="filamentColorPreview"></span>
-                        </span>
-                    </label>
-                    <label>
-                        Brand (optional)
-                        <input type="text" id="filamentBrand" placeholder="Bambu Lab">
-                    </label>
-                    <button type="submit" class="infoBtn">Add filament</button>
-                </form>
-
                 <div class="filamentList filamentGrid" id="filamentList">
                     <div class="historyItem">No filaments added yet.</div>
                 </div>
@@ -744,6 +721,141 @@
         </div><!-- /tab-power -->
 
     </main>
+
+    <div class="modalOverlay" id="filamentModal" hidden>
+        <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="filamentModalTitle">
+
+            <div class="modalHeader">
+                <strong id="filamentModalTitle">+ Add Filament</strong>
+                <button type="button" class="modalClose" id="filamentModalClose" aria-label="Close">&times;</button>
+            </div>
+
+            <div class="modalBody">
+
+                <div class="modalModeRow">
+                    <button type="button" class="modalModeBtn active" id="filamentModeManual">Manual Add</button>
+                    <button type="button" class="modalModeBtn" id="filamentModeAms">Read from AMS</button>
+                </div>
+
+                <div class="modalAmsPick" id="filamentAmsPick" hidden>
+                    <p class="hint">Pick a loaded AMS slot to prefill its material and colour, then adjust below.</p>
+                    <div class="modalAmsSlots" id="filamentAmsSlots"></div>
+                </div>
+
+                <div class="modalSectionTitle">Filament Info</div>
+
+                <form id="filamentAddForm">
+
+                    <div class="modalGrid2">
+                        <label class="modalField">
+                            <span class="modalLabel"><i class="req">*</i> Brand</span>
+                            <select id="filamentBrandSelect"></select>
+                        </label>
+
+                        <label class="modalField">
+                            <span class="modalLabel"><i class="req">*</i> Material Type</span>
+                            <select id="filamentMaterialSelect" disabled>
+                                <option value="">Select Brand First</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="modalGrid2">
+                        <label class="modalField" id="filamentBrandCustomWrap" hidden>
+                            <span class="modalLabel">Brand name</span>
+                            <input type="text" id="filamentBrandCustom" placeholder="Azure Film">
+                        </label>
+
+                        <label class="modalField" id="filamentMaterialCustomWrap" hidden>
+                            <span class="modalLabel">Material name</span>
+                            <input type="text" id="filamentMaterialCustom" placeholder="PLA Matte">
+                        </label>
+                    </div>
+
+                    <div class="modalField">
+                        <span class="modalLabel"><i class="req">*</i> Color</span>
+                        <p class="hint modalNoPresets">No predefined colors for this filament</p>
+
+                        <div class="modalColorRow">
+                            <button type="button" class="modalColorChip" id="filamentColorChip" title="Pick custom color"></button>
+                            <div class="modalColorMeta">
+                                <span class="modalColorCaption">CUSTOM COLOR</span>
+                                <strong id="filamentColorHexLabel">#FFFFFF</strong>
+                            </div>
+                        </div>
+
+                        <div class="modalColorPicker" id="filamentColorPicker" hidden>
+                            <label class="modalField">
+                                <span class="modalLabel">Pick</span>
+                                <input type="color" id="filamentColorNative" value="#ffffff">
+                            </label>
+                            <label class="modalField">
+                                <span class="modalLabel">Hex</span>
+                                <input type="text" id="filamentColorHex" maxlength="7" value="FFFFFF">
+                            </label>
+                            <div class="modalRgbRow">
+                                <label class="modalField">
+                                    <span class="modalLabel">R</span>
+                                    <input type="number" id="filamentColorR" min="0" max="255" value="255">
+                                </label>
+                                <label class="modalField">
+                                    <span class="modalLabel">G</span>
+                                    <input type="number" id="filamentColorG" min="0" max="255" value="255">
+                                </label>
+                                <label class="modalField">
+                                    <span class="modalLabel">B</span>
+                                    <input type="number" id="filamentColorB" min="0" max="255" value="255">
+                                </label>
+                            </div>
+                        </div>
+
+                        <label class="modalField modalColorName">
+                            <span class="modalLabel"><i class="req">*</i> Color name</span>
+                            <input type="text" id="filamentColorName" placeholder="Light Blue" required>
+                        </label>
+                    </div>
+
+                    <div class="modalField" id="filamentWeightBlock">
+                        <span class="modalLabel"><i class="req">*</i> Weight</span>
+                        <div class="modalGrid2">
+                            <label class="modalField">
+                                <span class="modalLabel">Current Net Weight</span>
+                                <span class="modalUnitRow">
+                                    <input type="number" id="filamentCurrentWeight" min="0" step="1" value="1000">
+                                    <span class="modalUnit">g</span>
+                                </span>
+                            </label>
+                            <label class="modalField">
+                                <span class="modalLabel">Total Net Weight</span>
+                                <span class="modalUnitRow">
+                                    <input type="number" id="filamentTotalWeight" min="1" step="1" value="1000">
+                                    <span class="modalUnit">g</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <label class="modalField">
+                        <span class="modalLabel">Note</span>
+                        <textarea id="filamentNote" maxlength="50" rows="3" placeholder="Input Note"></textarea>
+                        <span class="modalNoteCount" id="filamentNoteCount">0/50</span>
+                    </label>
+
+                    <div class="modalFooter">
+                        <span class="modalRollRow" id="filamentRollRow">
+                            <input type="number" id="filamentRolls" min="1" max="20" value="1">
+                            <span class="modalUnit">roll</span>
+                        </span>
+                        <span class="modalFooterBtns">
+                            <button type="button" class="infoBtn" id="filamentCancel">Cancel</button>
+                            <button type="submit" class="infoBtn modalPrimaryBtn">Add</button>
+                        </span>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </div>
 
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script src="broker.config.js"></script>

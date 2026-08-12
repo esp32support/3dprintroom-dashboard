@@ -1697,6 +1697,9 @@ loadPowerHistory();
 // a print is actively running gets an extra, more specific warning.
 let printerIsRunning = false;
 
+// Latest AMS tray array from the printer, for the Add Filament dialog.
+let lastPrinterTrays = [];
+
 function updatePrinter(data)
 {
     const state = data.gcodeState || "UNKNOWN";
@@ -1748,6 +1751,11 @@ function updatePrinter(data)
     }
 
     const trays = data.trays || [];
+
+    // Kept for the Add Filament dialog's "Read from AMS" mode, which needs
+    // the live tray colours/types outside of this render pass.
+    lastPrinterTrays = trays;
+
     const running = bambuOk && state === "RUNNING";
     const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
 
@@ -2238,10 +2246,15 @@ function renderFilamentLibrary()
 
         meta.appendChild(title);
 
-        if (f.brand)
+        // Brand and the marketing sub-type ("Matte", "Silk") are details
+        // under the title - the title itself stays the base material so it
+        // matches what the printer reports for deduction.
+        const subParts = [f.brand, f.variant].filter(Boolean);
+
+        if (subParts.length)
         {
             const sub = document.createElement("small");
-            sub.textContent = f.brand;
+            sub.textContent = subParts.join(" - ");
             meta.appendChild(sub);
         }
 
@@ -2353,44 +2366,11 @@ async function withFreshLibrary(mutatorFn)
 // Add-filament form's hex field defaults to FFFFFF (white) if left
 // untouched, and there was no way to go back and fix it afterward short
 // of removing and re-adding the whole entry (losing its spools/history).
+// Opens the same dialog used for adding, prefilled - replaced a chain of
+// window.prompt() calls that couldn't offer the brand/material dropdowns.
 function onEditFilament(filamentId)
 {
-    withFreshLibrary(lib =>
-    {
-        const f = lib.filaments.find(x => x.id === filamentId);
-
-        if (!f)
-            return;
-
-        const material = window.prompt("Material:", f.material);
-        if (material === null || !material.trim())
-            return;
-
-        const color = window.prompt("Color name:", f.color);
-        if (color === null || !color.trim())
-            return;
-
-        const colorHexInput = window.prompt("Color hex (RRGGBB):", f.colorHex);
-        if (colorHexInput === null)
-            return;
-
-        const colorHex = colorHexInput.replace("#", "").toUpperCase();
-
-        if (!/^[0-9A-F]{6}$/.test(colorHex))
-        {
-            window.alert("Color hex must be exactly 6 hex digits (e.g. BBBBBB) - not saved.");
-            return;
-        }
-
-        const brand = window.prompt("Brand (optional):", f.brand || "");
-        if (brand === null)
-            return;
-
-        f.material = material.trim();
-        f.color = color.trim();
-        f.colorHex = colorHex;
-        f.brand = brand.trim();
-    });
+    openFilamentModal(filamentId);
 }
 
 function onRemoveFilament(filamentId)
@@ -2845,47 +2825,461 @@ async function processFilamentDeductions(items)
 
 loadFilamentLibrary().then(reconcileDeductionLog);
 
-const filamentAddToggle = byId("filamentAddToggle");
-const filamentAddForm = byId("filamentAddForm");
-const filamentColorHexInput = byId("filamentColorHex");
-const filamentColorPreview = byId("filamentColorPreview");
+// ===== Add Filament modal =====
+//
+// Mirrors Bambu Studio's own "+ Add Filament" dialog (brand/material
+// dropdowns, colour picker, current-vs-total weight, note, roll count) so
+// adding a spool here feels the same as adding it there.
 
-// Windows' native <input type=color> picker was unreliable to confirm a
-// choice in, so this is a plain hex text field instead (also lets a Bambu
-// color hex be pasted in directly for exact auto-deduction matches) - this
-// just keeps the little preview swatch next to it in sync as you type.
-if (filamentColorHexInput && filamentColorPreview)
+const FILAMENT_BRANDS = ["Bambu Lab", "Generic", "Overture", "Polymaker", "SUNLU", "eSUN"];
+
+// Per-brand material lists, matching what Bambu Studio offers for each.
+const FILAMENT_MATERIALS = {
+    "Bambu Lab": [
+        "ABS", "ABS-GF", "ASA", "ASA-Aero", "ASA-CF", "PA-CF", "PA6-CF", "PA6-GF",
+        "PAHT-CF", "PC", "PC FR", "PET-CF", "PETG Basic", "PETG HF", "PETG Translucent",
+        "PETG-CF", "PLA Aero", "PLA Basic", "PLA Dynamic", "PLA Galaxy", "PLA Glow",
+        "PLA Lite", "PLA Marble", "PLA Matte", "PLA Metal", "PLA Pure", "PLA Silk",
+        "PLA Silk+", "PLA Sparkle", "PLA Tough", "PLA Tough+", "PLA Translucent",
+        "PLA Wood", "PLA-CF", "PPA-CF", "PPS-CF", "PVA", "Support For PA/PET",
+        "Support For PLA",
+    ],
+    "Generic": [
+        "ABS", "ASA", "BVOH", "EVA", "HIPS", "PA", "PA-CF", "PC", "PCTG", "PE",
+        "PE-CF", "PETG", "PETG-CF", "PHA", "PLA", "PLA-CF", "PP", "PPA-CF", "PPS",
+        "PVA", "SBS", "TPU",
+    ],
+    "Overture": [
+        "ABS", "Marble PLA", "Matte PLA", "Nylon", "PETG", "PLA", "PLA+", "Silk PLA",
+        "TPU", "Wood PLA",
+    ],
+    "Polymaker": [
+        "ABS", "ASA", "PA12-CF", "PA6-CF", "PA6-GF", "PA612-CF", "PET-CF", "PETG",
+        "PETG-ESD", "PETG-rCF", "PLA",
+    ],
+    "SUNLU": ["PETG", "PLA Marble", "PLA Matte", "PLA+", "PLA+ 2.0", "Silk PLA+", "Wood PLA"],
+    "eSUN": ["PLA+"],
+};
+
+const OTHER_OPTION = "Other...";
+
+// Automatic deduction matches a library entry's `material` by EXACT string
+// against what the printer reports for the loaded tray ("PLA", "PETG"), so
+// storing a marketing variant like "PLA Matte" there would silently stop
+// that entry ever deducting. The variant is kept separately for display and
+// the base type is what actually gets stored as `material`.
+const BASE_MATERIALS = [
+    "PETG-CF", "PETG-ESD", "PETG-rCF", "PETG", "PLA-CF", "PLA", "ABS-GF", "ABS",
+    "ASA-CF", "ASA", "PA12-CF", "PA612-CF", "PA6-CF", "PA6-GF", "PAHT-CF", "PA-CF",
+    "PA", "PC FR", "PC", "PET-CF", "PCTG", "PPA-CF", "PPS-CF", "PPS", "PVA", "TPU",
+    "HIPS", "PE-CF", "PE", "PHA", "PP", "SBS", "EVA", "BVOH", "PET",
+].sort((a, b) => b.length - a.length);
+
+function baseMaterialOf(variant)
 {
-    const updatePreview = () => { filamentColorPreview.style.background = trayColorCss(filamentColorHexInput.value); };
-    filamentColorHexInput.addEventListener("input", updatePreview);
-    updatePreview();
+    const v = String(variant || "").trim().toUpperCase();
+
+    if (!v)
+        return "";
+
+    for (const base of BASE_MATERIALS)
+    {
+        if (v === base || v.startsWith(base + " ") || v.startsWith(base + "-"))
+            return base;
+    }
+
+    // "Silk PLA+", "Matte PLA", "Support For PLA" - base isn't the leading
+    // token, so fall back to whichever known base appears anywhere.
+    for (const base of BASE_MATERIALS)
+    {
+        if (v.includes(base))
+            return base;
+    }
+
+    return v;
 }
 
-if (filamentAddToggle && filamentAddForm)
+const filamentAddToggle = byId("filamentAddToggle");
+const filamentModal = byId("filamentModal");
+const filamentAddForm = byId("filamentAddForm");
+const filamentBrandSelect = byId("filamentBrandSelect");
+const filamentMaterialSelect = byId("filamentMaterialSelect");
+const filamentBrandCustomWrap = byId("filamentBrandCustomWrap");
+const filamentMaterialCustomWrap = byId("filamentMaterialCustomWrap");
+const filamentColorChip = byId("filamentColorChip");
+const filamentColorPicker = byId("filamentColorPicker");
+const filamentColorHexInput = byId("filamentColorHex");
+const filamentColorNative = byId("filamentColorNative");
+const filamentColorHexLabel = byId("filamentColorHexLabel");
+const filamentNoteInput = byId("filamentNote");
+
+function normalizeHex(value)
 {
-    filamentAddToggle.addEventListener("click", () =>
+    const raw = String(value || "").replace("#", "").trim().toUpperCase();
+    return /^[0-9A-F]{6}$/.test(raw) ? raw : null;
+}
+
+function applyFilamentColor(hex, skip)
+{
+    const clean = normalizeHex(hex);
+
+    if (!clean)
+        return;
+
+    if (filamentColorChip) filamentColorChip.style.background = `#${clean}`;
+    if (filamentColorHexLabel) filamentColorHexLabel.textContent = `#${clean}`;
+    if (skip !== "hex" && filamentColorHexInput) filamentColorHexInput.value = clean;
+    if (skip !== "native" && filamentColorNative) filamentColorNative.value = `#${clean}`;
+
+    if (skip !== "rgb")
     {
-        const hidden = filamentAddForm.hasAttribute("hidden");
+        const r = byId("filamentColorR");
+        const g = byId("filamentColorG");
+        const b = byId("filamentColorB");
 
-        if (hidden)
-            filamentAddForm.removeAttribute("hidden");
-        else
-            filamentAddForm.setAttribute("hidden", "");
+        if (r) r.value = parseInt(clean.slice(0, 2), 16);
+        if (g) g.value = parseInt(clean.slice(2, 4), 16);
+        if (b) b.value = parseInt(clean.slice(4, 6), 16);
+    }
+}
 
-        filamentAddToggle.textContent = hidden ? "Cancel" : "+ Add filament";
+function readRgbInputs()
+{
+    const clamp255 = v => Math.max(0, Math.min(255, Number(v) || 0));
+    const r = clamp255(byId("filamentColorR")?.value);
+    const g = clamp255(byId("filamentColorG")?.value);
+    const b = clamp255(byId("filamentColorB")?.value);
+
+    return [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+function populateBrandSelect()
+{
+    if (!filamentBrandSelect)
+        return;
+
+    filamentBrandSelect.innerHTML = "";
+
+    for (const label of ["Select Brand", ...FILAMENT_BRANDS, OTHER_OPTION])
+    {
+        const opt = document.createElement("option");
+        opt.value = label === "Select Brand" ? "" : label;
+        opt.textContent = label;
+        filamentBrandSelect.appendChild(opt);
+    }
+}
+
+function populateMaterialSelect(brand)
+{
+    if (!filamentMaterialSelect)
+        return;
+
+    filamentMaterialSelect.innerHTML = "";
+
+    if (!brand)
+    {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "Select Brand First";
+        filamentMaterialSelect.appendChild(opt);
+        filamentMaterialSelect.disabled = true;
+        return;
+    }
+
+    filamentMaterialSelect.disabled = false;
+
+    const list = FILAMENT_MATERIALS[brand] || FILAMENT_MATERIALS["Generic"];
+
+    for (const label of ["Select Type", ...list, OTHER_OPTION])
+    {
+        const opt = document.createElement("option");
+        opt.value = label === "Select Type" ? "" : label;
+        opt.textContent = label;
+        filamentMaterialSelect.appendChild(opt);
+    }
+}
+
+function renderAmsPickSlots()
+{
+    const wrap = byId("filamentAmsSlots");
+
+    if (!wrap)
+        return;
+
+    wrap.innerHTML = "";
+
+    const trays = lastPrinterTrays || [];
+
+    if (trays.length === 0)
+    {
+        const empty = document.createElement("p");
+        empty.className = "hint";
+        empty.textContent = "No AMS data received yet.";
+        wrap.appendChild(empty);
+        return;
+    }
+
+    trays.forEach((tray, i) =>
+    {
+        const hex = normalizeHex((tray.color || "").slice(0, 6));
+        const type = tray.type || "";
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "modalAmsSlot";
+        btn.disabled = !hex || !type;
+
+        const dot = document.createElement("span");
+        dot.className = "modalAmsSlotDot";
+        dot.style.background = hex ? `#${hex}` : "#2a3136";
+
+        const label = document.createElement("span");
+        label.textContent = `A${i + 1} ${type || "Empty"}`;
+
+        btn.appendChild(dot);
+        btn.appendChild(label);
+
+        btn.addEventListener("click", () =>
+        {
+            applyFilamentColor(hex);
+            // The tray reports a base type ("PLA"), which is exactly what
+            // Generic's list holds - so that pairing round-trips cleanly.
+            filamentBrandSelect.value = "Generic";
+            populateMaterialSelect("Generic");
+
+            if ([...filamentMaterialSelect.options].some(o => o.value === type))
+                filamentMaterialSelect.value = type;
+
+            setFilamentMode("manual");
+        });
+
+        wrap.appendChild(btn);
+    });
+}
+
+function setFilamentMode(mode)
+{
+    const manualBtn = byId("filamentModeManual");
+    const amsBtn = byId("filamentModeAms");
+    const amsPick = byId("filamentAmsPick");
+
+    const isAms = mode === "ams";
+
+    if (manualBtn) manualBtn.classList.toggle("active", !isAms);
+    if (amsBtn) amsBtn.classList.toggle("active", isAms);
+    if (amsPick) amsPick.hidden = !isAms;
+
+    if (isAms)
+        renderAmsPickSlots();
+}
+
+// Non-null while the modal is editing an existing library entry rather
+// than adding a new one.
+let editingFilamentId = null;
+
+// Selects the option matching `value` if the list has it, otherwise falls
+// back to the "Other..." escape hatch with the value typed into its
+// companion text input - so an entry added before these dropdowns existed
+// (or one whose brand simply isn't in Bambu's list, e.g. Azure Film) still
+// round-trips through the edit form unchanged.
+function selectOrOther(select, value, customWrap, customInput)
+{
+    const has = [...select.options].some(o => o.value === value);
+
+    select.value = has ? value : (value ? OTHER_OPTION : "");
+
+    const useOther = !has && !!value;
+
+    if (customWrap) customWrap.hidden = !useOther;
+    if (customInput) customInput.value = useOther ? value : "";
+}
+
+function openFilamentModal(filamentId)
+{
+    if (!filamentModal)
+        return;
+
+    const entry = filamentId
+        ? filamentLibrary.filaments.find(f => f.id === filamentId)
+        : null;
+
+    editingFilamentId = entry ? entry.id : null;
+
+    filamentAddForm.reset();
+    populateBrandSelect();
+    populateMaterialSelect("");
+    applyFilamentColor("FFFFFF");
+    setFilamentMode("manual");
+
+    if (filamentColorPicker) filamentColorPicker.hidden = true;
+    if (filamentBrandCustomWrap) filamentBrandCustomWrap.hidden = true;
+    if (filamentMaterialCustomWrap) filamentMaterialCustomWrap.hidden = true;
+
+    // Spool weights are managed per-spool on the entry's own rows, so the
+    // weight/roll inputs only make sense when creating a brand new entry.
+    const weightBlock = byId("filamentWeightBlock");
+    const rollRow = byId("filamentRollRow");
+
+    if (weightBlock) weightBlock.hidden = !!entry;
+    if (rollRow) rollRow.hidden = !!entry;
+
+    setText("filamentModalTitle", entry ? "Edit Filament" : "+ Add Filament");
+    setText("filamentNoteCount", "0/50");
+
+    const modeRow = byId("filamentModeManual")?.parentElement;
+    if (modeRow) modeRow.hidden = !!entry;
+
+    const submitBtn = filamentAddForm.querySelector("button[type=submit]");
+    if (submitBtn) submitBtn.textContent = entry ? "Save" : "Add";
+
+    if (entry)
+    {
+        selectOrOther(filamentBrandSelect, entry.brand || "", filamentBrandCustomWrap, byId("filamentBrandCustom"));
+
+        const brandForList = filamentBrandSelect.value === OTHER_OPTION ? "Generic" : filamentBrandSelect.value;
+        populateMaterialSelect(brandForList || "Generic");
+
+        selectOrOther(filamentMaterialSelect, entry.variant || entry.material || "",
+                      filamentMaterialCustomWrap, byId("filamentMaterialCustom"));
+
+        byId("filamentColorName").value = entry.color || "";
+        applyFilamentColor(entry.colorHex || "FFFFFF");
+
+        if (filamentNoteInput)
+        {
+            filamentNoteInput.value = entry.note || "";
+            setText("filamentNoteCount", `${filamentNoteInput.value.length}/50`);
+        }
+    }
+
+    filamentModal.hidden = false;
+}
+
+function closeFilamentModal()
+{
+    if (filamentModal)
+        filamentModal.hidden = true;
+}
+
+if (filamentAddToggle && filamentModal)
+{
+    filamentAddToggle.addEventListener("click", openFilamentModal);
+    byId("filamentModalClose")?.addEventListener("click", closeFilamentModal);
+    byId("filamentCancel")?.addEventListener("click", closeFilamentModal);
+
+    // Click the dark backdrop (but not the card itself) to dismiss.
+    filamentModal.addEventListener("click", (e) =>
+    {
+        if (e.target === filamentModal)
+            closeFilamentModal();
+    });
+
+    document.addEventListener("keydown", (e) =>
+    {
+        if (e.key === "Escape" && !filamentModal.hidden)
+            closeFilamentModal();
+    });
+
+    byId("filamentModeManual")?.addEventListener("click", () => setFilamentMode("manual"));
+    byId("filamentModeAms")?.addEventListener("click", () => setFilamentMode("ams"));
+
+    filamentBrandSelect?.addEventListener("change", () =>
+    {
+        const brand = filamentBrandSelect.value;
+        const isOther = brand === OTHER_OPTION;
+
+        if (filamentBrandCustomWrap) filamentBrandCustomWrap.hidden = !isOther;
+
+        populateMaterialSelect(isOther ? "Generic" : brand);
+
+        if (filamentMaterialCustomWrap) filamentMaterialCustomWrap.hidden = true;
+    });
+
+    filamentMaterialSelect?.addEventListener("change", () =>
+    {
+        if (filamentMaterialCustomWrap)
+            filamentMaterialCustomWrap.hidden = filamentMaterialSelect.value !== OTHER_OPTION;
+    });
+
+    filamentColorChip?.addEventListener("click", () =>
+    {
+        if (filamentColorPicker)
+            filamentColorPicker.hidden = !filamentColorPicker.hidden;
+    });
+
+    filamentColorNative?.addEventListener("input", () => applyFilamentColor(filamentColorNative.value, "native"));
+    filamentColorHexInput?.addEventListener("input", () => applyFilamentColor(filamentColorHexInput.value, "hex"));
+
+    ["filamentColorR", "filamentColorG", "filamentColorB"].forEach(id =>
+    {
+        byId(id)?.addEventListener("input", () => applyFilamentColor(readRgbInputs(), "rgb"));
+    });
+
+    filamentNoteInput?.addEventListener("input", () =>
+    {
+        setText("filamentNoteCount", `${filamentNoteInput.value.length}/50`);
     });
 
     filamentAddForm.addEventListener("submit", (event) =>
     {
         event.preventDefault();
 
-        const material = byId("filamentMaterial").value.trim();
-        const color = byId("filamentColorName").value.trim();
-        const colorHex = byId("filamentColorHex").value.replace("#", "").toUpperCase();
-        const brand = byId("filamentBrand").value.trim();
+        const brandRaw = filamentBrandSelect.value;
+        const brand = brandRaw === OTHER_OPTION
+            ? byId("filamentBrandCustom").value.trim()
+            : brandRaw;
 
-        if (!material || !color)
+        const variantRaw = filamentMaterialSelect.value;
+        const variant = variantRaw === OTHER_OPTION
+            ? byId("filamentMaterialCustom").value.trim()
+            : variantRaw;
+
+        const material = baseMaterialOf(variant);
+        const color = byId("filamentColorName").value.trim();
+        const colorHex = normalizeHex(filamentColorHexInput.value);
+        const note = filamentNoteInput.value.trim();
+
+        const isEdit = !!editingFilamentId;
+
+        const totalWeight = Number(byId("filamentTotalWeight").value);
+        const currentWeight = Number(byId("filamentCurrentWeight").value);
+        const rolls = Math.max(1, Math.min(20, Number(byId("filamentRolls").value) || 1));
+
+        if (!brand)
+        {
+            window.alert("Pick a brand first.");
             return;
+        }
+
+        if (!variant || !material)
+        {
+            window.alert("Pick a material type first.");
+            return;
+        }
+
+        if (!color)
+        {
+            window.alert("Give the colour a name so you can tell it apart from your other spools.");
+            return;
+        }
+
+        if (!colorHex)
+        {
+            window.alert("Colour hex must be 6 hex digits, e.g. 46A8F9.");
+            return;
+        }
+
+        if (!isEdit && (!Number.isFinite(totalWeight) || totalWeight <= 0))
+        {
+            window.alert("Total net weight must be greater than 0.");
+            return;
+        }
+
+        if (!isEdit && (!Number.isFinite(currentWeight) || currentWeight < 0 || currentWeight > totalWeight))
+        {
+            window.alert("Current net weight must be between 0 and the total net weight.");
+            return;
+        }
 
         // Confirmed live: the hex field's own FFFFFF default got left
         // untouched when adding a filament that wasn't actually white,
@@ -2911,6 +3305,7 @@ if (filamentAddToggle && filamentAddForm)
         // this close would also make automatic deduction's "closest match"
         // logic pick between them inconsistently.
         const existingClose = filamentLibrary.filaments.find(f =>
+            f.id !== editingFilamentId &&
             f.material.toUpperCase() === material.toUpperCase() &&
             colorDistance((f.colorHex || "").toUpperCase(), colorHex) <= 80);
 
@@ -2925,11 +3320,57 @@ if (filamentAddToggle && filamentAddForm)
                 return;
         }
 
-        filamentAddForm.reset();
-        filamentAddForm.setAttribute("hidden", "");
-        filamentAddToggle.textContent = "+ Add filament";
+        const idBeingEdited = editingFilamentId;
 
-        withFreshLibrary(lib => { lib.filaments.push({ id: uid(), material, color, colorHex, brand, spools: [] }); });
+        closeFilamentModal();
+
+        // Marketing sub-type ("PLA Matte", "Silk PLA+") - a display detail
+        // only, deliberately NOT folded into `material`, which has to stay
+        // the base type for deduction matching.
+        const storedVariant = variant !== material ? variant : "";
+
+        if (idBeingEdited)
+        {
+            withFreshLibrary(lib =>
+            {
+                const f = lib.filaments.find(x => x.id === idBeingEdited);
+
+                if (!f)
+                    return;
+
+                f.material = material;
+                f.variant = storedVariant;
+                f.color = color;
+                f.colorHex = colorHex;
+                f.brand = brand;
+                f.note = note;
+            });
+
+            return;
+        }
+
+        const now = new Date().toISOString();
+
+        const spools = Array.from({ length: rolls }, () => ({
+            id: uid(),
+            total: totalWeight,
+            remaining: currentWeight,
+            createdAt: now,
+        }));
+
+        withFreshLibrary(lib =>
+        {
+            lib.filaments.push({
+                id: uid(),
+                material,
+                variant: storedVariant,
+                color,
+                colorHex,
+                brand,
+                note,
+                spools,
+            });
+        });
     });
 }
 

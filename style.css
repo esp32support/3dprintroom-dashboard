@@ -1047,6 +1047,331 @@ dd{
     font-size:13px;
 }
 
+/* ===== Add Filament modal ===== */
+
+.modalOverlay{
+    position:fixed;
+    inset:0;
+    z-index:50;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    background:rgba(0,0,0,.62);
+}
+
+.modalOverlay[hidden]{
+    display:none;
+}
+
+.modalCard{
+    width:min(760px,100%);
+    max-height:calc(100vh - 40px);
+    display:flex;
+    flex-direction:column;
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 24px 60px rgba(0,0,0,.5);
+}
+
+.modalHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+}
+
+.modalHeader strong{
+    font-size:16px;
+}
+
+.modalClose{
+    background:transparent;
+    border:none;
+    color:var(--muted);
+    font-size:24px;
+    line-height:1;
+    cursor:pointer;
+    padding:0 4px;
+}
+
+.modalClose:hover{
+    color:var(--text);
+}
+
+.modalBody{
+    padding:18px;
+    overflow-y:auto;
+}
+
+.modalModeRow{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-bottom:18px;
+}
+
+.modalModeBtn{
+    padding:12px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:#14181b;
+    color:var(--muted);
+    font-family:inherit;
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.modalModeBtn.active{
+    border-color:var(--green);
+    color:var(--green);
+}
+
+.modalSectionTitle{
+    margin-bottom:14px;
+    padding-left:8px;
+    border-left:3px solid var(--green);
+    font-size:14px;
+    font-weight:800;
+}
+
+.modalGrid2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+}
+
+.modalField{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin-bottom:14px;
+    min-width:0;
+}
+
+.modalLabel{
+    color:var(--muted);
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+
+.req{
+    color:var(--red);
+    font-style:normal;
+}
+
+.modalCard select,
+.modalCard input[type="text"],
+.modalCard input[type="number"],
+.modalCard textarea{
+    width:100%;
+    padding:9px 10px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#0c0f11;
+    color:var(--text);
+    font-family:inherit;
+    font-size:14px;
+}
+
+.modalCard select:focus,
+.modalCard input:focus,
+.modalCard textarea:focus{
+    outline:none;
+    border-color:var(--green);
+}
+
+.modalCard select:disabled{
+    color:var(--muted);
+}
+
+.modalNoPresets{
+    margin:0 0 10px;
+}
+
+.modalColorRow{
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.modalColorChip{
+    width:56px;
+    height:56px;
+    flex:none;
+    border-radius:8px;
+    border:2px solid var(--green);
+    background:#000;
+    cursor:pointer;
+}
+
+.modalColorCaption{
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.modalColorMeta strong{
+    font-family:monospace;
+    font-size:14px;
+}
+
+.modalColorPicker{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:12px;
+    align-items:end;
+    margin-top:12px;
+    padding:12px;
+    border-radius:8px;
+    background:#14181b;
+    border:1px solid #2f363d;
+}
+
+.modalColorPicker[hidden]{
+    display:none;
+}
+
+.modalColorPicker input[type="color"]{
+    width:56px;
+    height:38px;
+    padding:2px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#0c0f11;
+    cursor:pointer;
+}
+
+.modalRgbRow{
+    grid-column:1 / -1;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:10px;
+}
+
+.modalRgbRow .modalField,
+.modalColorPicker .modalField{
+    margin-bottom:0;
+}
+
+.modalColorName{
+    margin-top:14px;
+    margin-bottom:0;
+}
+
+.modalUnitRow{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.modalUnit{
+    color:var(--muted);
+    font-size:13px;
+    font-weight:700;
+}
+
+.modalNoteCount{
+    align-self:flex-end;
+    color:var(--muted);
+    font-size:11px;
+}
+
+.modalFooter{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+}
+
+.modalRollRow{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.modalRollRow input{
+    width:90px;
+}
+
+.modalFooterBtns{
+    display:flex;
+    gap:10px;
+}
+
+.modalFooterBtns .infoBtn{
+    margin-top:0;
+    padding:9px 22px;
+    font-size:12px;
+}
+
+.modalPrimaryBtn{
+    background:var(--green);
+    border-color:var(--green);
+    color:#0b1113;
+}
+
+.modalPrimaryBtn:hover{
+    border-color:var(--green);
+    filter:brightness(1.08);
+}
+
+.modalAmsPick{
+    margin-bottom:18px;
+}
+
+.modalAmsPick[hidden]{
+    display:none;
+}
+
+.modalAmsSlots{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:10px;
+}
+
+.modalAmsSlot{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    padding:10px 6px;
+    border-radius:8px;
+    background:#14181b;
+    border:1px solid #2f363d;
+    color:var(--text);
+    font-family:inherit;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.modalAmsSlot:hover:not(:disabled){
+    border-color:var(--cyan);
+}
+
+.modalAmsSlot:disabled{
+    opacity:.45;
+    cursor:not-allowed;
+}
+
+.modalAmsSlotDot{
+    width:26px;
+    height:26px;
+    border-radius:50%;
+    border:2px solid #0c0f11;
+}
+
 /* ===== Power tab ===== */
 
 .powerGrid{
@@ -1339,5 +1664,38 @@ dd{
         grid-template-columns:1fr;
         justify-items:stretch;
         text-align:left;
+    }
+
+    .modalOverlay{
+        padding:10px;
+    }
+
+    .modalBody{
+        padding:14px;
+    }
+
+    .modalGrid2{
+        grid-template-columns:1fr;
+    }
+
+    .modalAmsSlots{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
+    .modalFooter{
+        flex-direction:column;
+        align-items:stretch;
+    }
+
+    .modalFooterBtns{
+        justify-content:stretch;
+    }
+
+    .modalFooterBtns .infoBtn{
+        flex:1;
+    }
+
+    .modalRollRow input{
+        flex:1;
     }
 }
