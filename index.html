@@ -732,16 +732,6 @@
 
             <div class="modalBody">
 
-                <div class="modalModeRow">
-                    <button type="button" class="modalModeBtn active" id="filamentModeManual">Manual Add</button>
-                    <button type="button" class="modalModeBtn" id="filamentModeAms">Read from AMS</button>
-                </div>
-
-                <div class="modalAmsPick" id="filamentAmsPick" hidden>
-                    <p class="hint">Pick a loaded AMS slot to prefill its material and colour, then adjust below.</p>
-                    <div class="modalAmsSlots" id="filamentAmsSlots"></div>
-                </div>
-
                 <div class="modalSectionTitle">Filament Info</div>
 
                 <form id="filamentAddForm">
@@ -842,10 +832,6 @@
                     </label>
 
                     <div class="modalFooter">
-                        <span class="modalRollRow" id="filamentRollRow">
-                            <input type="number" id="filamentRolls" min="1" max="20" value="1">
-                            <span class="modalUnit">roll</span>
-                        </span>
                         <span class="modalFooterBtns">
                             <button type="button" class="infoBtn" id="filamentCancel">Cancel</button>
                             <button type="submit" class="infoBtn modalPrimaryBtn">Add</button>

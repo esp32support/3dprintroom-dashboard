@@ -1697,9 +1697,6 @@ loadPowerHistory();
 // a print is actively running gets an extra, more specific warning.
 let printerIsRunning = false;
 
-// Latest AMS tray array from the printer, for the Add Filament dialog.
-let lastPrinterTrays = [];
-
 function updatePrinter(data)
 {
     const state = data.gcodeState || "UNKNOWN";
@@ -1751,11 +1748,6 @@ function updatePrinter(data)
     }
 
     const trays = data.trays || [];
-
-    // Kept for the Add Filament dialog's "Read from AMS" mode, which needs
-    // the live tray colours/types outside of this render pass.
-    lastPrinterTrays = trays;
-
     const running = bambuOk && state === "RUNNING";
     const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
 
@@ -2999,80 +2991,6 @@ function populateMaterialSelect(brand)
     }
 }
 
-function renderAmsPickSlots()
-{
-    const wrap = byId("filamentAmsSlots");
-
-    if (!wrap)
-        return;
-
-    wrap.innerHTML = "";
-
-    const trays = lastPrinterTrays || [];
-
-    if (trays.length === 0)
-    {
-        const empty = document.createElement("p");
-        empty.className = "hint";
-        empty.textContent = "No AMS data received yet.";
-        wrap.appendChild(empty);
-        return;
-    }
-
-    trays.forEach((tray, i) =>
-    {
-        const hex = normalizeHex((tray.color || "").slice(0, 6));
-        const type = tray.type || "";
-
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "modalAmsSlot";
-        btn.disabled = !hex || !type;
-
-        const dot = document.createElement("span");
-        dot.className = "modalAmsSlotDot";
-        dot.style.background = hex ? `#${hex}` : "#2a3136";
-
-        const label = document.createElement("span");
-        label.textContent = `A${i + 1} ${type || "Empty"}`;
-
-        btn.appendChild(dot);
-        btn.appendChild(label);
-
-        btn.addEventListener("click", () =>
-        {
-            applyFilamentColor(hex);
-            // The tray reports a base type ("PLA"), which is exactly what
-            // Generic's list holds - so that pairing round-trips cleanly.
-            filamentBrandSelect.value = "Generic";
-            populateMaterialSelect("Generic");
-
-            if ([...filamentMaterialSelect.options].some(o => o.value === type))
-                filamentMaterialSelect.value = type;
-
-            setFilamentMode("manual");
-        });
-
-        wrap.appendChild(btn);
-    });
-}
-
-function setFilamentMode(mode)
-{
-    const manualBtn = byId("filamentModeManual");
-    const amsBtn = byId("filamentModeAms");
-    const amsPick = byId("filamentAmsPick");
-
-    const isAms = mode === "ams";
-
-    if (manualBtn) manualBtn.classList.toggle("active", !isAms);
-    if (amsBtn) amsBtn.classList.toggle("active", isAms);
-    if (amsPick) amsPick.hidden = !isAms;
-
-    if (isAms)
-        renderAmsPickSlots();
-}
-
 // Non-null while the modal is editing an existing library entry rather
 // than adding a new one.
 let editingFilamentId = null;
@@ -3109,25 +3027,21 @@ function openFilamentModal(filamentId)
     populateBrandSelect();
     populateMaterialSelect("");
     applyFilamentColor("FFFFFF");
-    setFilamentMode("manual");
 
     if (filamentColorPicker) filamentColorPicker.hidden = true;
     if (filamentBrandCustomWrap) filamentBrandCustomWrap.hidden = true;
     if (filamentMaterialCustomWrap) filamentMaterialCustomWrap.hidden = true;
 
-    // Spool weights are managed per-spool on the entry's own rows, so the
-    // weight/roll inputs only make sense when creating a brand new entry.
+    // Spool weights are managed per-spool on the entry's own rows (each
+    // spool has its own editable remaining/total there), so the weight
+    // inputs only make sense when creating a brand new entry - editing
+    // them here would silently do nothing.
     const weightBlock = byId("filamentWeightBlock");
-    const rollRow = byId("filamentRollRow");
 
     if (weightBlock) weightBlock.hidden = !!entry;
-    if (rollRow) rollRow.hidden = !!entry;
 
     setText("filamentModalTitle", entry ? "Edit Filament" : "+ Add Filament");
     setText("filamentNoteCount", "0/50");
-
-    const modeRow = byId("filamentModeManual")?.parentElement;
-    if (modeRow) modeRow.hidden = !!entry;
 
     const submitBtn = filamentAddForm.querySelector("button[type=submit]");
     if (submitBtn) submitBtn.textContent = entry ? "Save" : "Add";
@@ -3179,9 +3093,6 @@ if (filamentAddToggle && filamentModal)
         if (e.key === "Escape" && !filamentModal.hidden)
             closeFilamentModal();
     });
-
-    byId("filamentModeManual")?.addEventListener("click", () => setFilamentMode("manual"));
-    byId("filamentModeAms")?.addEventListener("click", () => setFilamentMode("ams"));
 
     filamentBrandSelect?.addEventListener("change", () =>
     {
@@ -3243,7 +3154,6 @@ if (filamentAddToggle && filamentModal)
 
         const totalWeight = Number(byId("filamentTotalWeight").value);
         const currentWeight = Number(byId("filamentCurrentWeight").value);
-        const rolls = Math.max(1, Math.min(20, Number(byId("filamentRolls").value) || 1));
 
         if (!brand)
         {
@@ -3349,15 +3259,6 @@ if (filamentAddToggle && filamentModal)
             return;
         }
 
-        const now = new Date().toISOString();
-
-        const spools = Array.from({ length: rolls }, () => ({
-            id: uid(),
-            total: totalWeight,
-            remaining: currentWeight,
-            createdAt: now,
-        }));
-
         withFreshLibrary(lib =>
         {
             lib.filaments.push({
@@ -3368,7 +3269,12 @@ if (filamentAddToggle && filamentModal)
                 colorHex,
                 brand,
                 note,
-                spools,
+                spools: [{
+                    id: uid(),
+                    total: totalWeight,
+                    remaining: currentWeight,
+                    createdAt: new Date().toISOString(),
+                }],
             });
         });
     });

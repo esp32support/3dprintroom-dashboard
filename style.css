@@ -1107,28 +1107,13 @@ dd{
     overflow-y:auto;
 }
 
-.modalModeRow{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:12px;
-    margin-bottom:18px;
-}
-
-.modalModeBtn{
-    padding:12px;
-    border-radius:8px;
-    border:1px solid var(--line);
-    background:#14181b;
-    color:var(--muted);
-    font-family:inherit;
-    font-size:14px;
-    font-weight:700;
-    cursor:pointer;
-}
-
-.modalModeBtn.active{
-    border-color:var(--green);
-    color:var(--green);
+/* The class rules below set display:flex/grid, which outranks the browser's
+   own [hidden]{display:none} - so toggling .hidden on e.g. the Weight block
+   left it visible anyway (confirmed live: Weight fields showed in Edit mode
+   despite being hidden in JS, where editing them silently did nothing).
+   Scoped to the modal rather than a global [hidden] override. */
+.modalCard [hidden]{
+    display:none !important;
 }
 
 .modalSectionTitle{
@@ -1288,20 +1273,10 @@ dd{
 .modalFooter{
     display:flex;
     align-items:center;
-    justify-content:space-between;
+    justify-content:flex-end;
     gap:12px;
     padding-top:14px;
     border-top:1px solid var(--line);
-}
-
-.modalRollRow{
-    display:flex;
-    align-items:center;
-    gap:8px;
-}
-
-.modalRollRow input{
-    width:90px;
 }
 
 .modalFooterBtns{
@@ -1324,52 +1299,6 @@ dd{
 .modalPrimaryBtn:hover{
     border-color:var(--green);
     filter:brightness(1.08);
-}
-
-.modalAmsPick{
-    margin-bottom:18px;
-}
-
-.modalAmsPick[hidden]{
-    display:none;
-}
-
-.modalAmsSlots{
-    display:grid;
-    grid-template-columns:repeat(4,minmax(0,1fr));
-    gap:10px;
-}
-
-.modalAmsSlot{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap:6px;
-    padding:10px 6px;
-    border-radius:8px;
-    background:#14181b;
-    border:1px solid #2f363d;
-    color:var(--text);
-    font-family:inherit;
-    font-size:12px;
-    font-weight:700;
-    cursor:pointer;
-}
-
-.modalAmsSlot:hover:not(:disabled){
-    border-color:var(--cyan);
-}
-
-.modalAmsSlot:disabled{
-    opacity:.45;
-    cursor:not-allowed;
-}
-
-.modalAmsSlotDot{
-    width:26px;
-    height:26px;
-    border-radius:50%;
-    border:2px solid #0c0f11;
 }
 
 /* ===== Power tab ===== */
@@ -1678,24 +1607,11 @@ dd{
         grid-template-columns:1fr;
     }
 
-    .modalAmsSlots{
-        grid-template-columns:repeat(2,minmax(0,1fr));
-    }
-
-    .modalFooter{
-        flex-direction:column;
-        align-items:stretch;
-    }
-
     .modalFooterBtns{
-        justify-content:stretch;
-    }
-
-    .modalFooterBtns .infoBtn{
         flex:1;
     }
 
-    .modalRollRow input{
+    .modalFooterBtns .infoBtn{
         flex:1;
     }
 }
