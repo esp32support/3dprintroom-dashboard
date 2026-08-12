@@ -2823,7 +2823,10 @@ loadFilamentLibrary().then(reconcileDeductionLog);
 // dropdowns, colour picker, current-vs-total weight, note, roll count) so
 // adding a spool here feels the same as adding it there.
 
-const FILAMENT_BRANDS = ["Bambu Lab", "Generic", "Overture", "Polymaker", "SUNLU", "eSUN"];
+// Alphabetical so a brand is easy to find as this list grows - these are
+// only a convenience shortcut, anything missing still goes in through the
+// "Other..." option with a free-text name.
+const FILAMENT_BRANDS = ["Azure Film", "Bambu Lab", "eSUN", "Generic", "Overture", "Polymaker", "SUNLU"];
 
 // Per-brand material lists, matching what Bambu Studio offers for each.
 const FILAMENT_MATERIALS = {
@@ -2834,7 +2837,7 @@ const FILAMENT_MATERIALS = {
         "PLA Lite", "PLA Marble", "PLA Matte", "PLA Metal", "PLA Pure", "PLA Silk",
         "PLA Silk+", "PLA Sparkle", "PLA Tough", "PLA Tough+", "PLA Translucent",
         "PLA Wood", "PLA-CF", "PPA-CF", "PPS-CF", "PVA", "Support For PA/PET",
-        "Support For PLA",
+        "Support For PLA", "TPU 95A HF", "TPU for AMS",
     ],
     "Generic": [
         "ABS", "ASA", "BVOH", "EVA", "HIPS", "PA", "PA-CF", "PC", "PCTG", "PE",
@@ -2847,10 +2850,16 @@ const FILAMENT_MATERIALS = {
     ],
     "Polymaker": [
         "ABS", "ASA", "PA12-CF", "PA6-CF", "PA6-GF", "PA612-CF", "PET-CF", "PETG",
-        "PETG-ESD", "PETG-rCF", "PLA",
+        "PETG-ESD", "PETG-rCF", "PLA", "PLA Matte", "Silk PLA", "TPU",
     ],
-    "SUNLU": ["PETG", "PLA Marble", "PLA Matte", "PLA+", "PLA+ 2.0", "Silk PLA+", "Wood PLA"],
-    "eSUN": ["PLA+"],
+    "SUNLU": [
+        "ABS", "PETG", "PLA", "PLA Marble", "PLA Matte", "PLA+", "PLA+ 2.0",
+        "Silk PLA+", "TPU", "Wood PLA",
+    ],
+    "eSUN": [
+        "ABS", "ASA", "PETG", "PLA", "PLA Matte", "PLA+", "Silk PLA", "TPU", "Wood PLA",
+    ],
+    "Azure Film": ["PETG", "PETG HS", "PLA"],
 };
 
 const OTHER_OPTION = "Other...";
@@ -2867,12 +2876,23 @@ const BASE_MATERIALS = [
     "HIPS", "PE-CF", "PE", "PHA", "PP", "SBS", "EVA", "BVOH", "PET",
 ].sort((a, b) => b.length - a.length);
 
+// Trade names that don't contain their own base type as a substring - the
+// printer reports nylon as "PA", so an entry stored as "NYLON" could never
+// match one and would silently never deduct.
+const MATERIAL_ALIASES = {
+    "NYLON": "PA",
+    "NYLON-CF": "PA-CF",
+};
+
 function baseMaterialOf(variant)
 {
     const v = String(variant || "").trim().toUpperCase();
 
     if (!v)
         return "";
+
+    if (MATERIAL_ALIASES[v])
+        return MATERIAL_ALIASES[v];
 
     for (const base of BASE_MATERIALS)
     {
