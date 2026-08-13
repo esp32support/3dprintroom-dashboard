@@ -1671,9 +1671,31 @@ dd{
     }
 
     .spoolRow{
-        grid-template-columns:1fr;
+        /* A single 1fr column with 3 grid children (input, "/ 1000g" label,
+           remove button) auto-flows each onto its OWN row - splitting the
+           weight input from its own unit label, e.g. "719" then "/ 1000g"
+           on the line below it. Pairing them on one row and only dropping
+           the remove button to its own row below reads correctly and still
+           fits a narrow screen. */
+        grid-template-columns:auto 1fr;
+        grid-template-areas:
+            "input label"
+            "btn btn";
         justify-items:stretch;
         text-align:left;
+    }
+
+    .spoolRow input[type="number"]{
+        grid-area:input;
+    }
+
+    .spoolRow span{
+        grid-area:label;
+        align-self:center;
+    }
+
+    .spoolRow button{
+        grid-area:btn;
     }
 
     .modalOverlay{
