@@ -311,6 +311,22 @@ h1{
     transition:width .35s ease,background-color .35s ease;
 }
 
+/* CYD disconnects its own MQTT link before downloading (this board can't
+   hold 3 concurrent TLS sessions - Bambu Cloud + HiveMQ + the GitHub
+   download all at once), so unlike master's OTA bar there's no live byte
+   count to report mid-transfer - a moving stripe is the honest way to show
+   "actively working" without a percentage that isn't there. */
+.bar.indeterminate span{
+    width:40%;
+    animation:otaIndeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes otaIndeterminate{
+    0%{margin-left:0%;}
+    50%{margin-left:60%;}
+    100%{margin-left:0%;}
+}
+
 .subgrid{
     display:grid;
     grid-template-columns:repeat(2,minmax(0,1fr));

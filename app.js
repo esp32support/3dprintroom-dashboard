@@ -1854,7 +1854,7 @@ function updatePrinter(data)
     if (data.displayVersion)
     {
         cydCurrentVersion = String(data.displayVersion);
-        updateCydUpdateCard();
+        updateCydUpdateCard(Boolean(data.displayOtaBusy));
     }
 
     // MQTT's tray_now is the printer's own live, direct report of which
@@ -3407,6 +3407,14 @@ let cydAnnouncedVersion = "";
 let cydCurrentVersion = "";
 const CYD_UPDATE_DISMISSED_KEY = "cydUpdateDismissedVersionV1";
 
+// Same collision master's own OTA card was confirmed to hit live: this extra
+// publish (cloud_publish.cpp, right before CYD disconnects its own MQTT link
+// to free a TLS slot for the download) can land in the same second as a
+// regular PRINTER_PUBLISH_INTERVAL tick, so data.now alone isn't a reliable
+// freshness signal for it. Tracking displayOtaBusy's own transitions
+// separately guarantees the start is never swallowed by that collision.
+let lastSeenDisplayOtaBusy = false;
+
 const client = mqtt.connect(`wss://${BROKER_CONFIG.host}:${BROKER_CONFIG.port}/mqtt`, {
     username: BROKER_CONFIG.username,
     password: BROKER_CONFIG.password,
@@ -3532,13 +3540,16 @@ client.on("message", (topic, payload) =>
         try
         {
             const data = JSON.parse(payload.toString());
-            const isFresh = data.now !== lastSeenPrinterNow;
+            const displayOtaBusyChanged = Boolean(data.displayOtaBusy) !== lastSeenDisplayOtaBusy;
+            const isFresh = data.now !== lastSeenPrinterNow || displayOtaBusyChanged;
 
             if (isFresh)
             {
                 lastSeenPrinterNow = data.now;
+                lastSeenDisplayOtaBusy = Boolean(data.displayOtaBusy);
                 lastPrinterMessageAt = Date.now();
                 updatePrinter(data);
+                updateCydOtaProgressCard(data);
             }
 
             // A stale redelivery has nothing new to show - previously this
@@ -3773,12 +3784,30 @@ if (bootInfoToggle && bootInfoPanel)
 // display is actually running, dismissible per-version via "Later" so it
 // doesn't re-nag every reload for the same already-seen announcement, but
 // comes back the moment a NEWER version is announced.
-function updateCydUpdateCard()
+// busyOverride lets updatePrinter(data) pass the live displayOtaBusy flag
+// straight through without a second lookup; callers with no fresher value
+// on hand (e.g. the CYD_OTA_VERSION_TOPIC handler, which only carries a
+// version string) can omit it and fall back to the last value seen via
+// updateCydOtaProgressCard().
+let cydOtaBusyKnown = false;
+
+function updateCydUpdateCard(busyOverride)
 {
     const card = byId("cydUpdateCard");
 
     if (!card || !cydAnnouncedVersion || !cydCurrentVersion)
         return;
+
+    const busy = busyOverride !== undefined ? busyOverride : cydOtaBusyKnown;
+
+    // Update Now/Later would be misleading (or actively confusing) to show
+    // while an update this card itself kicked off is already running -
+    // the progress card below is the one telling the truth at that point.
+    if (busy)
+    {
+        card.hidden = true;
+        return;
+    }
 
     const upToDate = cydAnnouncedVersion === cydCurrentVersion;
 
@@ -3793,6 +3822,33 @@ function updateCydUpdateCard()
 
     card.hidden = false;
     setText("cydUpdateVersion", cydAnnouncedVersion);
+}
+
+// Unlike master's own OTA card, there's no live percentage to show here:
+// otaDownloadAndFlash() (network/ota_downloader.cpp) disconnects THIS
+// board's MQTT link before it starts downloading, to free a TLS slot -
+// this board can't hold Bambu Cloud + HiveMQ + the GitHub download open
+// simultaneously (mbedTLS out-of-memory, see config.h). displayOtaBusy is
+// a single before/after signal, not a progress stream, so the bar is
+// deliberately indeterminate (see the .bar.indeterminate CSS) rather than
+// pretending to track real bytes transferred.
+function updateCydOtaProgressCard(data)
+{
+    const card = byId("cydOtaProgressCard");
+
+    if (!card)
+        return;
+
+    cydOtaBusyKnown = Boolean(data.displayOtaBusy);
+
+    if (!cydOtaBusyKnown)
+    {
+        card.hidden = true;
+        return;
+    }
+
+    card.hidden = false;
+    setText("cydOtaProgressStatus", data.displayOtaStatus || "Downloading and flashing…");
 }
 
 const cydUpdateNowBtn = byId("cydUpdateNowBtn");

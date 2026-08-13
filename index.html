@@ -401,6 +401,27 @@
 
         <div class="tabPanel" id="tab-printer" role="tabpanel" aria-labelledby="tabBtn-printer" hidden>
 
+            <section class="panel updateAvailableCard" id="cydUpdateCard" hidden>
+                <div class="updateAvailableRow">
+                    <p>Display firmware update available: <strong id="cydUpdateVersion">--</strong></p>
+                    <div class="updateAvailableBtns">
+                        <button type="button" class="infoBtn" id="cydUpdateNowBtn">Update now</button>
+                        <button type="button" class="infoBtn" id="cydUpdateLaterBtn">Later</button>
+                    </div>
+                </div>
+                <p class="watchdogReason" id="cydUpdateResult"></p>
+            </section>
+
+            <section class="panel otaBanner" id="cydOtaProgressCard" hidden>
+                <div class="otaBannerHead">
+                    <strong>Updating display firmware&hellip;</strong>
+                </div>
+                <p id="cydOtaProgressStatus">Starting</p>
+                <div class="bar indeterminate">
+                    <span></span>
+                </div>
+            </section>
+
             <section class="printerHero panel" id="printerHero">
                 <div class="printerHeroMain">
                     <span class="label" id="printerNameLabel">Printer</span>
@@ -424,17 +445,6 @@
                         </div>
                     </dl>
                 </div>
-            </section>
-
-            <section class="panel updateAvailableCard" id="cydUpdateCard" hidden>
-                <div class="updateAvailableRow">
-                    <p>Display firmware update available: <strong id="cydUpdateVersion">--</strong></p>
-                    <div class="updateAvailableBtns">
-                        <button type="button" class="infoBtn" id="cydUpdateNowBtn">Update now</button>
-                        <button type="button" class="infoBtn" id="cydUpdateLaterBtn">Later</button>
-                    </div>
-                </div>
-                <p class="watchdogReason" id="cydUpdateResult"></p>
             </section>
 
             <section class="primaryGrid">
