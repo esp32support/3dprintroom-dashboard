@@ -3485,6 +3485,16 @@ client.on("error", (err) =>
 let lastSeenUptime = null;
 let lastSeenPrinterNow = null;
 
+// The OTA-start publish (ota_manager.cpp's otaLoop()) fires within the same
+// loop() iteration as a regular SEND_INTERVAL tick can land in - both then
+// carry the same integer-second uptime (millis()/1000 granularity), so the
+// uptime-only freshness check above silently drops the one message that
+// matters most: confirmed live, the busy=true/"Starting" publish arrived
+// with an identical uptime to the periodic publish just before it and was
+// discarded, never opening the card. Tracking otaBusy's own transitions
+// separately guarantees a start/stop is never swallowed by that collision.
+let lastSeenOtaBusy = false;
+
 client.on("message", (topic, payload) =>
 {
     if (topic === CYD_OTA_VERSION_TOPIC)
@@ -3550,11 +3560,13 @@ client.on("message", (topic, payload) =>
     try
     {
         const data = JSON.parse(payload.toString());
-        const isFresh = data.uptime !== lastSeenUptime;
+        const otaBusyChanged = Boolean(data.otaBusy) !== lastSeenOtaBusy;
+        const isFresh = data.uptime !== lastSeenUptime || otaBusyChanged;
 
         if (isFresh)
         {
             lastSeenUptime = data.uptime;
+            lastSeenOtaBusy = Boolean(data.otaBusy);
             lastMessageAt = Date.now();
             updateStatus(data);
         }
