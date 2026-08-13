@@ -692,6 +692,71 @@ dd{
     border-color:var(--red);
 }
 
+.otaBanner{
+    margin-bottom:18px;
+    border-color:var(--cyan);
+}
+
+.otaBanner[hidden]{
+    display:none;
+}
+
+.otaBannerHead{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:8px;
+    color:var(--cyan);
+}
+
+.otaBannerHead strong{
+    font-size:15px;
+}
+
+.otaBanner p{
+    margin:0 0 10px;
+    color:var(--muted);
+    font-size:13px;
+}
+
+.otaBanner .bar span{
+    background:var(--cyan);
+}
+
+.updateAvailableCard{
+    margin-bottom:18px;
+    border-color:var(--cyan);
+}
+
+.updateAvailableCard[hidden]{
+    display:none;
+}
+
+.updateAvailableRow{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+}
+
+.updateAvailableRow p{
+    margin:0;
+    color:var(--muted);
+    font-size:13px;
+}
+
+.updateAvailableRow strong{
+    color:var(--cyan);
+}
+
+.updateAvailableBtns{
+    display:flex;
+    gap:8px;
+    flex:none;
+}
+
 .dangerZone{
     display:flex;
     flex-wrap:wrap;

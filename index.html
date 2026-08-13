@@ -64,6 +64,17 @@
 
         <div class="tabPanel" id="tab-room" role="tabpanel" aria-labelledby="tabBtn-room">
 
+        <section class="panel otaBanner" id="masterOtaCard" hidden>
+            <div class="otaBannerHead">
+                <strong>Updating master firmware&hellip;</strong>
+                <span id="masterOtaPercent">0%</span>
+            </div>
+            <p id="masterOtaStatus">Starting...</p>
+            <div class="bar">
+                <span id="masterOtaBar"></span>
+            </div>
+        </section>
+
         <section class="primaryGrid">
 
             <article class="panel primaryMetric">
@@ -413,6 +424,17 @@
                         </div>
                     </dl>
                 </div>
+            </section>
+
+            <section class="panel updateAvailableCard" id="cydUpdateCard" hidden>
+                <div class="updateAvailableRow">
+                    <p>Display firmware update available: <strong id="cydUpdateVersion">--</strong></p>
+                    <div class="updateAvailableBtns">
+                        <button type="button" class="infoBtn" id="cydUpdateNowBtn">Update now</button>
+                        <button type="button" class="infoBtn" id="cydUpdateLaterBtn">Later</button>
+                    </div>
+                </div>
+                <p class="watchdogReason" id="cydUpdateResult"></p>
             </section>
 
             <section class="primaryGrid">

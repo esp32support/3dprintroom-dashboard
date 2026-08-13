@@ -252,6 +252,31 @@ function updateStatus(data)
 
     renderHistory(data.history);
     renderSystemEvents(data.systemEvents);
+
+    updateMasterOtaCard(data);
+}
+
+// Master already publishes otaBusy/otaProgress/otaStatus in its regular
+// status payload (see mqtt_manager.cpp - print_watch's own ota_trigger.py
+// already reads these same fields to watch progress) - purely a display
+// addition here, no firmware change needed for this card.
+function updateMasterOtaCard(data)
+{
+    const card = byId("masterOtaCard");
+
+    if (!card)
+        return;
+
+    if (!data.otaBusy)
+    {
+        card.hidden = true;
+        return;
+    }
+
+    card.hidden = false;
+    setText("masterOtaStatus", data.otaStatus || "Updating...");
+    setBar("masterOtaBar", Number(data.otaProgress) || 0, 100, "var(--cyan)");
+    setText("masterOtaPercent", `${Number(data.otaProgress) || 0}%`);
 }
 
 function renderHistory(items)
@@ -1826,6 +1851,12 @@ function updatePrinter(data)
     setText("printerBootCountTotal", data.bootCountTotal ?? "--");
     renderBootHistory(data.bootHistory, "printerBootHistoryList");
 
+    if (data.displayVersion)
+    {
+        cydCurrentVersion = String(data.displayVersion);
+        updateCydUpdateCard();
+    }
+
     // MQTT's tray_now is the printer's own live, direct report of which
     // slot is physically engaged right now - that's the only thing that
     // should ever decide "which slot is active." Previously this was
@@ -3365,6 +3396,17 @@ const PRINTER_TOPIC = `${BROKER_CONFIG.topic}/printer`;
 // config.h for why the plug can't publish here directly itself).
 const POWER_TOPIC = `${BROKER_CONFIG.topic}/power`;
 
+// Retained announcement of the latest available CYD display firmware -
+// same topic the display's own on-device update popup already watches
+// (Config::MQTT_OTA_VERSION_TOPIC). Subscribing to it here too lets the
+// dashboard show its own "Update available" card without needing the
+// display to relay anything extra.
+const CYD_OTA_VERSION_TOPIC = "ifix/printerroom/jole2026/display_ota_version";
+
+let cydAnnouncedVersion = "";
+let cydCurrentVersion = "";
+const CYD_UPDATE_DISMISSED_KEY = "cydUpdateDismissedVersionV1";
+
 const client = mqtt.connect(`wss://${BROKER_CONFIG.host}:${BROKER_CONFIG.port}/mqtt`, {
     username: BROKER_CONFIG.username,
     password: BROKER_CONFIG.password,
@@ -3400,6 +3442,12 @@ client.on("connect", () =>
     {
         if (err)
             connectionLog(`Power topic subscribe failed: ${err.message}`);
+    });
+
+    client.subscribe(CYD_OTA_VERSION_TOPIC, (err) =>
+    {
+        if (err)
+            connectionLog(`CYD OTA version topic subscribe failed: ${err.message}`);
     });
 });
 
@@ -3439,6 +3487,22 @@ let lastSeenPrinterNow = null;
 
 client.on("message", (topic, payload) =>
 {
+    if (topic === CYD_OTA_VERSION_TOPIC)
+    {
+        try
+        {
+            const data = JSON.parse(payload.toString());
+            cydAnnouncedVersion = String(data.version || "");
+            updateCydUpdateCard();
+        }
+        catch (err)
+        {
+            connectionLog(`Bad payload on CYD OTA version topic: ${err.message}`);
+        }
+
+        return;
+    }
+
     if (topic === POWER_TOPIC)
     {
         try
@@ -3689,6 +3753,77 @@ if (bootInfoToggle && bootInfoPanel)
             bootInfoPanel.setAttribute("hidden", "");
 
         bootInfoToggle.textContent = hidden ? "Hide" : "History";
+    });
+}
+
+// Mirrors CYD's own on-device popup logic (ui.cpp's _lastCheckedVersion
+// comparison): shows whenever the announced version differs from what the
+// display is actually running, dismissible per-version via "Later" so it
+// doesn't re-nag every reload for the same already-seen announcement, but
+// comes back the moment a NEWER version is announced.
+function updateCydUpdateCard()
+{
+    const card = byId("cydUpdateCard");
+
+    if (!card || !cydAnnouncedVersion || !cydCurrentVersion)
+        return;
+
+    const upToDate = cydAnnouncedVersion === cydCurrentVersion;
+
+    let dismissedVersion = null;
+    try { dismissedVersion = localStorage.getItem(CYD_UPDATE_DISMISSED_KEY); } catch (err) { /* private browsing */ }
+
+    if (upToDate || dismissedVersion === cydAnnouncedVersion)
+    {
+        card.hidden = true;
+        return;
+    }
+
+    card.hidden = false;
+    setText("cydUpdateVersion", cydAnnouncedVersion);
+}
+
+const cydUpdateNowBtn = byId("cydUpdateNowBtn");
+const cydUpdateLaterBtn = byId("cydUpdateLaterBtn");
+
+if (cydUpdateNowBtn)
+{
+    cydUpdateNowBtn.addEventListener("click", async () =>
+    {
+        if (!window.confirm(`Update the display to version ${cydAnnouncedVersion}? It will briefly go dark while it flashes and restarts.`))
+            return;
+
+        const resultEl = byId("cydUpdateResult");
+
+        cydUpdateNowBtn.disabled = true;
+        resultEl.textContent = "Publishing command...";
+
+        try
+        {
+            const res = await fetch("/api/trigger-cyd-ota", { method: "POST" });
+            const data = await res.json();
+
+            resultEl.textContent = res.ok
+                ? data.message
+                : `Error: ${data.error || res.statusText}`;
+        }
+        catch (err)
+        {
+            resultEl.textContent = `Request failed: ${err.message}`;
+        }
+        finally
+        {
+            cydUpdateNowBtn.disabled = false;
+        }
+    });
+}
+
+if (cydUpdateLaterBtn)
+{
+    cydUpdateLaterBtn.addEventListener("click", () =>
+    {
+        try { localStorage.setItem(CYD_UPDATE_DISMISSED_KEY, cydAnnouncedVersion); } catch (err) { /* private browsing */ }
+        updateCydUpdateCard();
     });
 }
 

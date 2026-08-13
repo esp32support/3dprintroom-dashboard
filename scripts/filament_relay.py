@@ -44,6 +44,7 @@ def trim_library(lib):
             {
                 "material": f.get("material", ""),
                 "colorHex": f.get("colorHex", ""),
+                "color": f.get("color", ""),
                 "spools": [
                     {"total": s.get("total", 0), "remaining": s.get("remaining", 0)}
                     for s in f.get("spools", [])
