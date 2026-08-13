@@ -1295,8 +1295,51 @@ if (spendMonthSelect)
     });
 }
 
+// Blanks every live reading rather than leaving the last known numbers on
+// screen - with the plug unreachable there is nothing being measured, and
+// stale wattage sitting there reads as if it were current.
+function setPowerOffline(reason)
+{
+    setText("powerState", "OFFLINE");
+
+    setText("powerWatts", "--");
+    setText("powerVolts", "--");
+    setText("powerAmps", "--");
+
+    setText("powerToday", "-- kWh");
+    setText("powerYesterday", "-- kWh");
+    setText("powerTotal", "-- kWh");
+
+    setText("powerRelayState", "--");
+
+    const toggleBtn = byId("powerToggleBtn");
+
+    if (toggleBtn)
+    {
+        toggleBtn.disabled = true;
+        toggleBtn.textContent = "Turn OFF";
+    }
+
+    lastRelayState = null;
+
+    const resultEl = byId("powerToggleResult");
+
+    if (resultEl && reason)
+        resultEl.textContent = reason;
+}
+
 function updatePower(data)
 {
+    // master publishes an explicit {"online":false} marker over the
+    // retained reading when it can't reach the plug (see power_client.cpp).
+    if (data && data.online === false)
+    {
+        setPowerOffline(data.error ? `Plug unreachable: ${data.error}` : "Plug unreachable.");
+        return;
+    }
+
+    lastPowerMessageAt = Date.now();
+
     setText("powerState", "ONLINE");
 
     const w = Number(data.powerW) || 0;
@@ -3304,8 +3347,13 @@ if (filamentAddToggle && filamentModal)
 
 let lastMessageAt = 0;
 let lastPrinterMessageAt = 0;
+let lastPowerMessageAt = 0;
 let lastStaleReconnectAt = 0;
 const STALE_AFTER_MS = 30000; // SEND_INTERVAL is 5s; 30s silence => treat as offline
+
+// The plug is polled every 10s (POWER_POLL_INTERVAL_MS), so allow a few
+// missed rounds before calling it offline.
+const POWER_STALE_AFTER_MS = 60000;
 const STALE_RECONNECT_COOLDOWN_MS = 20000;
 
 // The printer monitor (3dprinterinfo, separate device) publishes to a
@@ -3486,14 +3534,32 @@ setInterval(() =>
 
     if (lastPrinterMessageAt && Date.now() - lastPrinterMessageAt > STALE_AFTER_MS)
         setPrinterOffline("Printer monitor has not published in over 30s");
+
+    // Backstop for the case master's own offline marker can't reach us -
+    // if master itself is down, nobody is left to publish anything, so the
+    // last good reading would otherwise sit there looking live.
+    if (lastPowerMessageAt && Date.now() - lastPowerMessageAt > POWER_STALE_AFTER_MS)
+        setPowerOffline("No power reading in over a minute.");
 }, 5000);
 
 // ===== Tabs =====
 
 const TABS = ["room", "printer", "power"];
+const ACTIVE_TAB_STORAGE_KEY = "activeTabV1";
 
 function selectTab(name)
 {
+    // Remembered so a refresh (or the browser restoring the page) comes
+    // back to the tab that was open instead of always snapping to Room.
+    try
+    {
+        localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, name);
+    }
+    catch (err)
+    {
+        // Storage disabled (private browsing) - tab just won't persist.
+    }
+
     TABS.forEach(t =>
     {
         const btn = byId(`tabBtn-${t}`);
@@ -3535,6 +3601,21 @@ TABS.forEach(t =>
     if (btn)
         btn.addEventListener("click", () => selectTab(t));
 });
+
+// Restore the last-open tab. Validated against TABS rather than trusted
+// outright, so a stale value from an older build (or a hand-edited one)
+// can't leave every panel hidden.
+try
+{
+    const savedTab = localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+
+    if (savedTab && TABS.includes(savedTab) && savedTab !== "room")
+        selectTab(savedTab);
+}
+catch (err)
+{
+    // Storage unavailable - stay on the default tab.
+}
 
 const logoutBtn = byId("logoutBtn");
 
