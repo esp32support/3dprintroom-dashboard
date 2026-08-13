@@ -1,0 +1,15 @@
+# build.sh stamps a per-commit ?v= onto index.html's style.css/app.js
+# references, which only helps if index.html itself is never served from a
+# stale cache - otherwise the browser keeps an old copy still pointing at the
+# previous build's asset URLs and the whole scheme silently does nothing.
+# no-cache does NOT mean "don't store", it means "revalidate before reuse":
+# the browser still caches, it just checks with the server first and gets a
+# cheap 304 when nothing changed.
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/login.html
+  Cache-Control: no-cache
