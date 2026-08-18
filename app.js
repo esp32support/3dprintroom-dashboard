@@ -1827,10 +1827,18 @@ function updatePrinter(data)
     // actually active.
     const layer = Number(data.layerNum) || 0;
     const total = Number(data.totalLayerNum) || 0;
-    const showProgress = preparing && total > 0;
 
-    setText("printerLayer", showProgress ? String(layer) : "--");
-    setText("printerLayerTotal", showProgress ? ` / ${total}` : " / --");
+    // Independent flags, not one shared gate - layerNum and totalLayerNum
+    // arrive as separate fields and don't always show up together. Bambu
+    // Cloud can report a real current layer well before it reports the
+    // slicer's total (confirmed live: layerNum=1 with totalLayerNum still
+    // 0, eleven minutes into a print) - blanking the layer number too just
+    // because the total hadn't arrived yet threw away real, valid data.
+    const showLayer = preparing && layer > 0;
+    const showTotal = preparing && total > 0;
+
+    setText("printerLayer", showLayer ? String(layer) : "--");
+    setText("printerLayerTotal", showTotal ? ` / ${total}` : " / --");
 
     // mc_percent is Bambu's own progress % (what the printer's LCD shows),
     // not a layer-ratio we derive ourselves - the printer counts prep/
@@ -1838,8 +1846,17 @@ function updatePrinter(data)
     // ratio that only starts once real printing begins reads noticeably
     // lower than Bambu's own screen for the same moment (confirmed live:
     // 37% shown here vs 72% on the printer's LCD with 1h13m left).
-    const pct = showProgress ? Math.round(Number(data.mcPercent) || 0) : 0;
-    setText("printerProgressPct", showProgress ? `${pct}%` : "--%");
+    //
+    // Gating this on total > 0 too (like the layer text above, which
+    // genuinely needs it) was wrong - mc_percent doesn't depend on
+    // totalLayerNum at all, but Bambu Cloud doesn't always report the
+    // slicer's total layer count in the first several minutes of a print.
+    // Confirmed live: a print 11 minutes in, layer 1, mcPercent=8 - a real,
+    // valid percentage - showed "--%" purely because totalLayerNum hadn't
+    // arrived yet. Percent only needs an active print, not a known total.
+    const showPercent = preparing;
+    const pct = showPercent ? Math.round(Number(data.mcPercent) || 0) : 0;
+    setText("printerProgressPct", showPercent ? `${pct}%` : "--%");
     setBar("printerProgressBar", pct, 100, "var(--cyan)");
 
     setText("printerNozzle", `${Number(data.nozzleTemp || 0).toFixed(1)} °C`);
