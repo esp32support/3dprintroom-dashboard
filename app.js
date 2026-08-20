@@ -1862,8 +1862,18 @@ function updatePrinter(data)
     // changing which filament a slot points to mid-print would misattribute
     // deduction for whatever's printing right now (processFilamentDeductions
     // reads slotAssignments as of whenever it happens to run, not as of
-    // when the print started).
-    printCurrentlyRunning = running;
+    // when the print started). Setting the variable alone doesn't move
+    // pixels - confirmed live: the buttons stayed clickable through an
+    // entire print because nothing re-rendered the Filament Library
+    // section on this tick, only on the next unrelated edit. Re-render
+    // ONLY on the actual idle<->running transition, not every 5s tick
+    // regardless (would work, just needlessly rebuild the whole list
+    // constantly while nothing about it actually changed).
+    if (running !== printCurrentlyRunning)
+    {
+        printCurrentlyRunning = running;
+        renderFilamentLibrary();
+    }
     const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
 
     // The device doesn't reset layerNum/totalLayerNum on its own once a
