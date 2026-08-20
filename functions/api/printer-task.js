@@ -95,8 +95,21 @@ export async function onRequestGet(context) {
         startTime: task.startTime || "",
         endTime: task.endTime || "",
         amsDetail: (task.amsDetailMapping || []).map((d) => ({
-            amsId: d.amsId,
-            slotId: d.slotId,
+            // Bambu's own amsId/slotId pair on this endpoint is unreliable -
+            // confirmed live it comes back 0/0 on EVERY entry regardless of
+            // which slot actually printed (a live "Basic Beige" job in slot
+            // A3 reported amsId:0, slotId:0 same as everything else), which
+            // is exactly the "slotId was wrong" behavior app.js's own
+            // multi-tray matching already had to work around with a color-
+            // distance fallback below - this is that bug's actual root
+            // cause, not just a rare edge case. `ams` (separate field, flat
+            // 0-3) is the one that's actually correct - matches the same
+            // slot-index convention as MQTT's tray_now and every tray.id
+            // elsewhere in this codebase. Splitting it as amsId=0/slotId=ams
+            // keeps every existing (amsId*4)+slotId computation downstream
+            // working unchanged.
+            amsId: 0,
+            slotId: d.ams,
             // targetColor is what the AMS mapping screen actually assigned
             // before printing - sourceColor is just the original 3MF/slicer
             // selection, which stays populated even after a user reassigns
