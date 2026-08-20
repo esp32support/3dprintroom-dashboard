@@ -2004,10 +2004,22 @@ function updatePrinter(data)
 
     if (preparing && matchingDetail && mqttActiveTray)
     {
-        if (filamentUsedSwatch)
-            filamentUsedSwatch.style.background = trayColorCss(mqttActiveTray.color);
+        // Same reasoning as renderAmsGrid()'s identical check - Bambu
+        // Studio's own AMS color picker only offers generic swatches, so
+        // guessColorName() below can land on a wildly wrong name for a
+        // custom color (confirmed live: a Beige spool, #F5F5DC, set in both
+        // Bambu Studio and this library, showed here as "Yellow" because
+        // guessColorName() was matching against whatever generic-ish hex
+        // Studio actually reported for the slot, not the real spool color).
+        // An explicit slot assignment is the trustworthy source when one
+        // exists; the guess is only a fallback for unassigned slots.
+        const assignedId = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[trayNow];
+        const assigned = assignedId ? filamentLibrary.filaments.find(f => f.id === assignedId) : null;
 
-        const colorName = guessColorName((mqttActiveTray.color || "").slice(0, 6));
+        if (filamentUsedSwatch)
+            filamentUsedSwatch.style.background = assigned ? trayColorCss(assigned.colorHex || "") : trayColorCss(mqttActiveTray.color);
+
+        const colorName = assigned ? assigned.color : guessColorName((mqttActiveTray.color || "").slice(0, 6));
         setText("printerFilamentUsed", `${matchingDetail.weight.toFixed(2)} g (${colorName} ${matchingDetail.type || "?"})`);
     }
     else
@@ -2430,13 +2442,26 @@ function renderFilamentLibrary()
         {
             const isAssigned = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slot] === f.id;
 
+            // Only locks REASSIGNING or unassigning a slot that already has
+            // SOME assignment - a pending (still-running, not yet deducted)
+            // print's eventual deduction could be relying on that existing
+            // mapping. Setting a currently-EMPTY slot for the first time is
+            // always safe to allow mid-print, even encouraged - it can only
+            // ever help a pending deduction resolve correctly instead of
+            // falling back to a guessed color match. Confirmed live: this
+            // was blocking exactly that useful case, right when it mattered
+            // (a print already running against a slot nobody had assigned
+            // yet).
+            const slotHasAnyAssignment = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slot] !== undefined;
+            const locked = printCurrentlyRunning && slotHasAnyAssignment;
+
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "slotAssignBtn" + (isAssigned ? " active" : "");
             btn.textContent = `A${slot + 1}`;
-            btn.disabled = printCurrentlyRunning;
-            btn.title = printCurrentlyRunning
-                ? "Locked while a print is running - changing this now could misattribute this job's deduction"
+            btn.disabled = locked;
+            btn.title = locked
+                ? "Locked while a print is running - changing this now could misattribute a pending deduction"
                 : isAssigned
                     ? `Loaded in A${slot + 1} - click to unassign`
                     : `Mark this as what's physically loaded in A${slot + 1}`;
@@ -2549,10 +2574,12 @@ async function withFreshLibrary(mutatorFn)
 // the button already showing "active" for this exact filament unassigns it.
 function onToggleSlotAssignment(filamentId, slot)
 {
-    // The button is already disabled while a print runs (see
-    // printCurrentlyRunning) - this is defense in depth, not the primary
-    // guard, in case this ever gets called some other way.
-    if (printCurrentlyRunning)
+    // The button is already disabled for this exact case (see the matching
+    // check in renderFilamentLibrary()) - this is defense in depth, not the
+    // primary guard, in case this ever gets called some other way. Only
+    // blocks changing/unassigning a slot that already has SOME assignment -
+    // setting a currently-empty slot is always safe, even mid-print.
+    if (printCurrentlyRunning && filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slot] !== undefined)
         return;
 
     withFreshLibrary(lib =>
