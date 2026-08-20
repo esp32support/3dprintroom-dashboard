@@ -1104,6 +1104,25 @@ dd{
     color:#08181c;
 }
 
+/* Locked while a print is running (see printCurrentlyRunning) - dimmed
+   rather than hidden, so it's clear these still reflect real assignments,
+   just not editable right now. active+disabled keeps the cyan fill but
+   fades it, so "what's loaded" stays legible while it's locked. */
+.slotAssignBtn:disabled{
+    cursor:not-allowed;
+    opacity:.45;
+}
+
+.slotAssignBtn:disabled:hover{
+    border-color:#2f363d;
+    color:var(--muted);
+}
+
+.slotAssignBtn.active:disabled:hover{
+    border-color:var(--cyan);
+    color:#08181c;
+}
+
 .filamentEntryActions .infoBtn{
     font-size:11px;
     padding:4px 8px;

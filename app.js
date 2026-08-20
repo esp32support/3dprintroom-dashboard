@@ -1857,6 +1857,13 @@ function updatePrinter(data)
 
     const trays = data.trays || [];
     const running = bambuOk && state === "RUNNING";
+
+    // Read by renderFilamentLibrary() to lock the slot-assign buttons -
+    // changing which filament a slot points to mid-print would misattribute
+    // deduction for whatever's printing right now (processFilamentDeductions
+    // reads slotAssignments as of whenever it happens to run, not as of
+    // when the print started).
+    printCurrentlyRunning = running;
     const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
 
     // The device doesn't reset layerNum/totalLayerNum on its own once a
@@ -2199,6 +2206,10 @@ setInterval(updatePrinterTask, 60000);
 // when a slot has no assignment) and by renderAmsGrid() to show the real
 // color name instead of just Bambu's raw swatch.
 let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {}, slotAssignments: {} };
+
+// Set by updatePrinter() on every printer MQTT tick - see its own comment
+// for why slot assignments lock while this is true.
+let printCurrentlyRunning = false;
 let filamentLibraryLoaded = false;
 
 function uid()
@@ -2413,9 +2424,12 @@ function renderFilamentLibrary()
             btn.type = "button";
             btn.className = "slotAssignBtn" + (isAssigned ? " active" : "");
             btn.textContent = `A${slot + 1}`;
-            btn.title = isAssigned
-                ? `Loaded in A${slot + 1} - click to unassign`
-                : `Mark this as what's physically loaded in A${slot + 1}`;
+            btn.disabled = printCurrentlyRunning;
+            btn.title = printCurrentlyRunning
+                ? "Locked while a print is running - changing this now could misattribute this job's deduction"
+                : isAssigned
+                    ? `Loaded in A${slot + 1} - click to unassign`
+                    : `Mark this as what's physically loaded in A${slot + 1}`;
             btn.addEventListener("click", () => onToggleSlotAssignment(f.id, slot));
             slotRow.appendChild(btn);
         }
@@ -2525,6 +2539,12 @@ async function withFreshLibrary(mutatorFn)
 // the button already showing "active" for this exact filament unassigns it.
 function onToggleSlotAssignment(filamentId, slot)
 {
+    // The button is already disabled while a print runs (see
+    // printCurrentlyRunning) - this is defense in depth, not the primary
+    // guard, in case this ever gets called some other way.
+    if (printCurrentlyRunning)
+        return;
+
     withFreshLibrary(lib =>
     {
         if (!lib.slotAssignments)
