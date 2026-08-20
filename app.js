@@ -789,8 +789,17 @@ function usageChip(entry)
 // Mirrors Bambu Studio's own AMS panel look (A1-A4 spool graphics). The
 // separate curated Filament card below is a manually-managed inventory,
 // not a live view of these slots - see the filament library section.
+// Cached so onToggleSlotAssignment() can force an immediate re-render
+// (showing the new assignment's color name right away) without waiting for
+// the next printer MQTT tick.
+let lastAmsTrays = null;
+let lastAmsTrayNow = null;
+
 function renderAmsGrid(trays, trayNow)
 {
+    lastAmsTrays = trays;
+    lastAmsTrayNow = trayNow;
+
     const grid = byId("amsGrid");
 
     if (!grid)
@@ -821,13 +830,22 @@ function renderAmsGrid(trays, trayNow)
     {
         const isActive = tray.id === trayNow;
 
+        // Bambu Studio's own AMS filament picker only offers generic
+        // colors/materials, so tray.type/tray.color from the printer are
+        // often just a generic default rather than this exact spool's real
+        // identity - the library's own explicit slot assignment (set on
+        // the Filament Library card below) is the more trustworthy source
+        // when one exists for this slot.
+        const assignedId = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[tray.id];
+        const assigned = assignedId ? filamentLibrary.filaments.find(f => f.id === assignedId) : null;
+
         const slot = document.createElement("div");
         slot.className = "amsSlot" + (isActive ? " active" : "");
 
         // Border matches the actual filament color instead of a generic
         // highlight color, so it reads as "this exact spool" at a glance.
-        if (isActive && tray.type)
-            slot.style.borderColor = trayColorCss(tray.color);
+        if (isActive && (assigned || tray.type))
+            slot.style.borderColor = assigned ? trayColorCss(assigned.colorHex || "") : trayColorCss(tray.color);
 
         const label = document.createElement("span");
         label.className = "amsSlotLabel";
@@ -835,15 +853,15 @@ function renderAmsGrid(trays, trayNow)
 
         const spool = document.createElement("span");
         spool.className = "amsSpool";
-        spool.style.background = tray.type ? trayColorCss(tray.color) : "#2a3136";
+        spool.style.background = assigned ? trayColorCss(assigned.colorHex || "") : (tray.type ? trayColorCss(tray.color) : "#2a3136");
 
         const hole = document.createElement("span");
         hole.className = "amsSpoolHole";
         spool.appendChild(hole);
 
         const material = document.createElement("span");
-        material.className = "amsSlotMaterial" + (tray.type ? "" : " empty");
-        material.textContent = tray.type || "Empty";
+        material.className = "amsSlotMaterial" + (assigned || tray.type ? "" : " empty");
+        material.textContent = assigned ? `${assigned.material} ${assigned.color}` : (tray.type || "Empty");
 
         slot.appendChild(label);
         slot.appendChild(spool);
@@ -2169,7 +2187,18 @@ setInterval(updatePrinterTask, 60000);
 // instead of the full amount again. Confirmed live without it: Holder
 // (21.07) deducted 6.37g twice - once from the Task API match, then
 // again in full when the gcode override landed.
-let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {} };
+// slotAssignments: which library filament (by id) is physically loaded in
+// each AMS slot right now - "0"/"1"/"2"/"3" keys, same slot-index
+// convention as tray.id/trayNow elsewhere (single AMS unit, 4 slots).
+// Explicit and user-set, not inferred - Bambu Studio's own AMS filament
+// picker only offers generic colors/materials, so the printer's own
+// reported color for a slot is often just a generic default rather than
+// this exact spool's real color. Set here once when you physically load a
+// spool, used by processFilamentDeductions() as the FIRST choice for which
+// spool to deduct from (falling back to today's color-distance match only
+// when a slot has no assignment) and by renderAmsGrid() to show the real
+// color name instead of just Bambu's raw swatch.
+let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {}, slotAssignments: {} };
 let filamentLibraryLoaded = false;
 
 function uid()
@@ -2191,6 +2220,7 @@ async function loadFilamentLibrary()
                 processedPrints: data.processedPrints || [],
                 historyOverrides: data.historyOverrides || {},
                 deductionLog: data.deductionLog || {},
+                slotAssignments: data.slotAssignments || {},
             };
         }
     }
@@ -2367,6 +2397,31 @@ function renderFilamentLibrary()
         head.appendChild(meta);
         entry.appendChild(head);
 
+        // Marks which AMS slot (if any) physically has this filament
+        // loaded right now - see slotAssignments' own declaration comment.
+        // Exclusive per slot by construction (a slot is a single object
+        // key), so clicking a slot here bumps out whatever filament
+        // previously claimed it, matching swapping a physical spool.
+        const slotRow = document.createElement("div");
+        slotRow.className = "slotAssignRow";
+
+        for (let slot = 0; slot < 4; slot++)
+        {
+            const isAssigned = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slot] === f.id;
+
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "slotAssignBtn" + (isAssigned ? " active" : "");
+            btn.textContent = `A${slot + 1}`;
+            btn.title = isAssigned
+                ? `Loaded in A${slot + 1} - click to unassign`
+                : `Mark this as what's physically loaded in A${slot + 1}`;
+            btn.addEventListener("click", () => onToggleSlotAssignment(f.id, slot));
+            slotRow.appendChild(btn);
+        }
+
+        entry.appendChild(slotRow);
+
         if (expandedSpoolHistory.has(f.id))
             entry.appendChild(buildSpoolHistoryPanel(f));
 
@@ -2462,6 +2517,26 @@ async function withFreshLibrary(mutatorFn)
     mutatorFn(filamentLibrary);
     renderFilamentLibrary();
     await saveFilamentLibrary();
+}
+
+// A slot can only hold one filamentId at a time (it's a single object key),
+// so assigning it here to a new filament automatically bumps out whatever
+// was previously assigned - matches physically swapping a spool. Clicking
+// the button already showing "active" for this exact filament unassigns it.
+function onToggleSlotAssignment(filamentId, slot)
+{
+    withFreshLibrary(lib =>
+    {
+        if (!lib.slotAssignments)
+            lib.slotAssignments = {};
+
+        if (lib.slotAssignments[slot] === filamentId)
+            delete lib.slotAssignments[slot];
+        else
+            lib.slotAssignments[slot] = filamentId;
+
+        renderAmsGrid(lastAmsTrays, lastAmsTrayNow);
+    });
 }
 
 // Was wired to the Edit button (filamentEntryActions) but never actually
@@ -2846,16 +2921,30 @@ async function processFilamentDeductions(items)
             const hex = (d.color || "").slice(0, 6).toUpperCase();
             const material = (d.type || "").toUpperCase();
 
+            // An explicit slot assignment (see slotAssignments' own
+            // declaration comment) is authoritative when one exists for
+            // this detail's slot - only raw Task API amsDetail entries
+            // carry amsId/slotId (an override's details, built above, do
+            // not), so this only ever applies on the non-override path.
+            const slotIndex = (typeof d.amsId === "number" && typeof d.slotId === "number")
+                ? (d.amsId * 4) + d.slotId
+                : null;
+            const assignedId = slotIndex !== null && filamentLibrary.slotAssignments
+                ? filamentLibrary.slotAssignments[slotIndex]
+                : null;
+
             // Closest color within the same material, not an exact hex
             // match - see colorDistance()'s comment for why an exact match
             // silently drops deductions for colors Task API reports
             // approximately (confirmed live: black as "000000" vs the
-            // library's real "161616").
-            const filament = filamentLibrary.filaments
-                .filter(f => f.material.toUpperCase() === material)
-                .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
-                .sort((a, b) => a.dist - b.dist)
-                .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
+            // library's real "161616"). Only reached when there's no
+            // slot assignment covering this detail.
+            const filament = (assignedId && filamentLibrary.filaments.find(f => f.id === assignedId))
+                || filamentLibrary.filaments
+                    .filter(f => f.material.toUpperCase() === material)
+                    .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
+                    .sort((a, b) => a.dist - b.dist)
+                    .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
 
             if (!filament || !filament.spools || filament.spools.length === 0)
             {

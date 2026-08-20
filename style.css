@@ -1072,6 +1072,38 @@ dd{
     margin-top:10px;
 }
 
+.slotAssignRow{
+    display:flex;
+    gap:6px;
+    margin-top:10px;
+}
+
+.slotAssignBtn{
+    flex:1 1 0;
+    padding:6px 0;
+    border-radius:6px;
+    border:1px solid #2f363d;
+    background:#14181b;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+    transition:background-color .15s ease,border-color .15s ease,color .15s ease;
+}
+
+.slotAssignBtn:hover{
+    border-color:var(--cyan);
+    color:var(--text);
+}
+
+/* "Loaded here" - lit up like the active AMS slot indicator elsewhere on
+   this dashboard, so the same visual language means the same thing. */
+.slotAssignBtn.active{
+    background:var(--cyan);
+    border-color:var(--cyan);
+    color:#08181c;
+}
+
 .filamentEntryActions .infoBtn{
     font-size:11px;
     padding:4px 8px;
