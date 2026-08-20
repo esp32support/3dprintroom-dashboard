@@ -877,6 +877,20 @@ const HISTORY_COLLAPSED_COUNT = 5;
 // visible here can't be trusted as the true copy count. Collapse to just
 // the base name + "(multiple copies)" rather than display the raw
 // garbled/truncated string or claim a specific count that might be wrong.
+// Bambu Studio auto-appends the print settings summary to a project's name
+// ("Sword Parts - 0.08mm layer, 2 walls, 15% infill") - only the part
+// before that is the actual project name, the rest is noise on a display
+// this small. Display-only, like shrinkMultiObjectName below - never
+// applied to the raw name used as part of a deductionLog/processedPrints
+// key elsewhere in this file.
+function trimProjectName(name)
+{
+    if (!name || !name.includes(" - "))
+        return name;
+
+    return name.split(" - ")[0].trim();
+}
+
 function shrinkMultiObjectName(name)
 {
     if (!name || !name.includes(" + "))
@@ -1794,7 +1808,7 @@ function updatePrinter(data)
     // The firmware doesn't clear subtask_name on its own (Bambu doesn't
     // send an explicit "cleared" message for it) - once idle there's no
     // "current project" to show, regardless of what the last one was.
-    setText("printerProject", displayState === "IDLE" ? "No project" : (data.subtaskName || "No project"));
+    setText("printerProject", displayState === "IDLE" ? "No project" : (trimProjectName(data.subtaskName) || "No project"));
 
     const hero = byId("printerHero");
 
