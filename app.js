@@ -1811,8 +1811,16 @@ function updatePrinter(data)
         const showStage = bambuOk && (state === "RUNNING" || state === "PREPARE");
         stageEl.hidden = !showStage;
 
+        // AMS-driven color changes don't move stg_cur - amsStatus is a
+        // separate, undocumented-by-Bambu field confirmed live over two
+        // full color-change cycles (see CYD's printer_state.h for the full
+        // writeup): idle sits at 0x300, an active swap runs through values
+        // with the high byte == 1. Checked first so a swap always overrides
+        // whatever stg_cur happens to say, matching CYD's own screen.
+        const changingFilament = (Number(data.amsStatus) & 0xFF00) === 0x0100;
+
         if (showStage)
-            stageEl.textContent = stageText(data.stageCur);
+            stageEl.textContent = changingFilament ? "Changing filament…" : stageText(data.stageCur);
     }
 
     const trays = data.trays || [];
