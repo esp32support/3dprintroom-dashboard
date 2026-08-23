@@ -795,6 +795,12 @@ function usageChip(entry)
 let lastAmsTrays = null;
 let lastAmsTrayNow = null;
 
+// Tap the AMS card to flip between the 4 AMS slots and the external spool -
+// deliberately no "1/2" page indicator (asked not to). Persists across
+// re-renders (every printer MQTT tick) since it's module-level, not reset
+// inside renderAmsGrid() itself.
+let amsShowExtPage = false;
+
 function renderAmsGrid(trays, trayNow)
 {
     lastAmsTrays = trays;
@@ -804,6 +810,20 @@ function renderAmsGrid(trays, trayNow)
 
     if (!grid)
         return;
+
+    // Wired once - grid.innerHTML gets cleared and rebuilt below on every
+    // call, but the container element itself persists, so re-attaching
+    // this on every render would stack duplicate listeners.
+    if (!grid.dataset.pageToggleWired)
+    {
+        grid.dataset.pageToggleWired = "1";
+        grid.classList.add("tappable");
+        grid.addEventListener("click", () =>
+        {
+            amsShowExtPage = !amsShowExtPage;
+            renderAmsGrid(lastAmsTrays, lastAmsTrayNow);
+        });
+    }
 
     grid.innerHTML = "";
 
@@ -816,10 +836,7 @@ function renderAmsGrid(trays, trayNow)
         return;
     }
 
-    // Shared by the 4 real AMS slots below AND the external spool tile -
-    // `tray` is undefined for EXT, since CYD doesn't relay Bambu's own
-    // vt_tray data yet (only the AMS's own 4 slots) - the library's own
-    // slot assignment is the only source of truth for it either way.
+    // Shared by the 4 real AMS slots and the external spool tile.
     function buildSlotTile(slotId, label, tray)
     {
         const isActive = slotId === trayNow;
@@ -864,6 +881,20 @@ function renderAmsGrid(trays, trayNow)
         grid.appendChild(slot);
     }
 
+    if (amsShowExtPage)
+    {
+        // External spool - 254 is Bambu's own reserved id for it (confirmed
+        // live via the raw vt_tray.id field, matching printerState.trayNow's
+        // own long-standing "254 = external spool" comment). CYD relays this
+        // the same way as the 4 real AMS trays (see cloud_publish.cpp), so it
+        // gets the same "shows Bambu's own generic color before you've
+        // assigned anything" fallback the A1-A4 tiles already have - falls
+        // back to an empty tray object rather than null for an old CYD build
+        // that hasn't picked up that firmware update yet.
+        buildSlotTile(254, "EXT", trays.find(t => t.id === 254) || null);
+        return;
+    }
+
     // Visual position only - matches Bambu Studio's own AMS panel layout
     // (A1/A4 on top, A2/A3 on bottom), which doesn't read left-to-right in
     // slot-number order. The 2-column grid auto-flows in DOM order, so
@@ -875,14 +906,6 @@ function renderAmsGrid(trays, trayNow)
         .filter(Boolean);
 
     orderedTrays.forEach(tray => buildSlotTile(tray.id, `A${tray.id + 1}`, tray));
-
-    // External spool - 254 is Bambu's own reserved id for it (confirmed
-    // live via the raw vt_tray.id field, matching printerState.trayNow's
-    // own long-standing "254 = external spool" comment). Always shown,
-    // unlike the 4 AMS tiles above which depend on live tray data actually
-    // existing - there's no live vt_tray relay yet, so this tile has
-    // nothing to wait on and is purely driven by the slot assignment.
-    buildSlotTile(254, "EXT", null);
 }
 
 let lastHistoryItems = [];

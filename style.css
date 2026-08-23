@@ -907,6 +907,12 @@ dd{
     gap:10px;
 }
 
+/* Tap to flip between the 4 AMS slots and the external spool - see
+   amsShowExtPage in app.js. Deliberately no page indicator. */
+.amsGrid.tappable{
+    cursor:pointer;
+}
+
 /* External spool is conceptually separate from the 4 physical AMS bays -
    its own full-width row rather than sharing the 2x2 pairing, so it
    doesn't look like it's awkwardly missing a partner tile. */
