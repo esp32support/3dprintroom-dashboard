@@ -610,48 +610,6 @@ dd{
     font-weight:700;
 }
 
-.stateValue{
-    min-height:72px;
-    font-size:30px;
-    line-height:1.12;
-    font-weight:900;
-}
-
-.stateMessage{
-    min-height:40px;
-    margin:10px 0 16px;
-    color:var(--muted);
-}
-
-.stateBar{
-    margin-bottom:14px;
-}
-
-.predictionBox{
-    padding:13px 14px;
-    border-radius:6px;
-    background:#14181b;
-    border:1px solid #2f363d;
-}
-
-.predictionBox span{
-    color:var(--muted);
-    font-size:12px;
-    font-weight:800;
-    text-transform:uppercase;
-}
-
-.predictionBox strong{
-    display:block;
-    margin-top:6px;
-    font-size:22px;
-}
-
-.predictionBox p{
-    margin:6px 0 0;
-    color:var(--muted);
-}
-
 .sensorPills{
     display:grid;
     gap:10px;

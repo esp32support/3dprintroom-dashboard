@@ -204,7 +204,6 @@ function updateStatus(data)
     setBar("eco2Bar", data.eco2, 2000, data.eco2 >= 1200 ? "var(--orange)" : "var(--cyan)");
 
     const airColor = colorForAirState(data.airQualityState);
-    const airScore = Number(data.airQualityScore) || 0;
 
     const aqiDial = byId("aqiDial");
     if (aqiDial)
@@ -214,19 +213,6 @@ function updateStatus(data)
     setTrend("humidityTrend", data.humidityTrendText, data.humidityTrendStrengthText);
     setTrend("tvocTrend", data.tvocTrendText, data.tvocTrendStrengthText);
     setTrend("eco2Trend", data.eco2TrendText, data.eco2TrendStrengthText);
-
-    setText("airStateText", data.airQualityText || "Air quality stable");
-    setText("airStateMessage", data.airQualityMessage || "Room conditions are steady");
-    setText("airScore", `${airScore} / 100`);
-
-    setBar("airStateBar", airScore, 100, airColor);
-
-    const airState = byId("airStateText");
-    if (airState)
-        airState.style.color = airColor;
-
-    setText("predictionText", data.predictionText || "Likely stable");
-    setText("predictionMessage", data.predictionMessage || "No strong movement detected");
 
     setText("ssid", data.ssid || "--");
     setText("ip", data.ip || "--");
