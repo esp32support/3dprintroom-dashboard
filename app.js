@@ -4059,7 +4059,6 @@ function updateCydOtaProgressCard(data)
     }
 
     card.hidden = false;
-    setText("cydOtaProgressStatus", data.displayOtaStatus || "Downloading and flashing…");
 }
 
 const cydUpdateNowBtn = byId("cydUpdateNowBtn");
