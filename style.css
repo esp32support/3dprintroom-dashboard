@@ -907,6 +907,13 @@ dd{
     gap:10px;
 }
 
+/* External spool is conceptually separate from the 4 physical AMS bays -
+   its own full-width row rather than sharing the 2x2 pairing, so it
+   doesn't look like it's awkwardly missing a partner tile. */
+.amsSlot.external{
+    grid-column:1 / -1;
+}
+
 .amsSlot{
     display:flex;
     flex-direction:column;

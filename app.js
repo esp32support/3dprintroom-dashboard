@@ -816,6 +816,54 @@ function renderAmsGrid(trays, trayNow)
         return;
     }
 
+    // Shared by the 4 real AMS slots below AND the external spool tile -
+    // `tray` is undefined for EXT, since CYD doesn't relay Bambu's own
+    // vt_tray data yet (only the AMS's own 4 slots) - the library's own
+    // slot assignment is the only source of truth for it either way.
+    function buildSlotTile(slotId, label, tray)
+    {
+        const isActive = slotId === trayNow;
+
+        // Bambu Studio's own AMS filament picker only offers generic
+        // colors/materials, so tray.type/tray.color from the printer are
+        // often just a generic default rather than this exact spool's real
+        // identity - the library's own explicit slot assignment (set on
+        // the Filament Library card below) is the more trustworthy source
+        // when one exists for this slot.
+        const assignedId = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slotId];
+        const assigned = assignedId ? filamentLibrary.filaments.find(f => f.id === assignedId) : null;
+
+        const slot = document.createElement("div");
+        slot.className = "amsSlot" + (isActive ? " active" : "") + (slotId === 254 ? " external" : "");
+
+        // Border matches the actual filament color instead of a generic
+        // highlight color, so it reads as "this exact spool" at a glance.
+        if (isActive && (assigned || (tray && tray.type)))
+            slot.style.borderColor = assigned ? trayColorCss(assigned.colorHex || "") : trayColorCss(tray.color);
+
+        const labelEl = document.createElement("span");
+        labelEl.className = "amsSlotLabel";
+        labelEl.textContent = label;
+
+        const spool = document.createElement("span");
+        spool.className = "amsSpool";
+        spool.style.background = assigned ? trayColorCss(assigned.colorHex || "") : (tray && tray.type ? trayColorCss(tray.color) : "#2a3136");
+
+        const hole = document.createElement("span");
+        hole.className = "amsSpoolHole";
+        spool.appendChild(hole);
+
+        const material = document.createElement("span");
+        material.className = "amsSlotMaterial" + (assigned || (tray && tray.type) ? "" : " empty");
+        material.textContent = assigned ? `${assigned.material} ${assigned.color}` : (tray && tray.type ? tray.type : "Empty");
+
+        slot.appendChild(labelEl);
+        slot.appendChild(spool);
+        slot.appendChild(material);
+
+        grid.appendChild(slot);
+    }
+
     // Visual position only - matches Bambu Studio's own AMS panel layout
     // (A1/A4 on top, A2/A3 on bottom), which doesn't read left-to-right in
     // slot-number order. The 2-column grid auto-flows in DOM order, so
@@ -826,49 +874,15 @@ function renderAmsGrid(trays, trayNow)
         .map(id => trays.find(t => t.id === id))
         .filter(Boolean);
 
-    orderedTrays.forEach(tray =>
-    {
-        const isActive = tray.id === trayNow;
+    orderedTrays.forEach(tray => buildSlotTile(tray.id, `A${tray.id + 1}`, tray));
 
-        // Bambu Studio's own AMS filament picker only offers generic
-        // colors/materials, so tray.type/tray.color from the printer are
-        // often just a generic default rather than this exact spool's real
-        // identity - the library's own explicit slot assignment (set on
-        // the Filament Library card below) is the more trustworthy source
-        // when one exists for this slot.
-        const assignedId = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[tray.id];
-        const assigned = assignedId ? filamentLibrary.filaments.find(f => f.id === assignedId) : null;
-
-        const slot = document.createElement("div");
-        slot.className = "amsSlot" + (isActive ? " active" : "");
-
-        // Border matches the actual filament color instead of a generic
-        // highlight color, so it reads as "this exact spool" at a glance.
-        if (isActive && (assigned || tray.type))
-            slot.style.borderColor = assigned ? trayColorCss(assigned.colorHex || "") : trayColorCss(tray.color);
-
-        const label = document.createElement("span");
-        label.className = "amsSlotLabel";
-        label.textContent = `A${tray.id + 1}`;
-
-        const spool = document.createElement("span");
-        spool.className = "amsSpool";
-        spool.style.background = assigned ? trayColorCss(assigned.colorHex || "") : (tray.type ? trayColorCss(tray.color) : "#2a3136");
-
-        const hole = document.createElement("span");
-        hole.className = "amsSpoolHole";
-        spool.appendChild(hole);
-
-        const material = document.createElement("span");
-        material.className = "amsSlotMaterial" + (assigned || tray.type ? "" : " empty");
-        material.textContent = assigned ? `${assigned.material} ${assigned.color}` : (tray.type || "Empty");
-
-        slot.appendChild(label);
-        slot.appendChild(spool);
-        slot.appendChild(material);
-
-        grid.appendChild(slot);
-    });
+    // External spool - 254 is Bambu's own reserved id for it (confirmed
+    // live via the raw vt_tray.id field, matching printerState.trayNow's
+    // own long-standing "254 = external spool" comment). Always shown,
+    // unlike the 4 AMS tiles above which depend on live tray data actually
+    // existing - there's no live vt_tray relay yet, so this tile has
+    // nothing to wait on and is purely driven by the slot assignment.
+    buildSlotTile(254, "EXT", null);
 }
 
 let lastHistoryItems = [];
@@ -2438,7 +2452,19 @@ function renderFilamentLibrary()
         const slotRow = document.createElement("div");
         slotRow.className = "slotAssignRow";
 
-        for (let slot = 0; slot < 4; slot++)
+        // 254 is Bambu's own reserved id for the external spool (see
+        // renderAmsGrid()'s identical use of it) - included here alongside
+        // the 4 real AMS slots so a filament loaded on the external mount
+        // can be assigned the same way.
+        const SLOTS = [
+            { id: 0, label: "A1" },
+            { id: 1, label: "A2" },
+            { id: 2, label: "A3" },
+            { id: 3, label: "A4" },
+            { id: 254, label: "EXT" },
+        ];
+
+        SLOTS.forEach(({ id: slot, label: slotLabel }) =>
         {
             const isAssigned = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slot] === f.id;
 
@@ -2458,16 +2484,16 @@ function renderFilamentLibrary()
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "slotAssignBtn" + (isAssigned ? " active" : "");
-            btn.textContent = `A${slot + 1}`;
+            btn.textContent = slotLabel;
             btn.disabled = locked;
             btn.title = locked
                 ? "Locked while a print is running - changing this now could misattribute a pending deduction"
                 : isAssigned
-                    ? `Loaded in A${slot + 1} - click to unassign`
-                    : `Mark this as what's physically loaded in A${slot + 1}`;
+                    ? `Loaded in ${slotLabel} - click to unassign`
+                    : `Mark this as what's physically loaded in ${slotLabel}`;
             btn.addEventListener("click", () => onToggleSlotAssignment(f.id, slot));
             slotRow.appendChild(btn);
-        }
+        });
 
         entry.appendChild(slotRow);
 
