@@ -1818,10 +1818,23 @@ function updatePrinter(data)
     setDot("printerMqttDot", bambuOk);
 
     setText("printerNameLabel", data.printerName || "Printer");
-    // The printer settles to FINISH once a job completes and stays there
-    // until the next print starts - showing that literally reads as stuck,
-    // when the printer is really just idle again.
-    const displayState = state === "FINISH" ? "IDLE" : state;
+
+    // Bambu settles on FINISH/FAILED once a job ends and stays there until
+    // the next print starts - clearing that to "IDLE" the instant it
+    // happens (the old behavior) meant a completed or failed job was only
+    // ever visible if you happened to be watching at the exact moment it
+    // ended. Held as the "last active job" - full state label, project
+    // name, progress, started/ended/elapsed - for a grace period after
+    // currentEnd, then clears itself to idle.
+    const HOLD_AFTER_END_MS = 2 * 60 * 1000;
+    const isTerminalState = state === "FINISH" || state === "FAILED";
+    const endTime = parseDeviceTime(data.currentEnd);
+    const nowTime = parseDeviceTime(data.now);
+    const msSinceEnd = (isTerminalState && endTime && nowTime) ? (nowTime - endTime) : Infinity;
+    const holdingLastJob = isTerminalState && msSinceEnd < HOLD_AFTER_END_MS;
+    const isIdle = isTerminalState && !holdingLastJob;
+
+    const displayState = isIdle ? "IDLE" : state;
     setText("printerState", bambuOk ? displayState : "PRINTER UNREACHABLE");
     // The firmware doesn't clear subtask_name on its own (Bambu doesn't
     // send an explicit "cleared" message for it) - once idle there's no
@@ -1874,7 +1887,7 @@ function updatePrinter(data)
         printCurrentlyRunning = running;
         renderFilamentLibrary();
     }
-    const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE");
+    const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE" || holdingLastJob);
 
     // The device doesn't reset layerNum/totalLayerNum on its own once a
     // print finishes (same "doesn't clear on its own" behavior as
