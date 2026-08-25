@@ -19,6 +19,7 @@ import os
 import urllib.request
 
 AUDIT_URL = "https://3dprintroom-dashboard.pages.dev/api/deduction-audit"
+FILAMENT_URL = "https://3dprintroom-dashboard.pages.dev/api/device-filament"
 USER_AGENT = "Mozilla/5.0 (compatible; deduction-audit-reader-github-actions)"
 
 
@@ -26,18 +27,65 @@ def log(msg):
     print(msg, flush=True)
 
 
+def api_get(url, secret):
+    req = urllib.request.Request(url, headers={
+        "X-Sync-Secret": secret,
+        "User-Agent": USER_AGENT,
+    })
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read())
+
+
+def print_current_state(secret):
+    """The audit trail explains CHANGES; this is the state those changes
+    landed on. Printed together so a single run answers both "what does
+    this spool read now" and "what moved it there" - checking one without
+    the other is what made earlier investigations slow."""
+    try:
+        lib = api_get(FILAMENT_URL, secret)
+    except Exception as e:
+        log(f"(couldn't read current spool state: {e})")
+        return
+
+    filaments = lib.get("filaments", [])
+    assignments = lib.get("slotAssignments") or {}
+
+    log("=== CURRENT SLOT ASSIGNMENTS ===")
+    if not assignments:
+        log("  (none set)")
+    for slot, fid in sorted(assignments.items(), key=lambda kv: int(kv[0])):
+        f = next((x for x in filaments if x.get("id") == fid), None)
+        # 254 is Bambu's external-spool sentinel, everything else is A1-A4.
+        label = "EXT" if slot == "254" else f"A{int(slot) + 1}"
+        if f:
+            active = [s for s in f.get("spools", []) if not s.get("removedAt")]
+            weights = ", ".join(f"{s.get('remaining', 0):.2f}g" for s in active) or "no active spool"
+            log(f"  {label:<4} -> {f.get('color','?')} [{f.get('colorHex','?')}] {f.get('material','')}  {weights}")
+        else:
+            log(f"  {label:<4} -> {fid}  (NOT FOUND in library)")
+
+    log("")
+    log("=== ALL ACTIVE SPOOLS ===")
+    for f in filaments:
+        for s in f.get("spools", []):
+            if s.get("removedAt"):
+                continue
+            log(f"  {f.get('color','?'):<22} [{f.get('colorHex','?')}] {f.get('material',''):<5}"
+                f" {s.get('remaining', 0):8.2f} / {s.get('total', 0)}   spool={s.get('id')}")
+
+    log("")
+
+
 def main():
+    secret = os.environ["FILAMENT_SYNC_SECRET"]
+    print_current_state(secret)
+
     limit = os.environ.get("FILAMENT_AUDIT_LIMIT", "60").strip()
     url = AUDIT_URL
     if limit and limit != "0":
         url = f"{AUDIT_URL}?limit={limit}"
 
-    req = urllib.request.Request(url, headers={
-        "X-Sync-Secret": os.environ["FILAMENT_SYNC_SECRET"],
-        "User-Agent": USER_AGENT,
-    })
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read())
+    data = api_get(url, secret)
 
     entries = data.get("entries", [])
     needle = os.environ.get("FILAMENT_AUDIT_FILTER", "").strip().lower()
