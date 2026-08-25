@@ -42,6 +42,15 @@ def trim_library(lib):
     return {
         "filaments": [
             {
+                # id relayed so CYD can cross-reference slotAssignments below
+                # against a specific filament, the same way the dashboard's
+                # own AMS card and deduction already do - without it, CYD had
+                # no way to know "A2 was explicitly assigned to this exact
+                # entry" and fell back to its own independent color-distance
+                # guess, which can (and did, confirmed live) land on a
+                # different but similar-colored filament than the one you
+                # actually assigned.
+                "id": f.get("id", ""),
                 "material": f.get("material", ""),
                 "colorHex": f.get("colorHex", ""),
                 "color": f.get("color", ""),
@@ -58,7 +67,11 @@ def trim_library(lib):
                 ],
             }
             for f in lib.get("filaments", [])
-        ]
+        ],
+        # {"0": filamentId, "1": ..., "254": ... for EXT} - same slot-index
+        # convention as tray.id/trayNow everywhere else. Pass-through as-is;
+        # CYD does its own lookup by id, same as the dashboard.
+        "slotAssignments": lib.get("slotAssignments", {}),
     }
 
 
