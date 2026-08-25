@@ -53,10 +53,3 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # Temporary - one-off recent-deduction audit, remove after use.
-      - run: python scripts/audit_recent_deductions.py
-        env:
-          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
-          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
-          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
