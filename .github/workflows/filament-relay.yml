@@ -53,12 +53,3 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # Temporary - one-off Fossil Gray deduction reconstruction, remove after use.
-      - run: python scripts/audit_fossil_gray.py
-        env:
-          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
-
-      - run: python scripts/audit_fossil_gray_2.py
-        env:
-          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
