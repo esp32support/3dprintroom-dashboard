@@ -54,7 +54,7 @@ jobs:
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
 
-      # Temporary - one-off bulk Fossil Gray correction, remove after use.
-      - run: python scripts/bulk_fix_fossil.py
+      # Temporary - one-off final Silver check, remove after use.
+      - run: python scripts/audit_silver_final.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
