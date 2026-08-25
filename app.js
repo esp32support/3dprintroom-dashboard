@@ -2984,13 +2984,18 @@ async function reconcileDeductionLog()
         }
     }
 
+    // Flushed BEFORE the early return, not after: a pass that changes
+    // nothing is exactly the pass whose audit rows matter most - every
+    // "skip" above happens without changing the ledger, and those are the
+    // rows that explain a spool that stubbornly won't move.
+    await flushAuditLog();
+
     if (!changed)
         return;
 
     renderFilamentLibrary();
     renderTodayTotals();
     await saveFilamentLibrary();
-    await flushAuditLog();
 }
 
 // One-time cleanup for prints already settled BY HAND before the
@@ -3059,7 +3064,6 @@ async function purgeStaleDuplicateDeductions()
     renderFilamentLibrary();
     renderTodayTotals();
     await saveFilamentLibrary();
-    await flushAuditLog();
 }
 
 // Auto-deducts each finished print's acquired weight from the matching
@@ -3111,6 +3115,20 @@ async function processFilamentDeductions(items)
         {
             if (!filamentLibrary.processedPrints.includes(key))
             {
+                // Recorded, not silent: "the print ended and nothing came
+                // off the spool" is a real outcome worth being able to look
+                // up later, and a cancelled print that SHOULD have been
+                // charged is otherwise indistinguishable from one the
+                // deduction never noticed at all.
+                auditSpoolChange({
+                    printKey: key,
+                    printName: item.name,
+                    printStart: item.start,
+                    event: "skip",
+                    reason: `print ended as ${item.outcome}, not FINISH - slicer weight covers the whole job, so nothing deducted`,
+                    source: "outcome-gate",
+                });
+
                 filamentLibrary.processedPrints.push(key);
                 changed = true;
             }
@@ -3285,6 +3303,12 @@ async function processFilamentDeductions(items)
             changed = true;
         }
     });
+
+    // Flushed BEFORE the early return - see reconcileDeductionLog's own
+    // note: a pass that deducts nothing still produces the "skip" rows
+    // that explain why, and those must not be held back waiting for some
+    // later pass that happens to change something.
+    await flushAuditLog();
 
     if (!changed)
         return;
