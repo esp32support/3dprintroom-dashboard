@@ -2043,7 +2043,14 @@ function updatePrinter(data)
         setText("printerFilamentUsed", "--");
     }
 
-    renderAmsGrid(trays, trayNow);
+    // Bambu's own tray_now doesn't reset once idle either (same "doesn't
+    // clear on its own" behavior as gcodeState/subtaskName) - confirmed
+    // live: A2 kept showing as the actively-fed slot long after the
+    // printer had gone idle. -1 is not a real slot id, so nothing
+    // highlights once genuinely idle; preparing already covers the
+    // 2-minute hold period, so the last job's active tray stays visible
+    // for that same grace window, then clears with everything else.
+    renderAmsGrid(trays, preparing ? trayNow : -1);
     renderPrintHistory(data.history || []);
     renderTodayTotals();
     processFilamentDeductions(data.history || []);
