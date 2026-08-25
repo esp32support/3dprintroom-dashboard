@@ -58,3 +58,7 @@ jobs:
       - run: python scripts/audit_fossil_gray.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+
+      - run: python scripts/audit_fossil_gray_2.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
