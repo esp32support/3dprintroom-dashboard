@@ -1,0 +1,38 @@
+name: Read deduction audit
+
+# On-demand only - no cron. This is the "why is this spool's number wrong"
+# tool: it prints the forensic trail the dashboard writes for every
+# automatic spool change (see functions/api/deduction-audit.js), including
+# which colorHex was reported, whether an explicit AMS slot assignment or a
+# fuzzy color match picked the target spool, and the before/after weights.
+#
+# Run it from the Actions tab: Run workflow -> optionally set how many
+# recent entries to show, or a filter (a print name, a color name, or a hex
+# like BBBBBB) to narrow it down.
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "How many recent entries to show (0 = all)"
+        required: false
+        default: "60"
+      filter:
+        description: "Optional filter - print name, color name, or hex"
+        required: false
+        default: ""
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python scripts/read_deduction_audit.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+          FILAMENT_AUDIT_LIMIT: ${{ inputs.limit }}
+          FILAMENT_AUDIT_FILTER: ${{ inputs.filter }}

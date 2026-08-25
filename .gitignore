@@ -1,3 +1,7 @@
 # Generated at build time from Cloudflare Pages environment variables
 # (see build.sh) - never commit the real broker.config.js.
 broker.config.js
+
+# Python bytecode from the scripts/ jobs
+__pycache__/
+*.pyc

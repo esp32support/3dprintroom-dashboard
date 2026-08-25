@@ -2247,7 +2247,10 @@ setInterval(updatePrinterTask, 60000);
 // spool to deduct from (falling back to today's color-distance match only
 // when a slot has no assignment) and by renderAmsGrid() to show the real
 // color name instead of just Bambu's raw swatch.
-let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {}, slotAssignments: {} };
+// migrations: names of one-time data cleanups already applied to this
+// library, so a repair that must not run twice (see
+// purgeStaleDuplicateDeductions) can record that it's done.
+let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {}, slotAssignments: {}, migrations: [] };
 
 // Set by updatePrinter() on every printer MQTT tick - see its own comment
 // for why slot assignments lock while this is true.
@@ -2274,6 +2277,7 @@ async function loadFilamentLibrary()
                 historyOverrides: data.historyOverrides || {},
                 deductionLog: data.deductionLog || {},
                 slotAssignments: data.slotAssignments || {},
+                migrations: data.migrations || [],
             };
         }
     }
@@ -2302,6 +2306,42 @@ async function saveFilamentLibrary()
     catch (err)
     {
         console.log("filament-library save failed", err);
+    }
+}
+
+// Forensic trail for every automatic spool change - see
+// /api/deduction-audit for why this exists and why it's deliberately not
+// surfaced anywhere in the UI. Entries are collected during a pass and
+// flushed in ONE request at the end rather than posted individually, so a
+// multi-color print costs a single write instead of one per color.
+const pendingAuditEntries = [];
+
+function auditSpoolChange(entry)
+{
+    pendingAuditEntries.push({ ts: new Date().toISOString(), ...entry });
+}
+
+async function flushAuditLog()
+{
+    if (pendingAuditEntries.length === 0)
+        return;
+
+    const entries = pendingAuditEntries.splice(0, pendingAuditEntries.length);
+
+    try
+    {
+        await fetch("/api/deduction-audit", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ entries }),
+        });
+    }
+    catch (err)
+    {
+        // An audit-write failure must never abort or roll back the real
+        // deduction that just happened - the spool ledger is the record
+        // that matters, this is only the explanation of it.
+        console.log("deduction-audit write failed", err);
     }
 }
 
@@ -2864,8 +2904,22 @@ async function reconcileDeductionLog()
 
         for (const hex of Object.keys(log))
         {
-            if (colorDistance(hex, correctHex) <= COLOR_MATCH_THRESHOLD)
-                continue;   // this IS the correct entry (or close enough)
+            // Exact match, NOT a color-distance match. Using distance here
+            // was a confirmed bug with real cost: Basic Silver (C0C0C0)
+            // and Fossil Gray (BBBBBB) are only 8.66 apart, far under
+            // COLOR_MATCH_THRESHOLD (80), so six prints corrected from
+            // Silver to Fossil Gray had their stale Silver rows read as
+            // "close enough to be the correct one" and left in place -
+            // while the re-deduction charged Fossil Gray the full amount.
+            // Two spools billed for one print, silently, for every print
+            // in that slot. Both values here are already canonical
+            // uppercase 6-char (gcode-sync normalises the override, and
+            // the deduction writes its log key from the same value), so
+            // equality is exactly the right test - and it can't be fooled
+            // by two genuinely different filaments that happen to look
+            // alike, which is the whole failure mode above.
+            if (hex === correctHex)
+                continue;
 
             const grams = log[hex];
 
@@ -2890,7 +2944,39 @@ async function reconcileDeductionLog()
                     .sort((a, b) => a.remaining - b.remaining)[0];
 
                 if (target)
+                {
+                    const before = target.remaining;
                     target.remaining += grams;
+
+                    auditSpoolChange({
+                        printKey: key,
+                        event: "refund",
+                        reason: "stale row for a color this print was corrected away from",
+                        source: "reconcile",
+                        sourceHex: hex,
+                        correctHex,
+                        filamentId: filament.id,
+                        filamentColor: filament.color,
+                        filamentColorHex: filament.colorHex,
+                        filamentMaterial: filament.material,
+                        spoolId: target.id,
+                        delta: grams,
+                        remainingBefore: before,
+                        remainingAfter: target.remaining,
+                    });
+                }
+            }
+            else
+            {
+                auditSpoolChange({
+                    printKey: key,
+                    event: "skip",
+                    reason: "stale row dropped, but no library filament matched it to refund",
+                    source: "reconcile",
+                    sourceHex: hex,
+                    correctHex,
+                    delta: grams,
+                });
             }
 
             delete log[hex];
@@ -2904,6 +2990,76 @@ async function reconcileDeductionLog()
     renderFilamentLibrary();
     renderTodayTotals();
     await saveFilamentLibrary();
+    await flushAuditLog();
+}
+
+// One-time cleanup for prints already settled BY HAND before the
+// exact-match fix in reconcileDeductionLog above existed. Six prints
+// (2026-08-23..25) were corrected from Basic Silver to Fossil Gray;
+// because those two greys are 8.66 apart the stale Silver rows survived
+// every reconcile pass while the corrected Fossil Gray deduction went
+// through in full, so both spools were corrected manually to their true
+// weights. With the fix in place those same stale rows would now finally
+// be "refunded", handing Basic Silver back 339.95g it has already been
+// credited. Drop them WITHOUT refunding instead.
+//
+// Deliberately narrow: only touches a row whose print ALSO carries a row
+// for the override's own color - i.e. provably re-deducted correctly
+// already, making the stale row a pure duplicate that nothing is owed for.
+// A stale row with no corrected counterpart is left alone for
+// reconcileDeductionLog to refund properly.
+const PURGE_MIGRATION = "purge-stale-duplicate-deductions-2026-08";
+
+async function purgeStaleDuplicateDeductions()
+{
+    if (!filamentLibraryLoaded)
+        return;
+
+    filamentLibrary.migrations = filamentLibrary.migrations || [];
+
+    if (filamentLibrary.migrations.includes(PURGE_MIGRATION))
+        return;
+
+    for (const [key, log] of Object.entries(filamentLibrary.deductionLog || {}))
+    {
+        const override = filamentLibrary.historyOverrides[key];
+
+        if (!override || Array.isArray(override.details) || typeof override.colorHex !== "string")
+            continue;
+
+        const correctHex = override.colorHex.toUpperCase();
+
+        if (typeof log[correctHex] !== "number")
+            continue;   // not re-deducted yet - leave it for reconcile to refund
+
+        for (const hex of Object.keys(log))
+        {
+            if (hex === correctHex)
+                continue;
+
+            auditSpoolChange({
+                printKey: key,
+                event: "purge",
+                reason: "stale duplicate row - already re-deducted under the corrected color, spools settled manually",
+                source: PURGE_MIGRATION,
+                sourceHex: hex,
+                correctHex,
+                delta: log[hex],
+            });
+
+            delete log[hex];
+        }
+    }
+
+    filamentLibrary.migrations.push(PURGE_MIGRATION);
+
+    // Saved unconditionally: the flag itself has to persist even when
+    // nothing needed purging, or this would run again later against data
+    // it was never meant to touch.
+    renderFilamentLibrary();
+    renderTodayTotals();
+    await saveFilamentLibrary();
+    await flushAuditLog();
 }
 
 // Auto-deducts each finished print's acquired weight from the matching
@@ -3022,21 +3178,46 @@ async function processFilamentDeductions(items)
                 ? filamentLibrary.slotAssignments[slotIndex]
                 : null;
 
+            const assignedFilament = assignedId
+                ? filamentLibrary.filaments.find(f => f.id === assignedId)
+                : null;
+
             // Closest color within the same material, not an exact hex
             // match - see colorDistance()'s comment for why an exact match
             // silently drops deductions for colors Task API reports
             // approximately (confirmed live: black as "000000" vs the
             // library's real "161616"). Only reached when there's no
             // slot assignment covering this detail.
-            const filament = (assignedId && filamentLibrary.filaments.find(f => f.id === assignedId))
+            const filament = assignedFilament
                 || filamentLibrary.filaments
                     .filter(f => f.material.toUpperCase() === material)
                     .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
                     .sort((a, b) => a.dist - b.dist)
                     .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
 
+            // Shared context for whichever audit row this detail produces.
+            // Built up front so a SKIP records just as much detail as a
+            // successful deduction - a silently skipped color is exactly
+            // the case that has been hardest to diagnose after the fact
+            // ("why is this spool still showing the same number").
+            const audit = {
+                printKey: key,
+                printName: item.name,
+                printStart: item.start,
+                event: "deduct",
+                source: override
+                    ? (Array.isArray(override.details) ? "override-multi" : "override-single")
+                    : "task-amsdetail",
+                sourceHex: hex,
+                sourceMaterial: material,
+                slotIndex,
+                viaSlotAssignment: !!assignedFilament,
+                weightClaimed: d.weight,
+            };
+
             if (!filament || !filament.spools || filament.spools.length === 0)
             {
+                auditSpoolChange({ ...audit, event: "skip", reason: "no library filament matched this color/material" });
                 allMatched = false;
                 return;
             }
@@ -3053,8 +3234,21 @@ async function processFilamentDeductions(items)
                 .filter(s => s.remaining > 0 && !s.removedAt)
                 .sort((a, b) => a.remaining - b.remaining)[0];
 
+            // Every audit row from here on can name the filament that was
+            // actually picked - including its OWN colorHex, which is the
+            // value to compare against sourceHex when checking whether a
+            // slot assignment or a fuzzy match chose the right spool.
+            const resolved = {
+                ...audit,
+                filamentId: filament.id,
+                filamentColor: filament.color,
+                filamentColorHex: filament.colorHex,
+                filamentMaterial: filament.material,
+            };
+
             if (!target)
             {
+                auditSpoolChange({ ...resolved, event: "skip", reason: "no active spool with weight remaining" });
                 allMatched = false;
                 return;
             }
@@ -3069,9 +3263,19 @@ async function processFilamentDeductions(items)
 
             if (delta > 0)
             {
-                target.remaining = Math.max(0, target.remaining - delta);
+                const before = target.remaining;
+                target.remaining = Math.max(0, before - delta);
                 log[hex] = already + delta;
                 changed = true;
+
+                auditSpoolChange({
+                    ...resolved,
+                    spoolId: target.id,
+                    alreadyDeducted: already,
+                    delta,
+                    remainingBefore: before,
+                    remainingAfter: target.remaining,
+                });
             }
         });
 
@@ -3104,9 +3308,15 @@ async function processFilamentDeductions(items)
     renderFilamentLibrary();
     renderTodayTotals();
     await saveFilamentLibrary();
+    await flushAuditLog();
 }
 
-loadFilamentLibrary().then(reconcileDeductionLog);
+// Purge first: it clears rows that were already settled by hand, so
+// reconcile can't "refund" them a second time. Anything it deliberately
+// leaves behind is a genuine stale row and reconcile handles it properly.
+loadFilamentLibrary()
+    .then(purgeStaleDuplicateDeductions)
+    .then(reconcileDeductionLog);
 
 // ===== Add Filament modal =====
 //
