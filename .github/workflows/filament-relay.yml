@@ -58,3 +58,7 @@ jobs:
       - run: python scripts/audit_fossil_recheck.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+
+      - run: python scripts/audit_fossil_recheck2.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
