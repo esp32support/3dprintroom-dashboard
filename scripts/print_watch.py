@@ -45,6 +45,7 @@ PRINTER_TOPIC = "ifix/printerroom/jole2026/printer"
 STATE_URL = "https://3dprintroom-dashboard.pages.dev/api/printer-watch-state"
 TASK_URL = "https://3dprintroom-dashboard.pages.dev/api/printer-task"
 SYNC_URL = "https://3dprintroom-dashboard.pages.dev/api/gcode-sync"
+FILAMENT_URL = "https://3dprintroom-dashboard.pages.dev/api/device-filament"
 
 USER_AGENT = "Mozilla/5.0 (compatible; print-watch-github-actions)"
 
@@ -105,6 +106,23 @@ def fetch_live_snapshot(hivemq_user, hivemq_pass):
 
     client.loop_stop()
     return got.get("payload")
+
+
+def assigned_filament_for_slot(library, slot):
+    """The dashboard's own explicit slot assignment, when one exists for
+    this slot - authoritative over the printer's own reported color the
+    same way it already is everywhere else this pattern is used (AMS card,
+    deduction). Confirmed live: without this, a slot explicitly assigned to
+    Fossil Gray still got a gcode-verified correction recorded as Basic
+    Silver, because this script only ever looked at Bambu's own generic
+    AMS color report - it had no idea the assignment feature existed."""
+    assignments = library.get("slotAssignments") or {}
+    filament_id = assignments.get(str(slot))
+
+    if not filament_id:
+        return None
+
+    return next((f for f in library.get("filaments", []) if f.get("id") == filament_id), None)
 
 
 def find_matching_task(tasks, subtask_name, current_start):
@@ -189,14 +207,20 @@ def main():
                     match = find_matching_task(task_data.get("tasks", []), state["subtaskName"], state["currentStart"])
 
                     if match and match.get("weight"):
+                        library = api_get(FILAMENT_URL, sync_secret)
+                        assigned = assigned_filament_for_slot(library, slot)
+
+                        material = assigned["material"] if assigned else tray["type"]
+                        color_hex = assigned["colorHex"].upper() if assigned else tray["color"][:6].upper()
+
                         result = api_post(SYNC_URL, sync_secret, {
                             "printName": state["subtaskName"],
                             "startTime": state["currentStart"],
-                            "material": tray["type"],
-                            "colorHex": tray["color"][:6].upper(),
+                            "material": material,
+                            "colorHex": color_hex,
                             "weight": match["weight"],
                         })
-                        log(f"pushed correction: {result}")
+                        log(f"pushed correction ({'assigned' if assigned else 'live tray'} color): {result}")
                     else:
                         log("no matching Task API weight found - skipping")
                 except Exception as e:
@@ -211,15 +235,24 @@ def main():
                 task_slots = {d.get("slotId") for d in ams_detail if d.get("slotId") is not None}
 
                 if match and ams_detail and task_slots == tray_seen:
-                    details = [
-                        {
-                            "material": d["type"],
-                            "colorHex": d["color"][:6].upper(),
+                    library = api_get(FILAMENT_URL, sync_secret)
+
+                    details = []
+                    for d in ams_detail:
+                        if not (d.get("type") and d.get("color") and d.get("weight")):
+                            continue
+
+                        # See assigned_filament_for_slot()'s own comment -
+                        # same precedence as the single-color path above,
+                        # per detail (a multi-color print can have some
+                        # slots assigned and others not).
+                        assigned = assigned_filament_for_slot(library, d.get("slotId"))
+
+                        details.append({
+                            "material": assigned["material"] if assigned else d["type"],
+                            "colorHex": assigned["colorHex"].upper() if assigned else d["color"][:6].upper(),
                             "weight": d["weight"],
-                        }
-                        for d in ams_detail
-                        if d.get("type") and d.get("color") and d.get("weight")
-                    ]
+                        })
 
                     if details:
                         result = api_post(SYNC_URL, sync_secret, {
