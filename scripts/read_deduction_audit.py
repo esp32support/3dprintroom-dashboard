@@ -59,14 +59,18 @@ def main():
         head = f"[{ts}] {event.upper():<7} {e.get('printName') or e.get('printKey', '?')}"
         log(head)
 
-        # How the target was chosen is the single most useful line here -
-        # a wrong spool is almost always a wrong CHOICE, not wrong maths.
-        chose = "slot assignment" if e.get("viaSlotAssignment") else "color match"
-        slot = e.get("slotIndex")
-        slot_txt = f"slot {slot}" if slot is not None else "slot n/a"
+        line = f"          source={e.get('source','?')}  reported={e.get('sourceHex','?')} {e.get('sourceMaterial','')}".rstrip()
 
-        log(f"          source={e.get('source','?')}  reported={e.get('sourceHex','?')}"
-            f" {e.get('sourceMaterial','')}  via {chose} ({slot_txt})")
+        # How the target was chosen is the single most useful detail here -
+        # a wrong spool is almost always a wrong CHOICE, not wrong maths.
+        # Only rows that actually went through that choice carry the flag,
+        # so purge/reconcile rows don't claim a decision they never made.
+        if "viaSlotAssignment" in e:
+            chose = "slot assignment" if e["viaSlotAssignment"] else "color match"
+            slot = e.get("slotIndex")
+            line += f"  via {chose}" + (f" (slot {slot})" if slot is not None else " (no slot reported)")
+
+        log(line)
 
         if e.get("filamentId"):
             log(f"          -> {e.get('filamentColor','?')} [{e.get('filamentColorHex','?')}]"
