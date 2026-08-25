@@ -49,13 +49,18 @@ function buildConnectPacket({ clientId, username, password, keepAliveSeconds }) 
     ]);
 }
 
-function buildPublishPacket({ topic, payload }) {
+function buildPublishPacket({ topic, payload, retain = false }) {
     const topicBytes = encodeUtf8String(topic);
     const payloadBytes = new TextEncoder().encode(payload);
     const remaining = topicBytes.length + payloadBytes.length;
 
+    // 0x30 = PUBLISH, QoS 0, no dup. Bit 0 is the RETAIN flag - needed for
+    // state topics a device must be able to read back on reconnect (the
+    // filament snapshot), but wrong for the one-shot command topics the
+    // trigger-* endpoints use, where a retained message would be re-
+    // delivered as a fresh command every time a device resubscribes.
     return new Uint8Array([
-        0x30,                              // packet type: PUBLISH, QoS 0, no retain, no dup
+        0x30 | (retain ? 0x01 : 0x00),
         ...encodeRemainingLength(remaining),
         ...topicBytes,
         ...payloadBytes,
@@ -66,7 +71,7 @@ const DISCONNECT_PACKET = new Uint8Array([0xE0, 0x00]);
 
 // Publishes a single message and resolves once the socket has cleanly closed.
 // Rejects on connect failure, bad CONNACK, or timeout.
-export function mqttPublishOnce({ url, username, password, topic, payload, timeoutMs = 10000 }) {
+export function mqttPublishOnce({ url, username, password, topic, payload, retain = false, timeoutMs = 10000 }) {
     return new Promise((resolve, reject) => {
         const clientId = "trigger-" + Math.random().toString(16).slice(2, 10);
         let settled = false;
@@ -109,7 +114,7 @@ export function mqttPublishOnce({ url, username, password, topic, payload, timeo
                 }
 
                 connacked = true;
-                ws.send(buildPublishPacket({ topic, payload }));
+                ws.send(buildPublishPacket({ topic, payload, retain }));
                 ws.send(DISCONNECT_PACKET);
                 ws.close();
             }
