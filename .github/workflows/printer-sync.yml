@@ -1,0 +1,89 @@
+name: Printer sync (filament relay + print watch)
+
+# Renamed from filament-relay.yml on 2026-08-27: something external, not
+# traceable from this machine, this Claude session, or this repo's own
+# code, was calling this workflow's dispatch API every ~2 minutes for over
+# 46 hours straight (2026-08-25 21:12 through 2026-08-27 19:16 UTC,
+# confirmed via `gh run list` - every run tagged event=workflow_dispatch,
+# actor=esp32support). That flood coincided with the actual GitHub Actions
+# "all jobs failed" incident (HiveMQ connection timeouts + GitHub
+# startup_failures from exceeding concurrency, both on 2026-08-26
+# afternoon) and is the likely cause of CYD needing a manual power cycle
+# around the same time.
+#
+# Investigated: not Windows Task Scheduler, not a local process, not a
+# CronCreate/ScheduleWakeup job, not a background agent, not this repo's
+# own Pages Functions code (no workflow_dispatch/actions API call anywhere
+# in functions/ or scripts/), not the Cloudflare Pages project (no
+# wrangler.toml, no scheduled() handler), not Render (that GitHub App is
+# for a different, unrelated project). Personal-account security logs
+# don't record repo-level workflow_dispatch API calls (that granularity
+# needs an Enterprise/Org audit log), so the actual caller was never
+# positively identified.
+#
+# filament-relay.yml was disabled rather than left exposed. This file is
+# the same three jobs under a NEW workflow ID/filename - the dispatch API
+# is called by exact workflow filename or numeric ID, so whatever was
+# calling the old one has nothing to call here unless it starts targeting
+# this file by name specifically. Watch `gh run list --workflow=printer-
+# sync.yml --event=workflow_dispatch` for the first few days after this
+# lands - any hit there means the caller enumerates workflows dynamically
+# rather than having the old name hardcoded, and this rename didn't help.
+#
+# Three LAN-free jobs replacing what gcode_sync_daemon.py used to do on a
+# PC that had to stay on:
+#   1. filament_relay.py - fetches the dashboard's filament inventory and
+#      republishes it to HiveMQ so the CYD display can read it (a direct
+#      pull from the device itself isn't reliable - see that script and
+#      cyd-display's printer/cloud_publish.cpp for why). Note: the
+#      dashboard's own /api/filament-library POST path now ALSO publishes
+#      this snapshot instantly on every save (see that Function) - this
+#      cron is a safety net, not the primary path, for exactly this kind
+#      of "the cron itself is unreliable" situation.
+#   2. print_watch.py - detects a single-color print finishing from the
+#      printer's live MQTT status and pushes an accurate weight/color
+#      correction, using Bambu's Task API for weight (confirmed reliable)
+#      instead of FTPS-reading the gcode header off the printer's SD card.
+#   3. power_watch.py - samples the smart plug's relayed reading (see
+#      /api/power-history) to build day/week/month min/max/average history
+#      for the dashboard's Power tab History card - throttles its own KV
+#      writes to once/hour internally, see that script's docstring.
+#
+# GitHub doesn't run schedules reliably below ~5 minutes (and may delay
+# even this under load) - the PC daemon these replace ran continuously,
+# so updates/detections here are on a coarser cadence. Also runnable by
+# hand via the Actions tab (workflow_dispatch) for testing.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install paho-mqtt
+
+      - run: python scripts/filament_relay.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      - run: python scripts/print_watch.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      - run: python scripts/power_watch.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
