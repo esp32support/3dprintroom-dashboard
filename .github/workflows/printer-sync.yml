@@ -87,9 +87,3 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # Temporary - one-shot CYD OTA state check, remove after use.
-      - run: python scripts/check_cyd_ota_state.py
-        env:
-          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
-          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
