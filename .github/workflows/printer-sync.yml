@@ -88,12 +88,12 @@ jobs:
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
 
-      # Temporary - audit last print's deduction trail, remove after use.
-      - run: python scripts/audit_recent_print.py
+      # Temporary - verify the Lightbox_Draft correction, remove after use.
+      - run: python scripts/verify_lightbox_fix.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
 
-      # Temporary - verify the Lightbox_Draft correction, remove after use.
-      - run: python scripts/verify_lightbox_fix.py
+      # Temporary - check Task API for the newest print, remove after use.
+      - run: python scripts/check_new_print_task.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
