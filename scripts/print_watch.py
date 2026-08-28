@@ -187,14 +187,41 @@ def main():
     # 254 (external spool) is kept - that IS real filament being used.
     tray_seen = set(state.get("trayNowSeen", [])) - {255}
 
-    # New print started (or a different one resumed) - reset tracking.
-    if now_running and state.get("currentStart") != current_start:
+    # Reset tracking only when this is genuinely a NEW print - a different
+    # job by name, or resuming after the previous one actually ended
+    # (FINISH/FAILED). NOT keyed on currentStart changing: Bambu assigns a
+    # brand-new currentStart on every manual resume after a plain PAUSE
+    # too, not only on a genuinely new print. Resetting on that alone wiped
+    # tray_seen on every pause of a multi-color print with manual EXT spool
+    # swaps - by the time the job's FINAL segment actually finished, this
+    # script had only ever tracked that last segment's one tray, and wrongly
+    # attributed the WHOLE job's weight to it (see the FINISH-gate comment
+    # below for the full incident this caused). subtaskName staying the
+    # same across a pause/resume is the real signal this is still one job.
+    if now_running and (state.get("subtaskName") != subtask_name or state.get("gcodeState") in ("FINISH", "FAILED")):
         tray_seen = set()
 
     if now_running and tray_now is not None and tray_now != 255:
         tray_seen.add(tray_now)
 
-    if was_running and not now_running and state.get("subtaskName") and state.get("currentStart"):
+    # Only a genuine FINISH, not merely "stopped running" - the latter also
+    # covers PAUSE, which happens repeatedly on a print with manual spool
+    # swaps (EXT spool color changes) and used to trigger this whole block
+    # every single time. Confirmed live: a 5-color print paused/resumed 14
+    # times (Bambu assigns a brand-new currentStart on every resume, so
+    # tray_seen - reset below - never accumulated across the whole job) hit
+    # this block wrongly on every pause and, once, actually got as far as
+    # pushing a single-color correction for the print's FINAL segment's one
+    # tray, attributing the ENTIRE print's weight to it. The dashboard's own
+    # live deduction (matchTaskForHistoryItem, using Task API's real
+    # amsDetail) had already correctly deducted all 5 colors BEFORE that -
+    # this override silently overwrote it, and reconcileDeductionLog()
+    # refunded the other 4 colors back to their spools since they no longer
+    # matched the new override's single color. ~29g of real usage vanished
+    # from the ledger. Same conservative posture as the dashboard's own
+    # outcome-gate (processFilamentDeductions in app.js) - only FINISH is
+    # trustworthy for a weight-affecting decision.
+    if was_running and gcode_state == "FINISH" and state.get("subtaskName") and state.get("currentStart"):
         log(f"print finished: {state['subtaskName']!r}, AMS trays seen: {sorted(tray_seen)}")
 
         if len(tray_seen) == 1:
@@ -205,8 +232,25 @@ def main():
                 try:
                     task_data = api_get(TASK_URL, sync_secret)
                     match = find_matching_task(task_data.get("tasks", []), state["subtaskName"], state["currentStart"])
+                    match_ams_detail = (match or {}).get("amsDetail", [])
+                    match_colors = {d.get("color") for d in match_ams_detail if d.get("color")}
 
-                    if match and match.get("weight"):
+                    # A single tray seen during THIS segment doesn't mean
+                    # the whole job was single-color - it only means this
+                    # script's own sampling (throttled to GitHub's actual
+                    # cron cadence, minutes apart) never caught a different
+                    # tray active, which is exactly what happened above.
+                    # Task API's own amsDetail reflects the WHOLE job
+                    # regardless of pauses - if it shows more than one
+                    # color, trust that over this segment-scoped sample and
+                    # defer entirely to whatever the dashboard's own live
+                    # deduction already did with the real breakdown, rather
+                    # than overwriting it with a wrong single-color guess.
+                    if len(match_colors) > 1:
+                        log(f"live sample saw only tray {slot}, but Task API shows {len(match_colors)} "
+                            "colors for this job - not actually single-color, skipping "
+                            "(the dashboard's own multi-color deduction already covers this)")
+                    elif match and match.get("weight"):
                         library = api_get(FILAMENT_URL, sync_secret)
                         assigned = assigned_filament_for_slot(library, slot)
 
