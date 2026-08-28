@@ -92,8 +92,3 @@ jobs:
       - run: python scripts/audit_recent_print.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
-
-      # Temporary - one-off Lightbox_Draft multi-color correction, remove after use.
-      - run: python scripts/fix_lightbox_multicolor.py
-        env:
-          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
