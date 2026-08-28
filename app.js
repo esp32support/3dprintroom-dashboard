@@ -2897,10 +2897,32 @@ async function reconcileDeductionLog()
     {
         const override = filamentLibrary.historyOverrides[key];
 
-        if (!override || Array.isArray(override.details) || typeof override.colorHex !== "string")
+        if (!override)
             continue;
 
-        const correctHex = override.colorHex.toUpperCase();
+        // The SET of hexes (and each one's material) this print's override
+        // now considers correct - a single-color override has exactly one,
+        // a multi-color (details[]) override can have several. Anything in
+        // deductionLog NOT in this set is a stale row left over from
+        // before the correction landed. Confirmed live: this used to skip
+        // every multi-color override entirely (the `Array.isArray` bail-
+        // out below, now removed) - a print corrected from single-color
+        // Black to its true 5-color breakdown kept its old raw-hex Blue
+        // row sitting in the log alongside the new corrected one, charging
+        // the Blue spool twice for one print's worth of Blue.
+        const correctEntries = Array.isArray(override.details)
+            ? override.details
+                .filter(d => typeof d.colorHex === "string")
+                .map(d => ({ hex: d.colorHex.toUpperCase(), material: (d.material || "").toUpperCase() }))
+            : (typeof override.colorHex === "string"
+                ? [{ hex: override.colorHex.toUpperCase(), material: (override.material || "").toUpperCase() }]
+                : []);
+
+        if (correctEntries.length === 0)
+            continue;
+
+        const correctHexes = new Set(correctEntries.map(e => e.hex));
+        const correctHex = correctEntries.map(e => e.hex).join(", ");
 
         for (const hex of Object.keys(log))
         {
@@ -2918,7 +2940,7 @@ async function reconcileDeductionLog()
             // equality is exactly the right test - and it can't be fooled
             // by two genuinely different filaments that happen to look
             // alike, which is the whole failure mode above.
-            if (hex === correctHex)
+            if (correctHexes.has(hex))
                 continue;
 
             const grams = log[hex];
@@ -2926,7 +2948,12 @@ async function reconcileDeductionLog()
             if (!grams)
                 continue;
 
-            const material = (override.material || "").toUpperCase();
+            // Every detail's own material for a genuine multi-material
+            // print would be more precise, but this printer's real-world
+            // usage is PLA-only per detail in every case seen so far - the
+            // first entry's material is a reasonable, simple assumption,
+            // same as the single-color case already made.
+            const material = correctEntries[0].material;
             const filament = filamentLibrary.filaments
                 .filter(f => f.material.toUpperCase() === material)
                 .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
