@@ -92,3 +92,9 @@ jobs:
       - run: python scripts/check_petg_deduction.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
+
+      # Temporary - check current print state, remove after use.
+      - run: python scripts/check_current_print.py
+        env:
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
