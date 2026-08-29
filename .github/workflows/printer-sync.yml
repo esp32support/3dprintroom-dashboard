@@ -93,3 +93,8 @@ jobs:
         env:
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      # Temporary - check task id matching, remove after use.
+      - run: python scripts/check_task_ids.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
