@@ -87,20 +87,3 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # Temporary - check PETG deduction, remove after use.
-      - run: python scripts/check_petg_deduction.py
-        env:
-          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
-
-      # Temporary - check current print state, remove after use.
-      - run: python scripts/check_current_print.py
-        env:
-          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
-          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # Temporary - check CYD connection/health state, remove after use.
-      - run: python scripts/check_cyd_ota_state.py
-        env:
-          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
-          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
