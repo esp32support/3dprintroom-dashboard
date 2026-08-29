@@ -816,12 +816,26 @@ function renderAmsGrid(trays, trayNow)
         const assignedId = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slotId];
         const assigned = assignedId ? filamentLibrary.filaments.find(f => f.id === assignedId) : null;
 
+        // The external mount has no physical presence sensor the way an
+        // AMS slot does - Bambu's own reported color/type for it are
+        // "sticky", holding whatever was last configured even after the
+        // spool is physically removed and cleared in Bambu Studio. remain
+        // hitting exactly 0 is Bambu's own actual "nothing loaded" signal
+        // here (confirmed live: color/type kept reporting the removed
+        // spool's old values while remain read 0, and Bambu Studio's own
+        // UI already showed it as empty) - null/undefined means "not
+        // reported", not "empty", so only treat an explicit 0 this way.
+        // A1-A4's own remain is always reported as a flat 100 on this
+        // printer regardless of real usage, so this can't misfire there.
+        const extEmpty = slotId === 254 && tray && tray.remain === 0;
+        const hasRawTray = tray && tray.type && !extEmpty;
+
         const slot = document.createElement("div");
         slot.className = "amsSlot" + (isActive ? " active" : "") + (slotId === 254 ? " external" : "");
 
         // Border matches the actual filament color instead of a generic
         // highlight color, so it reads as "this exact spool" at a glance.
-        if (isActive && (assigned || (tray && tray.type)))
+        if (isActive && (assigned || hasRawTray))
             slot.style.borderColor = assigned ? trayColorCss(assigned.colorHex || "") : trayColorCss(tray.color);
 
         const labelEl = document.createElement("span");
@@ -830,15 +844,15 @@ function renderAmsGrid(trays, trayNow)
 
         const spool = document.createElement("span");
         spool.className = "amsSpool";
-        spool.style.background = assigned ? trayColorCss(assigned.colorHex || "") : (tray && tray.type ? trayColorCss(tray.color) : "#2a3136");
+        spool.style.background = assigned ? trayColorCss(assigned.colorHex || "") : (hasRawTray ? trayColorCss(tray.color) : "#2a3136");
 
         const hole = document.createElement("span");
         hole.className = "amsSpoolHole";
         spool.appendChild(hole);
 
         const material = document.createElement("span");
-        material.className = "amsSlotMaterial" + (assigned || (tray && tray.type) ? "" : " empty");
-        material.textContent = assigned ? `${assigned.material} ${assigned.color}` : (tray && tray.type ? tray.type : "Empty");
+        material.className = "amsSlotMaterial" + (assigned || hasRawTray ? "" : " empty");
+        material.textContent = assigned ? `${assigned.material} ${assigned.color}` : (hasRawTray ? tray.type : "Empty");
 
         slot.appendChild(labelEl);
         slot.appendChild(spool);

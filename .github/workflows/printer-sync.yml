@@ -87,9 +87,3 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # Temporary - check EXT vt_tray raw state, remove after use.
-      - run: python scripts/check_ext_vttray.py
-        env:
-          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
-          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
