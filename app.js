@@ -574,6 +574,27 @@ function colorDistance(hexA, hexB)
 // disagree on what counts as "close enough".
 const COLOR_MATCH_THRESHOLD = 80;
 
+// deductionLog[key][hex] holds either a plain number (grams - the
+// original, pre-2026-08-29 shape) or { grams, filamentId } (current
+// shape, written by processFilamentDeductions below). filamentId
+// disambiguates two different filaments that share an identical color -
+// confirmed live: PLA Cotton White and PETG Basic White are both
+// FFFFFF, so a plain color-distance guess (renderTodayTotals used to do
+// exactly this) always picked whichever one happened to sort first in
+// the library array, silently mislabeling every PETG White/Black print
+// as PLA. A bare number means no filamentId was ever recorded (an entry
+// written before this fix) - callers needing the filament fall back to
+// the old color-distance guess only in that case.
+function gramsOf(entry)
+{
+    return typeof entry === "object" && entry !== null ? entry.grams : (entry || 0);
+}
+
+function filamentIdOf(entry)
+{
+    return typeof entry === "object" && entry !== null ? entry.filamentId : null;
+}
+
 // Best-effort color correction for DISPLAY - Task API's raw amsDetail
 // color is the same approximate/sometimes-wrong field the deduction logic
 // already treats with suspicion (see colorDistance's own comment above);
@@ -1258,26 +1279,32 @@ function renderTodayTotals()
 
         printsInPeriod.add(key);
 
-        for (const [hex, grams] of Object.entries(log || {}))
+        for (const [hex, entry] of Object.entries(log || {}))
         {
+            const grams = gramsOf(entry);
+
             if (!grams)
                 continue;
 
             // deductionLog's hex keys are the RAW source color (Task API's
             // targetColor or the live tray reading) at the moment of
             // deduction, not the library's own stored hex - same "BCBCBC
-            // vs BBBBBB, both gray" mismatch as elsewhere, confirmed live
-            // here too (showed "? - Gray"/"? - Blue" instead of the real
-            // material). Fuzzy-match against the library the same way,
-            // not an exact lookup. No material to pre-filter by (the log
-            // only ever stored color), so this can only mis-pick when two
-            // different materials share a near-identical color - not the
-            // case for this library today, but a real limitation of what
-            // deductionLog records.
-            const filament = filamentLibrary.filaments
-                .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
-                .sort((a, b) => a.dist - b.dist)
-                .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
+            // vs BBBBBB, both gray" mismatch as elsewhere. filamentId (see
+            // its own comment on deductionLog) resolves this exactly when
+            // recorded - only a legacy entry from before that falls back
+            // to the color-distance guess, which is a REAL mis-pick risk
+            // whenever two different materials share a near-identical
+            // color: confirmed live, PLA Cotton White and PETG Basic White
+            // are both FFFFFF (same for Black), and every PETG White/Black
+            // print here showed up as "PLA - White"/"PLA - Black" because
+            // the guess always landed on whichever sorted first.
+            const recordedId = filamentIdOf(entry);
+            const filament = recordedId
+                ? filamentLibrary.filaments.find(f => f.id === recordedId)
+                : filamentLibrary.filaments
+                    .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
+                    .sort((a, b) => a.dist - b.dist)
+                    .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
             const material = filament ? filament.material : "?";
             const canonicalColor = filament ? filament.colorHex : hex;
             const gKey = `${canonicalColor}|${material}`;
@@ -2957,22 +2984,39 @@ async function reconcileDeductionLog()
             if (correctHexes.has(hex))
                 continue;
 
-            const grams = log[hex];
+            const entry = log[hex];
+            const grams = gramsOf(entry);
 
             if (!grams)
                 continue;
 
-            // Every detail's own material for a genuine multi-material
-            // print would be more precise, but this printer's real-world
-            // usage is PLA-only per detail in every case seen so far - the
-            // first entry's material is a reasonable, simple assumption,
-            // same as the single-color case already made.
-            const material = correctEntries[0].material;
-            const filament = filamentLibrary.filaments
-                .filter(f => f.material.toUpperCase() === material)
-                .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
-                .sort((a, b) => a.dist - b.dist)
-                .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
+            // The filament this row actually charged, when recorded (see
+            // deductionLog's own comment on why this is needed at all) -
+            // exact, no guessing. Confirmed live: two same-color, different-
+            // material filaments (PLA Cotton White and PETG Basic White,
+            // both FFFFFF) made the OLD color+material guess below pick
+            // whichever sorted first regardless of which was really
+            // charged - only reached now as a fallback for a legacy entry
+            // that predates filamentId being recorded.
+            const recordedId = filamentIdOf(entry);
+            const filament = recordedId
+                ? filamentLibrary.filaments.find(f => f.id === recordedId)
+                : (() =>
+                  {
+                      // Every detail's own material for a genuine multi-
+                      // material print would be more precise, but this
+                      // printer's real-world usage is single-material per
+                      // detail in every case seen so far - the first
+                      // entry's material is a reasonable, simple
+                      // assumption, same as the single-color case already
+                      // made.
+                      const material = correctEntries[0].material;
+                      return filamentLibrary.filaments
+                          .filter(f => f.material.toUpperCase() === material)
+                          .map(f => ({ f, dist: colorDistance(hex, (f.colorHex || "").toUpperCase()) }))
+                          .sort((a, b) => a.dist - b.dist)
+                          .find(c => c.dist <= COLOR_MATCH_THRESHOLD)?.f;
+                  })();
 
             if (filament && filament.spools && filament.spools.length > 0)
             {
@@ -3075,7 +3119,7 @@ async function purgeStaleDuplicateDeductions()
 
         const correctHex = override.colorHex.toUpperCase();
 
-        if (typeof log[correctHex] !== "number")
+        if (log[correctHex] === undefined)
             continue;   // not re-deducted yet - leave it for reconcile to refund
 
         for (const hex of Object.keys(log))
@@ -3090,7 +3134,7 @@ async function purgeStaleDuplicateDeductions()
                 source: PURGE_MIGRATION,
                 sourceHex: hex,
                 correctHex,
-                delta: log[hex],
+                delta: gramsOf(log[hex]),
             });
 
             delete log[hex];
@@ -3105,6 +3149,83 @@ async function purgeStaleDuplicateDeductions()
     renderFilamentLibrary();
     renderTodayTotals();
     await saveFilamentLibrary();
+}
+
+// One-time backfill for two prints deducted BEFORE deductionLog started
+// recording filamentId (see that field's own comment) - both used PETG
+// Basic White/Black, but the color-only guess renderTodayTotals used to
+// make landed on PLA Cotton White/Charcoal Black instead (same FFFFFF/
+// 161616-adjacent colors, whichever filament happened to sort first).
+// Confirmed live against Task API for these exact two jobs: both
+// amsDetail entries report "PETG" for every tray. Deliberately narrow -
+// only these two specific keys, evidenced directly, not a general guess
+// applied to any other FFFFFF/161616 entry in the log (plenty of those
+// are genuinely PLA going back weeks, and nothing here justifies
+// touching them).
+const BACKFILL_PETG_MIGRATION = "backfill-petg-white-black-filamentid-2026-08-29";
+
+const BACKFILL_PETG_ENTRIES = [
+    { key: "0.2mm layer, 3 walls, 15% infill__2026-08-29 10:59:35", hex: "FFFFFF", filamentId: "t52as2oy" },
+    { key: "0.2mm layer, 3 walls, 15% infill__2026-08-29 10:59:35", hex: "000000", filamentId: "3b8gl3xg" },
+    { key: "0.2mm layer, 3 walls, 15% infill__2026-08-29 13:11:20", hex: "FFFFFF", filamentId: "t52as2oy" },
+    { key: "0.2mm layer, 3 walls, 15% infill__2026-08-29 13:11:20", hex: "000000", filamentId: "3b8gl3xg" },
+];
+
+async function backfillPetgFilamentIds()
+{
+    if (!filamentLibraryLoaded)
+        return;
+
+    filamentLibrary.migrations = filamentLibrary.migrations || [];
+
+    if (filamentLibrary.migrations.includes(BACKFILL_PETG_MIGRATION))
+        return;
+
+    let changed = false;
+
+    for (const { key, hex, filamentId } of BACKFILL_PETG_ENTRIES)
+    {
+        const log = filamentLibrary.deductionLog[key];
+        const entry = log ? log[hex] : undefined;
+
+        if (entry === undefined || filamentIdOf(entry))
+            continue;   // already gone, or already has an id (shouldn't happen, but don't clobber)
+
+        const filament = filamentLibrary.filaments.find(f => f.id === filamentId);
+
+        if (!filament)
+            continue;
+
+        const grams = gramsOf(entry);
+        log[hex] = { grams, filamentId };
+        changed = true;
+
+        auditSpoolChange({
+            printKey: key,
+            event: "skip",
+            reason: "backfilled filamentId on an existing entry - no spool weight changed, only which filament it's attributed to",
+            source: BACKFILL_PETG_MIGRATION,
+            sourceHex: hex,
+            filamentId,
+            filamentColor: filament.color,
+            filamentColorHex: filament.colorHex,
+            filamentMaterial: filament.material,
+            delta: grams,
+        });
+    }
+
+    filamentLibrary.migrations.push(BACKFILL_PETG_MIGRATION);
+
+    if (!changed)
+    {
+        await saveFilamentLibrary();
+        return;
+    }
+
+    renderFilamentLibrary();
+    renderTodayTotals();
+    await saveFilamentLibrary();
+    await flushAuditLog();
 }
 
 // Auto-deducts each finished print's acquired weight from the matching
@@ -3317,14 +3438,14 @@ async function processFilamentDeductions(items)
             // double-deduction this prevents when a print gets
             // re-processed after a gcode correction.
             const log = filamentLibrary.deductionLog[key] || (filamentLibrary.deductionLog[key] = {});
-            const already = log[hex] || 0;
+            const already = gramsOf(log[hex]);
             const delta = d.weight - already;
 
             if (delta > 0)
             {
                 const before = target.remaining;
                 target.remaining = Math.max(0, before - delta);
-                log[hex] = already + delta;
+                log[hex] = { grams: already + delta, filamentId: filament.id };
                 changed = true;
 
                 auditSpoolChange({
@@ -3379,8 +3500,12 @@ async function processFilamentDeductions(items)
 // Purge first: it clears rows that were already settled by hand, so
 // reconcile can't "refund" them a second time. Anything it deliberately
 // leaves behind is a genuine stale row and reconcile handles it properly.
+// Backfill only ADDS a filamentId to existing rows (no spool weight
+// change either way), so its order relative to the other two doesn't
+// matter - placed here simply to keep every one-time migration together.
 loadFilamentLibrary()
     .then(purgeStaleDuplicateDeductions)
+    .then(backfillPetgFilamentIds)
     .then(reconcileDeductionLog);
 
 // ===== Add Filament modal =====
