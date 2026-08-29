@@ -87,3 +87,9 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      # Temporary - check device history material capture, remove after use.
+      - run: python scripts/check_history_material.py
+        env:
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
