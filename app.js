@@ -1446,11 +1446,19 @@ function updatePower(data)
 
     setText("powerWatts", w.toFixed(0));
     setText("powerVolts", v.toFixed(0));
-    setText("powerAmps", a.toFixed(2));
+    // 3 decimals, not 2: the plug's BL0937 reports milliamp resolution
+    // (e.g. 0.103A), and rounding to 2 threw away that last digit - at
+    // this printer's idle draw the whole reading lives in it, where 0.103
+    // vs 0.115 displayed identically as "0.10".
+    setText("powerAmps", a.toFixed(3));
 
-    setText("powerToday", `${(Number(data.todayKwh) || 0).toFixed(2)} kWh`);
-    setText("powerYesterday", `${(Number(data.yesterdayKwh) || 0).toFixed(2)} kWh`);
-    setText("powerTotal", `${(Number(data.totalKwh) || 0).toFixed(2)} kWh`);
+    // 3 decimals for the same reason as current above - Tasmota reports
+    // kWh to milli-kWh (0.021), and 2 decimals rounded a real day's
+    // consumption down to "0.02", or to a flat "0.00" for anything under
+    // 5Wh. The printer idling overnight lives entirely in that third digit.
+    setText("powerToday", `${(Number(data.todayKwh) || 0).toFixed(3)} kWh`);
+    setText("powerYesterday", `${(Number(data.yesterdayKwh) || 0).toFixed(3)} kWh`);
+    setText("powerTotal", `${(Number(data.totalKwh) || 0).toFixed(3)} kWh`);
 
     // relayState is best-effort on the device side (a separate lightweight
     // poll from the wattage/voltage/current numbers above) - absent if
@@ -1810,7 +1818,10 @@ function renderPowerHistoryCard(dayRecords)
     setText("powerHistMaxA", a.max);
     setText("powerHistAvgA", a.avg);
 
-    setText("powerHistTotalKwh", `${totalKwh.toFixed(2)} kWh`);
+    // Same 3-decimal reasoning as the live kWh readouts above - this sums
+    // per-day totals that are themselves sub-0.1 kWh, so 2 decimals lost
+    // most of the signal.
+    setText("powerHistTotalKwh", `${totalKwh.toFixed(3)} kWh`);
     setText("powerHistDayCount", String(dayRecords.length));
 
     const hintEl = byId("powerHistHint");
