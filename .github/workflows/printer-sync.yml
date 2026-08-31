@@ -87,3 +87,9 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      # Temporary - CYD 1.2.32 update announcement, remove after use.
+      - run: python scripts/announce_cyd_version.py
+        env:
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
