@@ -1908,15 +1908,38 @@ function renderPowerHistoryCard(dayRecords)
     // per-day totals that are themselves sub-0.1 kWh, so 2 decimals lost
     // most of the signal.
     setText("powerHistTotalKwh", `${totalKwh.toFixed(3)} kWh`);
-    setText("powerHistDayCount", String(dayRecords.length));
 
-    // "Days recorded" is meaningless on the Today tab (it can only ever be
-    // 0 or 1) - relabel it to something that carries information there,
-    // rather than showing a constant.
+    // dayRecords.length ("how many DAYS have a record") reads exactly
+    // like "how many prints" and is always 0 or 1 on the Today tab either
+    // way - confirmed live: it showed "1" over a day with 4+ real prints.
+    //
+    // What belongs here instead: how many prints happened in this period -
+    // not the hourly power sampler's own tick count (that runs whether the
+    // printer is idle or not, which isn't "recorded" in the sense this
+    // card means), and not de-duplicated by object name either - a print
+    // that got paused and resumed (Bambu opens a fresh history entry each
+    // time) genuinely drew power again each time it restarted, which is
+    // exactly what a POWER card should count. lastHistoryItems is the
+    // device's own print history (populated by renderPrintHistory,
+    // already loaded for the History panel elsewhere on the page) -
+    // reusing spendPeriodStart/End's exact day-boundary logic keeps this
+    // consistent with how the Filament panel already counts "prints
+    // today" for the same three period names.
+    const periodStart = spendPeriodStart(powerHistoryPeriod);
+    const periodEnd = spendPeriodEnd(powerHistoryPeriod);
+
+    const printsInPeriod = lastHistoryItems.filter(item =>
+    {
+        const start = parseDeviceTime(item.start);
+        return start && start >= periodStart && start < periodEnd;
+    }).length;
+
+    setText("powerHistDayCount", String(printsInPeriod));
+
     const dayCountLabel = byId("powerHistDayCountLabel");
 
     if (dayCountLabel)
-        dayCountLabel.textContent = powerHistoryPeriod === "today" ? "Recorded today" : "Days recorded";
+        dayCountLabel.textContent = powerHistoryPeriod === "today" ? "Prints today" : "Prints recorded";
 
     const hintEl = byId("powerHistHint");
 
