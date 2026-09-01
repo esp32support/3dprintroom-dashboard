@@ -36,6 +36,10 @@ function emptyDay() {
         minV: null, maxV: null, sumV: 0, countV: 0,
         minA: null, maxA: null, sumA: 0, countA: 0,
         kwh: 0,
+        // UTC hour (0-23) this day last actually merged a sample for, -1
+        // meaning none yet today. See onRequestPost's own comment for why
+        // this replaced the caller-side "only run near :00" gate.
+        lastHour: -1,
     };
 }
 
@@ -102,7 +106,25 @@ export async function onRequestPost(context) {
     const existingRaw = await env.FILAMENT_KV.get(key);
     const day = existingRaw ? { ...emptyDay(), ...JSON.parse(existingRaw) } : emptyDay();
 
+    // Once-per-hour dedup lives HERE now, not in the caller's own "only
+    // run near minute :00" check that used to gate this. GitHub's cron
+    // doesn't actually fire every 5 minutes the way the workflow's own
+    // schedule claims - measured elsewhere in this project at 25-60
+    // minutes in practice - so a narrow 5-minute acceptance window could,
+    // and did, go entire hours (a full day, even) without ever being hit,
+    // silently under-sampling regardless of how healthy the plug was.
+    // Computed from THIS server's clock, not anything the caller sends -
+    // a GitHub runner's clock is trustworthy enough, but there's no reason
+    // to depend on it when the source of truth for "what hour is it"
+    // should be authoritative either way.
+    const currentHour = new Date().getUTCHours();
+
+    if (day.lastHour === currentHour) {
+        return jsonResponse({ ok: true, skipped: "already recorded this hour" });
+    }
+
     mergeSample(day, Number(body.w) || 0, Number(body.v) || 0, Number(body.a) || 0);
+    day.lastHour = currentHour;
 
     // Tasmota's own todayKwh counter is already cumulative for the day -
     // just take the latest reading rather than summing samples.

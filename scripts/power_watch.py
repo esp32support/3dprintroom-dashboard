@@ -4,14 +4,19 @@ reading off HiveMQ (retained message, same pattern as print_watch.py's
 fetch_live_snapshot) and pushes it to /api/power-history, which merges it
 into that UTC day's running min/max/average in Cloudflare KV.
 
-The workflow itself runs every 5 minutes (same cron as the other sync
-jobs), but this only actually writes to KV once per hour (see the
-top-of-hour check in main()) - filament_relay.py and print_watch.py
-already had to be throttled once before to stay under Cloudflare's free
-KV tier write limit (1000/day per namespace), and writing every 5
-minutes here (288/day) would eat a big chunk of that budget for a
-feature that doesn't need 5-minute resolution - a day's min/max/average
-is still meaningful from ~24 samples spread across the day.
+Attempts a push on EVERY run - the once-per-hour throttle needed to stay
+under Cloudflare's free KV tier write limit (1000/day/namespace, already
+shared with filament_relay.py and print_watch.py) now lives server-side
+in power-history.js, keyed on the day record's own lastHour field. This
+used to be a client-side "only run within the first 5 minutes of the
+hour" check instead - removed after it caused a real gap: GitHub's own
+*/5 cron actually fires every 25-60 minutes in practice (measured
+elsewhere in this project), so a narrow 5-minute acceptance window could
+go entire hours - a full day, even, confirmed live on 2026-09-01 - without
+ever lining up, regardless of how healthy the plug was. Trying every run
+and letting the server decide "already have this hour" is strictly more
+robust: whichever run happens to be first in a new UTC hour writes it,
+no matter what minute it fires at.
 """
 import datetime
 import json
@@ -76,14 +81,9 @@ def push_sample(sync_secret, date_str, w, v, a, kwh):
 
 
 def main():
-    # Workflow cron fires every 5 minutes; only act on the run closest to
-    # the top of the hour (minute 0-4) so this writes to KV ~24 times/day
-    # instead of ~288 - see the module docstring for why.
+    # See the module docstring - the once-per-hour throttle is server-side
+    # now, not a client-side minute check.
     now = datetime.datetime.now(datetime.timezone.utc)
-
-    if now.minute >= 5:
-        log(f"not top of the hour ({now.isoformat()}) - skipping to limit KV writes")
-        return
 
     sync_secret = os.environ["FILAMENT_SYNC_SECRET"]
     hivemq_user = os.environ["HIVEMQ_USER"]
