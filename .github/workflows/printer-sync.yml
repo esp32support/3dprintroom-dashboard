@@ -87,3 +87,12 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      # Temporary - master OTA trigger, remove after use.
+      - run: python scripts/trigger_master_ota.py
+        env:
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+          MASTER_OTA_USERNAME: ${{ secrets.MASTER_OTA_USERNAME }}
+          MASTER_OTA_PASSWORD: ${{ secrets.MASTER_OTA_PASSWORD }}
+          FIRMWARE_READ_TOKEN: ${{ secrets.FIRMWARE_READ_TOKEN }}
