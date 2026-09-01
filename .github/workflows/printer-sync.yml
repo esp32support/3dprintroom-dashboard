@@ -87,3 +87,10 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      # TEMP - confirms the printer is idle before a master OTA for the
+      # Timer feature. Removed in a follow-up commit right after use.
+      - run: python scripts/check_idle_before_timer_ota.py
+        env:
+          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
+          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
