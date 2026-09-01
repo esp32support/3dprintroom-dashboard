@@ -1483,6 +1483,17 @@ dd{
     margin-top:14px;
 }
 
+.timerGlobalWarning{
+    margin:10px 0 0;
+    padding:8px 10px;
+    border-radius:6px;
+    border:1px solid var(--orange);
+    background:rgba(255,138,61,.1);
+    color:var(--orange);
+    font-size:12px;
+    font-weight:600;
+}
+
 .timerSlotsList{
     margin-top:10px;
     display:flex;

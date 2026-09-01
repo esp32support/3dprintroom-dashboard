@@ -1886,6 +1886,30 @@ function updateTimers(data)
         toggleBtn.textContent = data.Timers === "ON" ? "Turn OFF" : "Turn ON";
     }
 
+    // Tasmota's global "Timers" switch gates ALL 16 slots at once - a slot
+    // with its own Enable=1 still silently never fires while this is OFF.
+    // Confirmed live as the actual cause of a "I set a timer and it just
+    // doesn't fire" report: the slot itself was configured correctly, only
+    // this master switch was off, with nothing in the UI saying so. Scoped
+    // to "some slot is actually enabled" rather than always showing this
+    // when OFF, so it doesn't nag on every visit when timers are
+    // deliberately unused.
+    const warningEl = byId("timerGlobalWarning");
+
+    if (warningEl)
+    {
+        const someSlotEnabled = Object.keys(data).some(
+            (key) => /^Timer\d+$/.test(key) && data[key] && data[key].Enable
+        );
+
+        const shouldWarn = data.Timers !== "ON" && someSlotEnabled;
+
+        warningEl.hidden = !shouldWarn;
+
+        if (shouldWarn)
+            warningEl.textContent = "⚠ Master switch above is OFF - enabled timers below will NOT fire until it's turned ON.";
+    }
+
     renderTimerSlots();
 }
 
