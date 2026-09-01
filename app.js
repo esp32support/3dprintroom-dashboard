@@ -1566,6 +1566,13 @@ function updatePower(data)
 // republishes it unmodified on TIMER_STATE_TOPIC, see master's
 // timer_client.cpp) =====
 
+// Tasmota supports 16 slots per plug, but this dashboard only ever needs a
+// handful (start/stop the printer around a schedule) - showing all 16 was
+// more clutter than the feature earns. Slots above this are still fully
+// usable from Tasmota's own web UI (192.168.1.74/tm) if ever needed; this
+// only limits what THIS dashboard renders.
+const TIMER_SLOT_COUNT = 3;
+
 const TIMER_ACTION_LABELS = ["Off", "On", "Toggle"];
 const TIMER_MODE_LABELS = ["Time", "Sunrise", "Sunset"];
 const TIMER_DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -1824,7 +1831,7 @@ function renderTimerSlots()
     if (!list || !timerState)
         return;
 
-    for (let slot = 1; slot <= 16; slot++)
+    for (let slot = 1; slot <= TIMER_SLOT_COUNT; slot++)
     {
         const t = timerState[`Timer${slot}`] || {};
         const isOpen = timerOpenSlots.has(slot);
