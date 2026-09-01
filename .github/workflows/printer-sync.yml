@@ -88,8 +88,8 @@ jobs:
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
 
-      # Temporary - CYD 1.2.32 update announcement, remove after use.
-      - run: python scripts/announce_cyd_version.py
+      # Temporary - check CYD version vs announced, remove after use.
+      - run: python scripts/check_cyd_version_state.py
         env:
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
