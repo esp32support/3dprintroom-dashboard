@@ -95,6 +95,20 @@ def main():
         log("no live power snapshot received this run - skipping")
         return
 
+    # master publishes {"online": false, "error": "..."} (no powerW/
+    # voltage/current fields) when it can't reach the plug - see
+    # power_client.cpp's logFailure(). Without this check, .get("powerW", 0)
+    # silently defaulted to 0 and got recorded as a genuine zero-power
+    # reading. Confirmed live: three days of history (2026-08-25..27) came
+    # out as 58-71 samples each, ALL zero, minW/maxW/avgW entirely
+    # meaningless - the plug was offline that whole stretch (worsened by
+    # the workflow_dispatch spam incident hammering this exact job during
+    # the same window), and every single sample was this fake zero rather
+    # than a real reading.
+    if snapshot.get("online") is False:
+        log(f"plug reported offline ({snapshot.get('error', 'no reason given')}) - skipping, not recording a fake zero")
+        return
+
     w = snapshot.get("powerW", 0)
     v = snapshot.get("voltage", 0)
     a = snapshot.get("current", 0)
