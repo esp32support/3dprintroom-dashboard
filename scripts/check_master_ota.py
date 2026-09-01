@@ -1,36 +1,40 @@
-"""Temporary: read master's OTA status from its room topic."""
+"""Temporary: does master publish plugInfo yet? Definitive test for
+whether the new build is running, since FW_VERSION wasn't bumped."""
 import json, os, time
 import paho.mqtt.client as mqtt
 
 HIVEMQ_HOST = "489b8202ba4948fd959020e8eed0cedf.s1.eu.hivemq.cloud"
-ROOM_TOPIC = "ifix/printerroom/jole2026"
+POWER_TOPIC = "ifix/printerroom/jole2026/power"
 
-seen = []
+got = {}
 
 def on_message(c, u, msg):
     try:
-        seen.append(json.loads(msg.payload.decode()))
+        got["p"] = json.loads(msg.payload.decode())
     except Exception:
         pass
 
 def on_connect(c, u, f, rc, properties=None):
     if rc == 0:
-        c.subscribe(ROOM_TOPIC)
+        c.subscribe(POWER_TOPIC)
 
-client = mqtt.Client(client_id="check-master-ota", protocol=mqtt.MQTTv311)
+client = mqtt.Client(client_id="check-pluginfo", protocol=mqtt.MQTTv311)
 client.username_pw_set(os.environ["HIVEMQ_USER"], os.environ["HIVEMQ_PASS"])
 client.tls_set()
 client.on_message = on_message
 client.on_connect = on_connect
 client.connect(HIVEMQ_HOST, 8883, keepalive=30)
 client.loop_start()
-for _ in range(40):
-    if len(seen) >= 2:
+for _ in range(60):
+    if "p" in got:
         break
     time.sleep(0.5)
 client.loop_stop()
 
-for i, p in enumerate(seen, 1):
-    print(f"sample {i}: otaBusy={p.get('otaBusy')} otaProgress={p.get('otaProgress')} "
-          f"otaStatus={p.get('otaStatus')!r} freeHeap={p.get('freeHeap')} "
-          f"uptime={p.get('uptime')}", flush=True)
+p = got.get("p")
+print(json.dumps(p, indent=2), flush=True)
+print("", flush=True)
+if p and "plugInfo" in p:
+    print("=> NEW build running (plugInfo present)", flush=True)
+else:
+    print("=> OLD build still running (no plugInfo)", flush=True)
