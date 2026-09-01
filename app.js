@@ -21,6 +21,45 @@ function formatTime(seconds)
     return `${s} s`;
 }
 
+// Uptime specifically, NOT the hours-based formatTime above - a device
+// that's been up for a week read as "160 h 12 min", which nobody parses
+// as "just under 7 days" at a glance. Rolls into days once past 24h and
+// into weeks past 7 days, listing every non-zero unit down to minutes
+// ("1 week 1 day 1 hour", "1 day 1 hour 1 minute"). Zero units are
+// skipped entirely rather than padded ("2 days 5 minutes" when the hour
+// count happens to land on zero). formatTime is deliberately left alone
+// for print duration/ETA, where hours are the conventional unit.
+function formatUptime(seconds)
+{
+    const value = Math.max(0, Math.floor(Number(seconds) || 0));
+
+    const weeks = Math.floor(value / 604800);
+    const days = Math.floor((value % 604800) / 86400);
+    const hours = Math.floor((value % 86400) / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+
+    const parts = [];
+
+    if (weeks > 0)
+        parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
+
+    if (days > 0)
+        parts.push(`${days} day${days === 1 ? "" : "s"}`);
+
+    if (hours > 0)
+        parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+
+    if (minutes > 0)
+        parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+
+    // Only fall back to seconds when the device genuinely hasn't been up a
+    // full minute yet - otherwise a fresh boot would render as "".
+    if (parts.length === 0)
+        return `${value} second${value === 1 ? "" : "s"}`;
+
+    return parts.join(" ");
+}
+
 function clamp(value, min, max)
 {
     return Math.min(max, Math.max(min, value));
@@ -222,7 +261,7 @@ function updateStatus(data)
     setDot("watchdogDot", !data.watchdogSafeMode && data.watchdogHealthy);
     setText("heap", `${Math.round(data.freeHeap / 1024)} kB`);
     setText("espTemp", `${Number(data.espTemp).toFixed(1)} °C`);
-    setText("uptime", formatTime(data.uptime));
+    setText("uptime", formatUptime(data.uptime));
     setText("firmware", data.firmware || "--");
     setText("connectionState", "ONLINE");
 
