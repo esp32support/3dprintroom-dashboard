@@ -23,39 +23,73 @@ function formatTime(seconds)
 
 // Uptime specifically, NOT the hours-based formatTime above - a device
 // that's been up for a week read as "160 h 12 min", which nobody parses
-// as "just under 7 days" at a glance. Rolls into days once past 24h and
-// into weeks past 7 days, listing every non-zero unit down to minutes
-// ("1 week 1 day 1 hour", "1 day 1 hour 1 minute"). Zero units are
-// skipped entirely rather than padded ("2 days 5 minutes" when the hour
-// count happens to land on zero). formatTime is deliberately left alone
-// for print duration/ETA, where hours are the conventional unit.
+// as "just under 7 days" at a glance. Cascades mo/w/d/h/m, listing every
+// non-zero unit ("1mo 1d 1h 1m", "1w 1d 1h"). Zero units are skipped
+// rather than padded ("2d 2h", not "2d 2h 0m"), so the string stays
+// short even though it can span five units.
+//
+// "mo" for month, not "m" - m is already minutes, and this string can
+// legitimately contain both at once ("1mo 1d 1h 1m").
+//
+// A month here is 30 days flat. Calendar months vary 28-31, but uptime is
+// an elapsed-duration readout rather than a date calculation, so a fixed
+// divisor is both correct enough and stable (the displayed value never
+// jumps around depending on which months it happens to span).
+//
+// formatTime is deliberately left alone for print duration/ETA, where
+// hours are the conventional unit.
 function formatUptime(seconds)
 {
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
 
-    const weeks = Math.floor(value / 604800);
-    const days = Math.floor((value % 604800) / 86400);
-    const hours = Math.floor((value % 86400) / 3600);
-    const minutes = Math.floor((value % 3600) / 60);
+    const MINUTE = 60;
+    const HOUR = 3600;
+    const DAY = 86400;
+    const WEEK = 604800;
+    const MONTH = 30 * DAY;
+
+    // Each unit takes its remainder from the PREVIOUS unit, not from the
+    // original value - computing every term against `value` independently
+    // double-counts, since the divisors aren't multiples of each other
+    // (a week doesn't divide a 30-day month). Caught by test: exactly 30
+    // days rendered "1mo 2d" instead of "1mo".
+    let rem = value;
+
+    const months = Math.floor(rem / MONTH);
+    rem -= months * MONTH;
+
+    const weeks = Math.floor(rem / WEEK);
+    rem -= weeks * WEEK;
+
+    const days = Math.floor(rem / DAY);
+    rem -= days * DAY;
+
+    const hours = Math.floor(rem / HOUR);
+    rem -= hours * HOUR;
+
+    const minutes = Math.floor(rem / MINUTE);
 
     const parts = [];
 
+    if (months > 0)
+        parts.push(`${months}mo`);
+
     if (weeks > 0)
-        parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
+        parts.push(`${weeks}w`);
 
     if (days > 0)
-        parts.push(`${days} day${days === 1 ? "" : "s"}`);
+        parts.push(`${days}d`);
 
     if (hours > 0)
-        parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+        parts.push(`${hours}h`);
 
     if (minutes > 0)
-        parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+        parts.push(`${minutes}m`);
 
     // Only fall back to seconds when the device genuinely hasn't been up a
     // full minute yet - otherwise a fresh boot would render as "".
     if (parts.length === 0)
-        return `${value} second${value === 1 ? "" : "s"}`;
+        return `${value}s`;
 
     return parts.join(" ");
 }
