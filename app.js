@@ -1529,6 +1529,14 @@ function updatePower(data)
     // kWh to milli-kWh (0.021), and 2 decimals rounded a real day's
     // consumption down to "0.02", or to a flat "0.00" for anything under
     // 5Wh. The printer idling overnight lives entirely in that third digit.
+    // Read live from the plug via master (see power_client.cpp's
+    // refreshPlugIdentity) rather than hardcoded - the previous static
+    // string outlived the plug it described by a whole hardware swap,
+    // still naming a unit that had been dead for days. Absent on an older
+    // master build, so leave whatever's there rather than blanking it.
+    if (data.plugInfo)
+        setText("powerDeviceInfo", data.plugInfo);
+
     setText("powerToday", `${(Number(data.todayKwh) || 0).toFixed(3)} kWh`);
     setText("powerYesterday", `${(Number(data.yesterdayKwh) || 0).toFixed(3)} kWh`);
     setText("powerTotal", `${(Number(data.totalKwh) || 0).toFixed(3)} kWh`);
