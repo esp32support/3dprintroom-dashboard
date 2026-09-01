@@ -659,7 +659,8 @@
                 <div class="panelHeader">
                     <span>Usage History</span>
                     <div class="spendPeriodTabs">
-                        <button type="button" class="spendPeriodBtn active" data-power-period="week">Week</button>
+                        <button type="button" class="spendPeriodBtn active" data-power-period="today">Today</button>
+                        <button type="button" class="spendPeriodBtn" data-power-period="week">Week</button>
                         <button type="button" class="spendPeriodBtn" data-power-period="month">Month</button>
                     </div>
                 </div>
@@ -697,7 +698,7 @@
                         <dd id="powerHistTotalKwh">-- kWh</dd>
                     </div>
                     <div>
-                        <dt>Days recorded</dt>
+                        <dt id="powerHistDayCountLabel">Days recorded</dt>
                         <dd id="powerHistDayCount">0</dd>
                     </div>
                 </dl>

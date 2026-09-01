@@ -1823,11 +1823,16 @@ window.addEventListener("resize", schedulePowerChartDraw);
 
 // ===== Power History card (week/month, server-side via scripts/power_watch.py) =====
 
-let powerHistoryPeriod = "week";
+// Defaults to "today" to match the tab marked active in index.html - the
+// two have to agree, or the card loads a different range than the
+// highlighted button claims until you click something.
+let powerHistoryPeriod = "today";
+
+const POWER_HISTORY_DAYS = { today: 1, week: 7, month: 30 };
 
 async function loadPowerHistoryCard()
 {
-    const days = powerHistoryPeriod === "month" ? 30 : 7;
+    const days = POWER_HISTORY_DAYS[powerHistoryPeriod] || 7;
     let data;
 
     try
@@ -1897,10 +1902,28 @@ function renderPowerHistoryCard(dayRecords)
     setText("powerHistTotalKwh", `${totalKwh.toFixed(3)} kWh`);
     setText("powerHistDayCount", String(dayRecords.length));
 
+    // "Days recorded" is meaningless on the Today tab (it can only ever be
+    // 0 or 1) - relabel it to something that carries information there,
+    // rather than showing a constant.
+    const dayCountLabel = byId("powerHistDayCountLabel");
+
+    if (dayCountLabel)
+        dayCountLabel.textContent = powerHistoryPeriod === "today" ? "Recorded today" : "Days recorded";
+
     const hintEl = byId("powerHistHint");
 
     if (hintEl)
+    {
+        // The stock hint ("check back once a few days have passed") is
+        // wrong for Today - power_watch.py only writes one rollup an hour,
+        // so an empty Today view right after midnight is expected and
+        // self-resolving, not a "wait days" situation.
+        hintEl.textContent = powerHistoryPeriod === "today"
+            ? "No reading recorded yet today - the hourly rollup fills this in."
+            : "Collecting data - check back once a few days have passed.";
+
         hintEl.hidden = dayRecords.length > 0;
+    }
 }
 
 document.querySelectorAll("[data-power-period]").forEach(btn =>
