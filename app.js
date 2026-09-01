@@ -1561,6 +1561,327 @@ function updatePower(data)
     recordPowerSample(w, v, a);
 }
 
+// ===== Plug Timers (Tasmota's own Timer engine, mirrored 1:1 rather than
+// reinvented - master polls the plug's real `Timers` command response and
+// republishes it unmodified on TIMER_STATE_TOPIC, see master's
+// timer_client.cpp) =====
+
+const TIMER_ACTION_LABELS = ["Off", "On", "Toggle"];
+const TIMER_MODE_LABELS = ["Time", "Sunrise", "Sunset"];
+const TIMER_DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+let timerState = null;
+let timerOpenSlots = new Set();
+let lastTimerMessageAt = 0;
+
+// A slot's Days field is "0000000" (7 chars, Sun->Sat, 1 = active that
+// day) - Tasmota's own convention, confirmed live against the plug before
+// any of this was written rather than guessed from documentation (see the
+// two boot-loop incidents from an earlier, inferred vendor template).
+function timerDaysSummary(days)
+{
+    if (!days || days.length !== 7)
+        return "no days";
+
+    const active = [];
+
+    for (let i = 0; i < 7; i++)
+    {
+        if (days[i] === "1")
+            active.push(TIMER_DAY_LABELS[i]);
+    }
+
+    if (active.length === 0)
+        return "no days";
+
+    if (active.length === 7)
+        return "every day";
+
+    return active.join(",");
+}
+
+function timerSlotSummary(t)
+{
+    if (!t || !t.Enable)
+        return "Disabled";
+
+    const when = t.Mode === 0
+        ? (t.Time || "--:--")
+        : `${TIMER_MODE_LABELS[t.Mode] || "?"}${t.Window ? ` ±${t.Window}m` : ""}`;
+
+    const action = TIMER_ACTION_LABELS[t.Action] || "?";
+
+    return `${timerDaysSummary(t.Days)} ${when} → ${action}${t.Repeat ? "" : " (once)"}`;
+}
+
+function setTimersOffline(reason)
+{
+    setText("timerGlobalState", "--");
+
+    const toggleBtn = byId("timerGlobalToggleBtn");
+
+    if (toggleBtn)
+        toggleBtn.disabled = true;
+
+    const resultEl = byId("timerGlobalResult");
+
+    if (resultEl && reason)
+        resultEl.textContent = reason;
+
+    timerState = null;
+
+    const list = byId("timerSlotsList");
+
+    if (list)
+        list.innerHTML = "";
+}
+
+function buildTimerSlotMarkup(slot)
+{
+    const dayButtons = TIMER_DAY_LABELS.map((label, i) =>
+        `<button type="button" class="timerDayBtn" data-day="${i}">${label}</button>`
+    ).join("");
+
+    return `
+        <button type="button" class="timerSlotHeader">
+            <span class="timerSlotDot"></span>
+            <span class="timerSlotTitle">Timer ${slot}</span>
+            <span class="timerSlotSummary">--</span>
+            <span class="timerSlotChevron">▾</span>
+        </button>
+        <div class="timerSlotBody" hidden>
+            <div class="timerFieldRow">
+                <label><input type="checkbox" class="timerInput timerEnable"> Enabled</label>
+                <label>Action <select class="timerInput timerAction">
+                    <option value="0">Off</option>
+                    <option value="1">On</option>
+                    <option value="2">Toggle</option>
+                </select></label>
+                <label><input type="checkbox" class="timerInput timerRepeat"> Repeat weekly</label>
+            </div>
+            <div class="timerFieldRow">
+                <label>Mode <select class="timerInput timerMode">
+                    <option value="0">Time</option>
+                    <option value="1">Sunrise</option>
+                    <option value="2">Sunset</option>
+                </select></label>
+                <label class="timerTimeField">Time <input type="time" class="timerInput timerTime"></label>
+                <label class="timerWindowField" hidden>Window (min, +/-) <input type="number" class="timerInput timerWindow" min="0" max="60" style="width:60px"></label>
+            </div>
+            <div class="timerFieldRow">
+                <span>Days:</span>
+                <div class="timerDays">${dayButtons}</div>
+            </div>
+            <div class="timerSlotActions">
+                <button type="button" class="infoBtn timerSlotSave">Save</button>
+                <span class="timerSlotStatus"></span>
+            </div>
+        </div>
+    `;
+}
+
+function fillTimerSlotFields(row, t)
+{
+    const enableEl = row.querySelector(".timerEnable");
+    const actionEl = row.querySelector(".timerAction");
+    const repeatEl = row.querySelector(".timerRepeat");
+    const modeEl = row.querySelector(".timerMode");
+    const timeEl = row.querySelector(".timerTime");
+    const windowEl = row.querySelector(".timerWindow");
+    const timeField = row.querySelector(".timerTimeField");
+    const windowField = row.querySelector(".timerWindowField");
+
+    if (enableEl) enableEl.checked = Boolean(t.Enable);
+    if (actionEl) actionEl.value = String(t.Action ?? 0);
+    if (repeatEl) repeatEl.checked = Boolean(t.Repeat);
+    if (modeEl) modeEl.value = String(t.Mode ?? 0);
+    if (timeEl) timeEl.value = t.Time || "00:00";
+    if (windowEl) windowEl.value = t.Window ?? 0;
+
+    const mode = Number(t.Mode) || 0;
+
+    if (timeField) timeField.hidden = mode !== 0;
+    if (windowField) windowField.hidden = mode === 0;
+
+    const days = (t.Days && t.Days.length === 7) ? t.Days : "0000000";
+
+    row.querySelectorAll(".timerDayBtn").forEach((btn) =>
+    {
+        const i = Number(btn.dataset.day);
+        btn.classList.toggle("active", days[i] === "1");
+    });
+}
+
+function wireTimerSlotRow(row, slot)
+{
+    const header = row.querySelector(".timerSlotHeader");
+
+    if (header)
+    {
+        header.addEventListener("click", () =>
+        {
+            if (timerOpenSlots.has(slot))
+            {
+                timerOpenSlots.delete(slot);
+            }
+            else
+            {
+                timerOpenSlots.add(slot);
+
+                // Re-fill from the latest known state right when opening,
+                // in case this row's fields were last painted before the
+                // user's own previous edit (or before any data had
+                // arrived at all when the row was first created).
+                if (timerState)
+                    fillTimerSlotFields(row, timerState[`Timer${slot}`] || {});
+            }
+
+            renderTimerSlots();
+        });
+    }
+
+    const modeEl = row.querySelector(".timerMode");
+
+    if (modeEl)
+    {
+        modeEl.addEventListener("change", () =>
+        {
+            const mode = Number(modeEl.value);
+            const timeField = row.querySelector(".timerTimeField");
+            const windowField = row.querySelector(".timerWindowField");
+
+            if (timeField) timeField.hidden = mode !== 0;
+            if (windowField) windowField.hidden = mode === 0;
+        });
+    }
+
+    row.querySelectorAll(".timerDayBtn").forEach((btn) =>
+    {
+        btn.addEventListener("click", () => btn.classList.toggle("active"));
+    });
+
+    const saveBtn = row.querySelector(".timerSlotSave");
+
+    if (saveBtn)
+    {
+        saveBtn.addEventListener("click", async () =>
+        {
+            const statusEl = row.querySelector(".timerSlotStatus");
+
+            const days = TIMER_DAY_LABELS.map((_, i) =>
+                row.querySelector(`.timerDayBtn[data-day="${i}"]`).classList.contains("active") ? "1" : "0"
+            ).join("");
+
+            const timer = {
+                Enable: row.querySelector(".timerEnable").checked ? 1 : 0,
+                Mode: Number(row.querySelector(".timerMode").value),
+                Time: row.querySelector(".timerTime").value || "00:00",
+                Window: Number(row.querySelector(".timerWindow").value) || 0,
+                Days: days,
+                Repeat: row.querySelector(".timerRepeat").checked ? 1 : 0,
+                Output: 1,
+                Action: Number(row.querySelector(".timerAction").value),
+            };
+
+            saveBtn.disabled = true;
+            statusEl.textContent = "Saving...";
+
+            try
+            {
+                const res = await fetch("/api/trigger-timer-set", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ slot, timer }),
+                });
+                const data = await res.json();
+
+                statusEl.textContent = res.ok ? "Saved." : `Error: ${data.error || res.statusText}`;
+
+                // The next state publish (master forces an immediate
+                // re-poll right after any SET command) will repaint this
+                // row from the plug's own confirmed state - closing it now
+                // rather than leaving it open indefinitely waiting for
+                // that is simpler than tracking a "just saved" flag.
+                if (res.ok)
+                    timerOpenSlots.delete(slot);
+            }
+            catch (err)
+            {
+                statusEl.textContent = `Request failed: ${err.message}`;
+            }
+            finally
+            {
+                saveBtn.disabled = false;
+            }
+        });
+    }
+}
+
+function renderTimerSlots()
+{
+    const list = byId("timerSlotsList");
+
+    if (!list || !timerState)
+        return;
+
+    for (let slot = 1; slot <= 16; slot++)
+    {
+        const t = timerState[`Timer${slot}`] || {};
+        const isOpen = timerOpenSlots.has(slot);
+        let row = list.querySelector(`.timerSlot[data-slot="${slot}"]`);
+
+        if (!row)
+        {
+            row = document.createElement("div");
+            row.className = "timerSlot";
+            row.dataset.slot = String(slot);
+            row.innerHTML = buildTimerSlotMarkup(slot);
+            list.appendChild(row);
+            wireTimerSlotRow(row, slot);
+        }
+
+        row.classList.toggle("expanded", isOpen);
+
+        const dot = row.querySelector(".timerSlotDot");
+        const summary = row.querySelector(".timerSlotSummary");
+        const body = row.querySelector(".timerSlotBody");
+
+        if (dot)
+            dot.classList.toggle("on", Boolean(t.Enable));
+
+        if (summary)
+            summary.textContent = timerSlotSummary(t);
+
+        if (body)
+            body.hidden = !isOpen;
+
+        // Only repaint the edit fields while the row is COLLAPSED - a live
+        // re-poll landing while the user has this row open editing it
+        // would otherwise stomp their in-progress changes with whatever
+        // was last saved.
+        if (!isOpen)
+            fillTimerSlotFields(row, t);
+    }
+}
+
+function updateTimers(data)
+{
+    lastTimerMessageAt = Date.now();
+    timerState = data;
+
+    setText("timerGlobalState", data.Timers === "ON" ? "ON" : "OFF");
+
+    const toggleBtn = byId("timerGlobalToggleBtn");
+
+    if (toggleBtn)
+    {
+        toggleBtn.disabled = false;
+        toggleBtn.textContent = data.Timers === "ON" ? "Turn OFF" : "Turn ON";
+    }
+
+    renderTimerSlots();
+}
+
 // ===== Power history (Min/Max/Average + the line graph) =====
 //
 // Scoped to the CURRENT PRINT, not an open-ended session - resets
@@ -4140,6 +4461,14 @@ const STALE_AFTER_MS = 30000; // SEND_INTERVAL is 5s; 30s silence => treat as of
 // The plug is polled every 10s (POWER_POLL_INTERVAL_MS), so allow a few
 // missed rounds before calling it offline.
 const POWER_STALE_AFTER_MS = 60000;
+
+// Timers are polled every 60s (timer_client.cpp's own POLL_INTERVAL_MS,
+// slower than the power reading above since timers change by human edit,
+// not continuously) - a flat 2.5x margin over that interval before calling
+// it stale, same reasoning as POWER_STALE_AFTER_MS's margin over its own
+// 10s poll.
+const TIMER_STALE_AFTER_MS = 150000;
+
 const STALE_RECONNECT_COOLDOWN_MS = 20000;
 
 // The printer monitor (3dprinterinfo, separate device) publishes to a
@@ -4150,6 +4479,14 @@ const PRINTER_TOPIC = `${BROKER_CONFIG.topic}/printer`;
 // project (which polls the plug's own local HTTP status - see master's
 // config.h for why the plug can't publish here directly itself).
 const POWER_TOPIC = `${BROKER_CONFIG.topic}/power`;
+
+// Retained Tasmota Timer config for the same plug (all 16 slots + the
+// global "Enable Timers" switch, one payload) - master polls this
+// separately from the power reading above (see master's timer_client.cpp,
+// 60s cadence since timers change by human edit, not continuously) and
+// republishes it here unmodified, so this shape is exactly Tasmota's own
+// `Timers` command response.
+const TIMER_STATE_TOPIC = `${BROKER_CONFIG.topic}/power/timers`;
 
 // Retained announcement of the latest available CYD display firmware -
 // same topic the display's own on-device update popup already watches
@@ -4211,6 +4548,12 @@ client.on("connect", () =>
     {
         if (err)
             connectionLog(`CYD OTA version topic subscribe failed: ${err.message}`);
+    });
+
+    client.subscribe(TIMER_STATE_TOPIC, (err) =>
+    {
+        if (err)
+            connectionLog(`Timer topic subscribe failed: ${err.message}`);
     });
 });
 
@@ -4290,6 +4633,20 @@ client.on("message", (topic, payload) =>
         return;
     }
 
+    if (topic === TIMER_STATE_TOPIC)
+    {
+        try
+        {
+            updateTimers(JSON.parse(payload.toString()));
+        }
+        catch (err)
+        {
+            connectionLog(`Bad payload on timer topic: ${err.message}`);
+        }
+
+        return;
+    }
+
     if (topic === PRINTER_TOPIC)
     {
         try
@@ -4346,6 +4703,7 @@ client.on("message", (topic, payload) =>
 
 setOffline();
 setPrinterOffline("Waiting for the printer monitor...");
+setTimersOffline("Waiting for timer data...");
 
 setInterval(() =>
 {
@@ -4382,6 +4740,9 @@ setInterval(() =>
     // last good reading would otherwise sit there looking live.
     if (lastPowerMessageAt && Date.now() - lastPowerMessageAt > POWER_STALE_AFTER_MS)
         setPowerOffline("No power reading in over a minute.");
+
+    if (lastTimerMessageAt && Date.now() - lastTimerMessageAt > TIMER_STALE_AFTER_MS)
+        setTimersOffline("No timer data in over 2.5 minutes.");
 }, 5000);
 
 // ===== Tabs =====
@@ -4847,6 +5208,44 @@ if (powerToggleBtn)
             // forces that poll to happen right away rather than waiting
             // out the normal interval, so this is a ~1s wait in practice.
             powerToggleBtn.disabled = false;
+        }
+    });
+}
+
+const timerGlobalToggleBtn = byId("timerGlobalToggleBtn");
+
+if (timerGlobalToggleBtn)
+{
+    timerGlobalToggleBtn.addEventListener("click", async () =>
+    {
+        // Same "send the opposite of the last REPORTED state" reasoning as
+        // the plug relay toggle above.
+        const nextEnabled = !(timerState && timerState.Timers === "ON");
+        const resultEl = byId("timerGlobalResult");
+
+        timerGlobalToggleBtn.disabled = true;
+        resultEl.textContent = "Publishing command...";
+
+        try
+        {
+            const res = await fetch("/api/trigger-timer-set", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ enabled: nextEnabled }),
+            });
+            const data = await res.json();
+
+            resultEl.textContent = res.ok
+                ? data.message
+                : `Error: ${data.error || res.statusText}`;
+        }
+        catch (err)
+        {
+            resultEl.textContent = `Request failed: ${err.message}`;
+        }
+        finally
+        {
+            timerGlobalToggleBtn.disabled = false;
         }
     });
 }

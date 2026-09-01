@@ -1479,6 +1479,142 @@ dd{
     cursor:not-allowed;
 }
 
+.timerSection{
+    margin-top:14px;
+}
+
+.timerSlotsList{
+    margin-top:10px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+}
+
+.timerSlot{
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:#14181b;
+    overflow:hidden;
+}
+
+.timerSlotHeader{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    background:transparent;
+    border:none;
+    color:var(--text);
+    font-size:12px;
+    cursor:pointer;
+    text-align:left;
+}
+
+.timerSlotDot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--muted);
+    flex:0 0 auto;
+}
+
+.timerSlotDot.on{
+    background:var(--green);
+}
+
+.timerSlotTitle{
+    font-weight:700;
+    flex:0 0 auto;
+}
+
+.timerSlotSummary{
+    color:var(--muted);
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.timerSlotChevron{
+    color:var(--muted);
+    transition:transform .15s;
+    flex:0 0 auto;
+}
+
+.timerSlot.expanded .timerSlotChevron{
+    transform:rotate(180deg);
+}
+
+.timerSlotBody{
+    padding:10px 12px 12px;
+    border-top:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+
+.timerFieldRow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.timerFieldRow label{
+    font-size:12px;
+    color:var(--muted);
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+
+.timerInput{
+    background:#1c2226;
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:4px;
+    padding:4px 6px;
+    font-size:12px;
+}
+
+.timerDays{
+    display:flex;
+    gap:4px;
+}
+
+.timerDayBtn{
+    padding:4px 7px;
+    border-radius:4px;
+    border:1px solid var(--line);
+    background:#1c2226;
+    color:var(--muted);
+    font-size:11px;
+    cursor:pointer;
+}
+
+.timerDayBtn.active{
+    background:var(--cyan);
+    color:#04222a;
+    border-color:var(--cyan);
+    font-weight:700;
+}
+
+.timerSlotActions{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.timerSlotActions .infoBtn{
+    margin-top:0;
+}
+
+.timerSlotStatus{
+    font-size:11px;
+    color:var(--muted);
+}
+
 .powerDot{
     display:inline-block;
     width:10px;
