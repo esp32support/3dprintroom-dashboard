@@ -87,10 +87,3 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # TEMP - one-shot manual deduction fix for washer_ring_v2 (outcome-
-      # corrupted by a connectivity outage, confirmed via Task API to have
-      # finished normally). Removed after use.
-      - run: python scripts/fix_washer_ring_v2.py
-        env:
-          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
