@@ -1066,7 +1066,15 @@ function renderPrintHistory(items)
         // measure a partial amount from any data source available here -
         // only the wording/color differ.
         const isPause = item.outcome === "PAUSE";
-        const notFinished = item.outcome && item.outcome !== "FINISH";
+
+        // An override means someone already confirmed this print's real
+        // result and weight (see processFilamentDeductions' own identical
+        // reasoning) - showing a red "Cancelled/failed" badge for a print
+        // that's already been deducted as a normal completion just reads
+        // as a bug ("why does this look wrong but the spool is right").
+        const historyKey = `${item.name}__${item.start}`;
+        const override = filamentLibrary.historyOverrides[historyKey];
+        const notFinished = item.outcome && item.outcome !== "FINISH" && !override;
 
         const row = document.createElement("div");
         row.className = "historyItem historyItemClickable";
@@ -1098,7 +1106,6 @@ function renderPrintHistory(items)
         row.appendChild(left);
         row.appendChild(time);
 
-        const historyKey = `${item.name}__${item.start}`;
         const isExpanded = expandedHistoryKeys.has(historyKey);
 
         const detail = document.createElement("div");
@@ -1106,7 +1113,6 @@ function renderPrintHistory(items)
         detail.hidden = !isExpanded;
         row.setAttribute("aria-expanded", isExpanded ? "true" : "false");
 
-        const override = filamentLibrary.historyOverrides[historyKey];
         const usage = parseTrayUsage(item.trays);
         const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
         const resolvedUsage = resolveItemUsage(item);
