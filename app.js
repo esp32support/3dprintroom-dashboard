@@ -3729,8 +3729,24 @@ async function processFilamentDeductions(items)
         return;
 
     const candidates = items.filter(item => item.start && item.end);
+
+    // A print already marked processed still counts as "unprocessed" here
+    // if an override has since shown up for it - otherwise this outer
+    // short-circuit (a cheap pre-check so this doesn't reload the whole
+    // library from KV on every 5s poll when there's nothing to do) returns
+    // before the loop below ever gets a chance to apply that override,
+    // even though that loop's own gates already know how to handle it.
+    // Confirmed live: a pushed correction for a print wrongly marked
+    // "processed" by an earlier outcome-gate skip sat there doing nothing
+    // for over half an hour because of exactly this - every other history
+    // entry was also already processed, so hasUnprocessed was false for
+    // the entire batch and this returned immediately every single time,
+    // never even reaching the override-aware checks inside the loop.
     const hasUnprocessed = candidates.some(item =>
-        !filamentLibrary.processedPrints.includes(`${item.name}__${item.start}`));
+    {
+        const key = `${item.name}__${item.start}`;
+        return !filamentLibrary.processedPrints.includes(key) || !!filamentLibrary.historyOverrides[key];
+    });
 
     if (!hasUnprocessed)
         return;
