@@ -3803,7 +3803,15 @@ async function processFilamentDeductions(items)
             return;
         }
 
-        if (filamentLibrary.processedPrints.includes(key))
+        // An override can arrive AFTER this print was already marked
+        // processed by the outcome-gate skip above (exactly the case a
+        // pushed correction for a wrongly-"IDLE" print hits) - safe to
+        // reprocess it: the actual deduction below is idempotent per
+        // print+color via deductionLog (only ever deducts the difference
+        // from what's already been logged), so re-running this for an
+        // override that was already fully applied just computes a delta
+        // of 0 and touches nothing.
+        if (filamentLibrary.processedPrints.includes(key) && !override)
             return;
 
         const usage = parseTrayUsage(item.trays);
