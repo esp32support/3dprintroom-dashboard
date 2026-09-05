@@ -1096,12 +1096,21 @@ function renderPrintHistory(items)
             left.appendChild(badge);
         }
 
+        // Both fall back to the device's own (possibly corrupted) values
+        // when no override carries a corrected one - see gcode-sync.js's
+        // own comment for how a connectivity outage at the exact moment a
+        // print ended can leave Bambu's permanent cloud record with a
+        // wrong layer count and duration despite a completely normal print.
+        const displayLayers = (override && typeof override.layers === "number") ? override.layers : (item.layers || 0);
+
         const sub = document.createElement("small");
-        sub.textContent = `${item.layers || 0} layers - ${formatDeviceDate(item.start)}`;
+        sub.textContent = `${displayLayers} layers - ${formatDeviceDate(item.start)}`;
         left.appendChild(sub);
 
         const time = document.createElement("span");
-        time.textContent = printDuration(item.start, item.end);
+        time.textContent = (override && typeof override.durationSeconds === "number")
+            ? formatTime(override.durationSeconds)
+            : printDuration(item.start, item.end);
 
         row.appendChild(left);
         row.appendChild(time);

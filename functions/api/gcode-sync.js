@@ -50,7 +50,21 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
-    const { printName, startTime, material, colorHex, weight, details } = body;
+    const { printName, startTime, material, colorHex, weight, details, durationSeconds, layers } = body;
+
+    // Both display-only, for a history entry whose start/end/layers got
+    // corrupted at the source (confirmed live: a Bambu-cloud connectivity
+    // outage on the display at the exact moment a print ended left its
+    // permanent cloud record showing the wrong duration and a 0 layer
+    // count, even though the print itself finished completely normally).
+    // Neither affects deduction - that's driven by weight/material/colorHex
+    // above regardless of what's here.
+    const durationOverride = typeof durationSeconds === "number" && Number.isFinite(durationSeconds) && durationSeconds >= 0
+        ? durationSeconds
+        : undefined;
+    const layersOverride = typeof layers === "number" && Number.isFinite(layers) && layers >= 0
+        ? layers
+        : undefined;
 
     // Multi-color: caller sends `details` (an array of {material, colorHex,
     // weight}) instead of the single flat material/colorHex/weight -
@@ -80,6 +94,8 @@ export async function onRequestPost(context) {
                 colorHex: String(d.colorHex).replace("#", "").toUpperCase(),
                 weight: typeof d.weight === "number" && Number.isFinite(d.weight) ? d.weight : undefined,
             })),
+            durationSeconds: durationOverride,
+            layers: layersOverride,
             source: "gcode",
         };
 
@@ -103,6 +119,8 @@ export async function onRequestPost(context) {
         material: String(material).trim(),
         colorHex: String(colorHex).replace("#", "").toUpperCase(),
         weight: typeof weight === "number" && Number.isFinite(weight) ? weight : undefined,
+        durationSeconds: durationOverride,
+        layers: layersOverride,
         source: "gcode",
     };
 
