@@ -87,9 +87,3 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # TEMP - checking Bambu Task API data for a print whose CYD-relayed
-      # history got corrupted by a connectivity outage. Removed after use.
-      - run: python scripts/check_task_api.py
-        env:
-          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
