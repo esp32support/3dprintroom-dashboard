@@ -3750,6 +3750,7 @@ async function processFilamentDeductions(items)
             return;   // still running, or timestamps missing - nothing to settle yet
 
         const key = `${item.name}__${item.start}`;
+        const override = filamentLibrary.historyOverrides[key];
 
         // The Task API's weight is a full-print slice estimate, fixed at
         // whatever the whole job was planned to use - it doesn't shrink to
@@ -3763,7 +3764,21 @@ async function processFilamentDeductions(items)
         // once (or if) the Task API happens to answer. History display
         // and manual "Fix filament" corrections aren't affected by this -
         // only the automatic deduction is.
-        if (item.outcome && item.outcome !== "FINISH")
+        //
+        // An override present means someone (or print_watch.py) already
+        // deliberately attested this print's real weight/color - trust
+        // that over the device's own outcome field. Confirmed live: Bambu's
+        // cloud recorded a print's own outcome as "IDLE" (not "FINISH")
+        // because of a connectivity outage on the display's own Bambu-
+        // cloud connection at the moment the print ended, even though the
+        // print itself finished completely normally - the outcome field
+        // itself is just as capable of being wrong as anything else caught
+        // in that outage, and there's no way to correct it at the source
+        // (it's Bambu's own permanent record for that task). Gating a
+        // human-confirmed override on a field that can be wrong for
+        // reasons that have nothing to do with the actual print result
+        // defeats the entire point of being able to override it.
+        if (item.outcome && item.outcome !== "FINISH" && !override)
         {
             if (!filamentLibrary.processedPrints.includes(key))
             {
@@ -3793,7 +3808,6 @@ async function processFilamentDeductions(items)
 
         const usage = parseTrayUsage(item.trays);
         const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
-        const override = filamentLibrary.historyOverrides[key];
 
         // A manual correction (see onFixHistoryFilament) means Bambu's own
         // per-tray breakdown is known wrong for this print - deduct the
