@@ -87,3 +87,7 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+
+      - run: python scripts/check_stuck_prints.py
+        env:
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
