@@ -2784,62 +2784,83 @@ async function recoverOrphanedTasks(deviceHistory)
 
     for (const task of latestPrinterTasks)
     {
-        if (task.id == null || !task.startTime || !task.endTime || !task.amsDetail || task.amsDetail.length === 0)
+        if (task.id == null || !task.startTime || !task.endTime)
             continue;
 
         const taskIdStr = String(task.id);
 
-        if (deviceTaskIds.has(taskIdStr) || recovered.includes(taskIdStr))
-            continue;
+        if (deviceTaskIds.has(taskIdStr))
+            continue;   // back in device history (e.g. a later reconnect) - the normal path owns it
 
         const startMs = new Date(task.startTime).getTime();
         const endMs = new Date(task.endTime).getTime();
 
-        if (isNaN(startMs) || isNaN(endMs) || endMs > cutoffMs)
-            continue;   // too recent - could still be mid-normal-processing, don't race it
+        if (isNaN(startMs) || isNaN(endMs))
+            continue;
+
+        const alreadyRecovered = recovered.includes(taskIdStr);
+
+        // The write (override + audit entry) happens at most ONCE per
+        // taskId, guarded by recoveredTaskIds - but the phantom below is
+        // rebuilt on EVERY call regardless, from Task API's own cache
+        // (refreshed every 60s, no extra fetch), not from this branch.
+        // Confirmed live this distinction matters: an earlier version only
+        // ever produced the phantom on the one tick a task was newly
+        // recovered, so the print correctly got deducted but then
+        // vanished from the history panel on every later page load, even
+        // though nothing was actually wrong with the underlying data.
+        if (!alreadyRecovered)
+        {
+            if (endMs > cutoffMs)
+                continue;   // too recent - could still be mid-normal-processing, don't race it
+
+            recovered.push(taskIdStr);
+            changed = true;
+
+            const start = formatAsDeviceLocalTime(task.startTime);
+            const end = formatAsDeviceLocalTime(task.endTime);
+            const details = (task.amsDetail || [])
+                .filter(d => d.type && d.color && typeof d.weight === "number")
+                .map(d => ({ material: d.type, colorHex: d.color.slice(0, 6).toUpperCase(), weight: d.weight }));
+
+            if (start && end && details.length > 0)
+            {
+                const key = `${task.title}__${start}`;
+                const durationSeconds = Math.round((endMs - startMs) / 1000);
+
+                filamentLibrary.historyOverrides[key] = details.length === 1
+                    ? { material: details[0].material, colorHex: details[0].colorHex, weight: details[0].weight, durationSeconds, source: "task-api-recovered" }
+                    : { details, durationSeconds, source: "task-api-recovered" };
+
+                auditSpoolChange({
+                    printKey: key,
+                    printName: task.title,
+                    printStart: start,
+                    event: "skip",
+                    reason: "recovered from Bambu Task API - this print fell out of the device's own history before it could ever be processed (likely during a KV outage); weight/color sourced from Bambu's cloud and applied as a normal finished print",
+                    source: "task-api-recovered",
+                });
+            }
+            // No usable amsDetail: still marked recovered above so this
+            // exact task isn't re-checked forever, but no override/audit
+            // entry is created for it - nothing this pass could apply.
+        }
 
         const start = formatAsDeviceLocalTime(task.startTime);
         const end = formatAsDeviceLocalTime(task.endTime);
 
-        const details = task.amsDetail
-            .filter(d => d.type && d.color && typeof d.weight === "number")
-            .map(d => ({ material: d.type, colorHex: d.color.slice(0, 6).toUpperCase(), weight: d.weight }));
-
-        // Marked recovered either way (with or without usable data) so a
-        // task Task API can't give usable amsDetail for doesn't get
-        // re-checked forever - there's nothing more this pass could ever
-        // do for it.
-        recovered.push(taskIdStr);
-        changed = true;
-
-        if (!start || !end || details.length === 0)
-            continue;
-
-        const key = `${task.title}__${start}`;
-        const durationSeconds = Math.round((endMs - startMs) / 1000);
-
-        filamentLibrary.historyOverrides[key] = details.length === 1
-            ? { material: details[0].material, colorHex: details[0].colorHex, weight: details[0].weight, durationSeconds, source: "task-api-recovered" }
-            : { details, durationSeconds, source: "task-api-recovered" };
-
-        auditSpoolChange({
-            printKey: key,
-            printName: task.title,
-            printStart: start,
-            event: "skip",
-            reason: "recovered from Bambu Task API - this print fell out of the device's own history before it could ever be processed (likely during a KV outage); weight/color sourced from Bambu's cloud and applied as a normal finished print",
-            source: "task-api-recovered",
-        });
-
-        phantoms.push({
-            name: task.title,
-            start,
-            end,
-            layers: 0,
-            trays: "",
-            outcome: "RECOVERED",
-            taskId: taskIdStr,
-        });
+        if (start && end)
+        {
+            phantoms.push({
+                name: task.title,
+                start,
+                end,
+                layers: 0,
+                trays: "",
+                outcome: "RECOVERED",
+                taskId: taskIdStr,
+            });
+        }
     }
 
     if (changed)
