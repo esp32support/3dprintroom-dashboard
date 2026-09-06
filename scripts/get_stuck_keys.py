@@ -1,11 +1,9 @@
-"""Temp read-only check - pull the exact printKey strings for the two
-permanently-unresolvable prints (empty Charcoal Black PLA spool, and a
-print with no matching ABS filament) straight from the deduction-audit
-trail, so they can be written into processedPrints verbatim (write-off,
-no deduction) once the KV put-quota resets."""
+"""Temp read-only check v2 - broaden match to the SKIP reason itself
+rather than an exact print-name substring, since the first pass missed
+the ABS print (name substring guess was probably slightly off)."""
 import json, os, urllib.request
 
-URL = "https://3dprintroom-dashboard.pages.dev/api/deduction-audit?limit=500"
+URL = "https://3dprintroom-dashboard.pages.dev/api/deduction-audit?limit=1000"
 UA = "Mozilla/5.0 (compatible; stuck-key-lookup-github-actions)"
 
 def main():
@@ -16,12 +14,12 @@ def main():
 
     seen = set()
     for e in data.get("entries", []):
-        name = (e.get("printName") or "")
-        if "anchor_pegs" in name.lower() or "0.2mm layer" in name.lower():
+        reason = (e.get("reason") or "")
+        if "no library filament matched" in reason or "no active spool with weight remaining" in reason:
             k = e.get("printKey")
             if k and k not in seen:
                 seen.add(k)
-                print(f"{name!r} -> printKey={k!r}  reason={e.get('reason')!r}")
+                print(f"name={e.get('printName')!r} -> printKey={k!r}  reason={reason!r}  sourceHex={e.get('sourceHex')!r} sourceMaterial={e.get('sourceMaterial')!r}")
 
 if __name__ == "__main__":
     main()
