@@ -2817,9 +2817,19 @@ async function loadFilamentLibrary()
         if (res.ok)
         {
             const data = await res.json();
+
+            // De-dupe on every load - a since-fixed bug in
+            // processFilamentDeductions() re-pushed the same key onto this
+            // array on every 5s MQTT tick for as long as an override
+            // existed for it, confirmed live at 70+ copies of one key in a
+            // few hours. Cheap and safe to run unconditionally (a plain
+            // array of strings), and self-heals every existing library the
+            // next time anything triggers a save.
+            const processedPrints = [...new Set(data.processedPrints || [])];
+
             filamentLibrary = {
                 filaments: data.filaments || [],
-                processedPrints: data.processedPrints || [],
+                processedPrints,
                 historyOverrides: data.historyOverrides || {},
                 deductionLog: data.deductionLog || {},
                 slotAssignments: data.slotAssignments || {},
@@ -4002,7 +4012,18 @@ async function processFilamentDeductions(items)
             }
         });
 
-        if (allMatched)
+        // Only push/save the FIRST time this key is fully settled - without
+        // this guard, once any override exists for a key, the outer
+        // hasUnprocessed check (added to let an override reach an
+        // already-processed print) keeps treating it as work to do on
+        // EVERY MQTT tick forever, and this unconditionally pushed a
+        // duplicate onto processedPrints and forced a KV save each time -
+        // confirmed live: one key accumulated 70+ duplicate entries in a
+        // few hours, continuously re-saving to KV for a deduction that had
+        // already fully landed (delta 0 every time). A very likely
+        // meaningful contributor to the 2026-09-05 KV daily-quota
+        // exhaustion, on top of manual re-pushes that day.
+        if (allMatched && !filamentLibrary.processedPrints.includes(key))
         {
             filamentLibrary.processedPrints.push(key);
             changed = true;
