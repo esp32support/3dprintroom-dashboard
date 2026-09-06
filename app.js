@@ -3914,6 +3914,33 @@ async function backfillPetgFilamentIds()
 // history (see matchTaskForHistoryItem). processedPrints - persisted in KV
 // alongside the library itself - stops the same print being deducted twice
 // across repeated polls or page reloads.
+//
+// A print whose deduction can never succeed (no matching library filament,
+// or the matching one's every spool is empty) has NO way to ever reach
+// allMatched=true, so it can never join processedPrints either - it stays
+// a "candidate" forever, and this whole function re-runs its full skip
+// logic on EVERY 5s MQTT tick indefinitely. Confirmed live as the actual
+// dominant cause of hitting the Cloudflare Workers KV daily quota, not
+// just the already-fixed processedPrints/override bug: two such prints
+// (an empty spool, an unmatched color) were each writing a fresh
+// deduction-audit entry every 5 seconds, continuously, for as long as
+// their tab stayed open - thousands of writes/day from just those two.
+// In-memory only (not KV-persisted) - resets on reload, which is fine,
+// the goal is only to stop the every-5-SECOND repeat within one session,
+// not to silence a genuinely still-broken print forever.
+const loggedSkipReasons = new Set();
+
+function logSkipOnce(auditEntry, key, hex, reasonId)
+{
+    const skipId = `${key}|${hex}|${reasonId}`;
+
+    if (loggedSkipReasons.has(skipId))
+        return;
+
+    loggedSkipReasons.add(skipId);
+    auditSpoolChange(auditEntry);
+}
+
 async function processFilamentDeductions(items)
 {
     if (!filamentLibraryLoaded || !items || items.length === 0)
@@ -4116,7 +4143,7 @@ async function processFilamentDeductions(items)
 
             if (!filament || !filament.spools || filament.spools.length === 0)
             {
-                auditSpoolChange({ ...audit, event: "skip", reason: "no library filament matched this color/material" });
+                logSkipOnce({ ...audit, event: "skip", reason: "no library filament matched this color/material" }, key, hex, "no-filament");
                 allMatched = false;
                 return;
             }
@@ -4147,7 +4174,7 @@ async function processFilamentDeductions(items)
 
             if (!target)
             {
-                auditSpoolChange({ ...resolved, event: "skip", reason: "no active spool with weight remaining" });
+                logSkipOnce({ ...resolved, event: "skip", reason: "no active spool with weight remaining" }, key, hex, "no-spool");
                 allMatched = false;
                 return;
             }
