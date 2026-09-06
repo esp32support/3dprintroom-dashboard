@@ -50,7 +50,39 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
-    const { printName, startTime, material, colorHex, weight, details, durationSeconds, layers } = body;
+    const { printName, startTime, material, colorHex, weight, details, durationSeconds, layers, skip, reason } = body;
+
+    // Permanent write-off: for a print that will NEVER be able to deduct
+    // (a spool that's out for good, or a material the room simply doesn't
+    // stock) rather than let it sit as a "candidate" forever - retried,
+    // silently, on every single 5s poll. Confirmed live 2026-09-06: two
+    // such prints (an empty PLA spool, an unmatched ABS color that turned
+    // out to be a mislabeled tray - this room never prints ABS) were each
+    // producing a fresh SKIP audit-log write every 5 seconds indefinitely,
+    // since neither could ever join processedPrints on its own - one of
+    // the two confirmed contributors to that day's KV quota exhaustion.
+    // No material/colorHex/weight needed - see app.js's
+    // processFilamentDeductions for the corresponding `override.skip`
+    // short-circuit that both marks it processed AND stops the outer
+    // hasUnprocessed check from ever re-flagging it.
+    if (skip === true) {
+        if (!printName || !startTime) {
+            return jsonResponse({ error: "printName and startTime are required" }, 400);
+        }
+
+        const raw = await env.FILAMENT_KV.get(KV_KEY);
+        const lib = raw ? { ...emptyLibrary(), ...JSON.parse(raw) } : emptyLibrary();
+        const key = `${printName}__${startTime}`;
+
+        lib.historyOverrides[key] = {
+            skip: true,
+            reason: typeof reason === "string" && reason.trim() ? reason.trim() : "manually written off - no deduction possible",
+            source: "gcode",
+        };
+
+        await env.FILAMENT_KV.put(KV_KEY, JSON.stringify(lib));
+        return jsonResponse({ ok: true, key, skipped: true });
+    }
 
     // Both display-only, for a history entry whose start/end/layers got
     // corrupted at the source (confirmed live: a Bambu-cloud connectivity

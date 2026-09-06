@@ -3963,7 +3963,19 @@ async function processFilamentDeductions(items)
     const hasUnprocessed = candidates.some(item =>
     {
         const key = `${item.name}__${item.start}`;
-        return !filamentLibrary.processedPrints.includes(key) || !!filamentLibrary.historyOverrides[key];
+        const override = filamentLibrary.historyOverrides[key];
+
+        // A `skip` override is a permanent write-off (see gcode-sync.js) -
+        // once it's actually landed in processedPrints below, it must NOT
+        // keep tripping this short-circuit forever the way a normal
+        // override deliberately does (to let a correction get picked back
+        // up). A live/still-unprocessed skip override is why the `some()`
+        // still needs to see it once - only an already-settled one is
+        // excluded.
+        if (filamentLibrary.processedPrints.includes(key))
+            return !!override && !override.skip;
+
+        return true;
     });
 
     if (!hasUnprocessed)
@@ -3985,6 +3997,32 @@ async function processFilamentDeductions(items)
 
         const key = `${item.name}__${item.start}`;
         const override = filamentLibrary.historyOverrides[key];
+
+        // Permanent write-off (see gcode-sync.js's `skip` path) - takes
+        // priority over everything else below, including the outcome-gate,
+        // since the whole point is to stop ANY further evaluation of this
+        // print, ever. One audit entry, once, then processedPrints closes
+        // it out for good (the outer hasUnprocessed check above is what
+        // keeps it closed).
+        if (override && override.skip)
+        {
+            if (!filamentLibrary.processedPrints.includes(key))
+            {
+                auditSpoolChange({
+                    printKey: key,
+                    printName: item.name,
+                    printStart: item.start,
+                    event: "skip",
+                    reason: override.reason || "manually written off - no deduction possible",
+                    source: "manual-writeoff",
+                });
+
+                filamentLibrary.processedPrints.push(key);
+                changed = true;
+            }
+
+            return;
+        }
 
         // The Task API's weight is a full-print slice estimate, fixed at
         // whatever the whole job was planned to use - it doesn't shrink to
