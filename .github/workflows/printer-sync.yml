@@ -87,8 +87,3 @@ jobs:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
           HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
           HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
-
-      # TEMP - check the actual stored v4 override for the duration bug.
-      - run: python scripts/check_v4_override.py
-        env:
-          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
