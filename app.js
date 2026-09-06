@@ -1101,7 +1101,13 @@ function renderPrintHistory(items)
         // own comment for how a connectivity outage at the exact moment a
         // print ended can leave Bambu's permanent cloud record with a
         // wrong layer count and duration despite a completely normal print.
-        const displayLayers = (override && typeof override.layers === "number") ? override.layers : (item.layers || 0);
+        // "RECOVERED" entries (see recoverOrphanedTasks) have no device
+        // data at all to fall back to - Task API doesn't report a layer
+        // count, so showing "0" would read as another corrupted value
+        // rather than the honest "we never actually knew" it is.
+        const displayLayers = (override && typeof override.layers === "number")
+            ? override.layers
+            : (item.outcome === "RECOVERED" ? "?" : (item.layers || 0));
 
         const sub = document.createElement("small");
         sub.textContent = `${displayLayers} layers - ${formatDeviceDate(item.start)}`;
@@ -2343,7 +2349,7 @@ loadPowerHistory();
 // a print is actively running gets an extra, more specific warning.
 let printerIsRunning = false;
 
-function updatePrinter(data)
+async function updatePrinter(data)
 {
     const state = data.gcodeState || "UNKNOWN";
     const bambuOk = data.bambuConnected === true;
@@ -2597,9 +2603,16 @@ function updatePrinter(data)
     // 2-minute hold period, so the last job's active tray stays visible
     // for that same grace window, then clears with everything else.
     renderAmsGrid(trays, preparing ? trayNow : -1);
-    renderPrintHistory(data.history || []);
+    const deviceHistory = data.history || [];
+    const recoveredPhantoms = await recoverOrphanedTasks(deviceHistory);
+    const historyWithRecovered = recoveredPhantoms.length === 0
+        ? deviceHistory
+        : [...recoveredPhantoms, ...deviceHistory].sort(
+            (a, b) => (parseDeviceTime(b.start) || 0) - (parseDeviceTime(a.start) || 0));
+
+    renderPrintHistory(historyWithRecovered);
     renderTodayTotals();
-    processFilamentDeductions(data.history || []);
+    processFilamentDeductions(historyWithRecovered);
     reconcileDeductionLog();
     syncAmsToLibrary(trays);
 }
@@ -2707,6 +2720,137 @@ function matchTaskForHistoryItem(item)
     return best;
 }
 
+// Reverses parseDeviceTime()'s own `new Date(s.replace(" ", "T"))` - that
+// treats a device history string as LOCAL time (no zone suffix), so this
+// has to format using the same LOCAL getters, not toISOString()/UTC, or a
+// round-trip through parseDeviceTime() would land on the wrong moment
+// (confirmed live: an earlier draft of this used UTC and drifted by
+// exactly this browser's own UTC offset).
+function formatAsDeviceLocalTime(isoString)
+{
+    const d = new Date(isoString);
+
+    if (isNaN(d.getTime()))
+        return null;
+
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} `
+        + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// Safety net for a print that finishes, but scrolls off the device's own
+// ~20-slot rolling history buffer before ever being processed - normally
+// impossible to reach (processFilamentDeductions runs on every 5s tick,
+// long before 20 more prints could happen), but confirmed live during the
+// 2026-09-05 KV quota outage: FiatEmblem_PART1_base_CANDIDATE_v4.stl
+// (20.27g PETG) finished mid-outage, its deduction never got a chance to
+// persist, and by the time KV writes worked again it had already aged out
+// of device history entirely - unlike washer_ring_v2's corrupted-but-
+// still-present entry earlier that same day, there was nothing left
+// anywhere to attach a correction to.
+//
+// Bambu's Task API keeps its own separate last-10 list, independent of
+// the device's rolling buffer - this compares that list against the
+// CURRENT device history and, for anything present in Task API but
+// missing from device history entirely, synthesizes a phantom history
+// entry plus a matching historyOverrides correction (reusing the exact
+// override + outcome-gate-bypass machinery already proven for
+// washer_ring_v2) so it flows through rendering and deduction exactly
+// like a real print would have. Task API has no outcome/status field, so
+// there's no way to tell a genuine finish from an early cancel here the
+// way device history's own outcome does - deliberately restricted to
+// tasks that ended over an hour ago (well past any normal processing
+// window) to keep this rare, and every recovery is written to the audit
+// log with a distinct source so it's always individually reviewable
+// after the fact, never silently indistinguishable from a normal
+// deduction.
+//
+// recoveredTaskIds (persisted, like processedPrints) is the durable
+// per-taskId guard - without it, an old task that's STILL missing from
+// device history (nothing wrong, it just isn't there - not every task
+// needs recovering forever) would get re-synthesized and re-saved to KV
+// on every single tick, the exact KV-write-storm class of bug just fixed
+// above for processedPrints itself.
+async function recoverOrphanedTasks(deviceHistory)
+{
+    if (!filamentLibraryLoaded || latestPrinterTasks.length === 0)
+        return [];
+
+    const deviceTaskIds = new Set(deviceHistory.map(it => it.taskId).filter(Boolean).map(String));
+    const recovered = filamentLibrary.recoveredTaskIds || (filamentLibrary.recoveredTaskIds = []);
+    const cutoffMs = Date.now() - 60 * 60 * 1000;
+    const phantoms = [];
+    let changed = false;
+
+    for (const task of latestPrinterTasks)
+    {
+        if (task.id == null || !task.startTime || !task.endTime || !task.amsDetail || task.amsDetail.length === 0)
+            continue;
+
+        const taskIdStr = String(task.id);
+
+        if (deviceTaskIds.has(taskIdStr) || recovered.includes(taskIdStr))
+            continue;
+
+        const startMs = new Date(task.startTime).getTime();
+        const endMs = new Date(task.endTime).getTime();
+
+        if (isNaN(startMs) || isNaN(endMs) || endMs > cutoffMs)
+            continue;   // too recent - could still be mid-normal-processing, don't race it
+
+        const start = formatAsDeviceLocalTime(task.startTime);
+        const end = formatAsDeviceLocalTime(task.endTime);
+
+        const details = task.amsDetail
+            .filter(d => d.type && d.color && typeof d.weight === "number")
+            .map(d => ({ material: d.type, colorHex: d.color.slice(0, 6).toUpperCase(), weight: d.weight }));
+
+        // Marked recovered either way (with or without usable data) so a
+        // task Task API can't give usable amsDetail for doesn't get
+        // re-checked forever - there's nothing more this pass could ever
+        // do for it.
+        recovered.push(taskIdStr);
+        changed = true;
+
+        if (!start || !end || details.length === 0)
+            continue;
+
+        const key = `${task.title}__${start}`;
+        const durationSeconds = Math.round((endMs - startMs) / 1000);
+
+        filamentLibrary.historyOverrides[key] = details.length === 1
+            ? { material: details[0].material, colorHex: details[0].colorHex, weight: details[0].weight, durationSeconds, source: "task-api-recovered" }
+            : { details, durationSeconds, source: "task-api-recovered" };
+
+        auditSpoolChange({
+            printKey: key,
+            printName: task.title,
+            printStart: start,
+            event: "skip",
+            reason: "recovered from Bambu Task API - this print fell out of the device's own history before it could ever be processed (likely during a KV outage); weight/color sourced from Bambu's cloud and applied as a normal finished print",
+            source: "task-api-recovered",
+        });
+
+        phantoms.push({
+            name: task.title,
+            start,
+            end,
+            layers: 0,
+            trays: "",
+            outcome: "RECOVERED",
+            taskId: taskIdStr,
+        });
+    }
+
+    if (changed)
+    {
+        await saveFilamentLibrary();
+        await flushAuditLog();
+    }
+
+    return phantoms;
+}
+
 // Single source of truth for "what filament did this history item use" -
 // override > device-reported trays > Task API fallback, the exact
 // precedence renderPrintHistory's own detail panel already used. Sharing
@@ -2796,7 +2940,7 @@ setInterval(updatePrinterTask, 60000);
 // migrations: names of one-time data cleanups already applied to this
 // library, so a repair that must not run twice (see
 // purgeStaleDuplicateDeductions) can record that it's done.
-let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {}, slotAssignments: {}, migrations: [] };
+let filamentLibrary = { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {}, slotAssignments: {}, migrations: [], recoveredTaskIds: [] };
 
 // Set by updatePrinter() on every printer MQTT tick - see its own comment
 // for why slot assignments lock while this is true.
@@ -2834,6 +2978,7 @@ async function loadFilamentLibrary()
                 deductionLog: data.deductionLog || {},
                 slotAssignments: data.slotAssignments || {},
                 migrations: data.migrations || [],
+                recoveredTaskIds: data.recoveredTaskIds || [],
             };
         }
     }
