@@ -2067,6 +2067,13 @@ dd{
     font-weight:800;
 }
 
+.filamentHeadActions{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:8px;
+}
+
 .filamentAddBtn{
     margin-top:0;
     background:var(--cyan);
@@ -2078,6 +2085,113 @@ dd{
 
 .filamentAddBtn:hover{
     filter:brightness(1.08);
+}
+
+/* --- Sort control --- */
+
+.filamentSortWrap{
+    position:relative;
+}
+
+.filamentSortBtn{
+    margin-top:0;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 12px;
+    font-size:12px;
+}
+
+.filamentSortBtn.hasSort{
+    border-color:var(--cyan);
+    color:var(--cyan);
+}
+
+.filamentSortIcon{
+    font-size:13px;
+}
+
+.filamentSortCaret{
+    font-size:9px;
+    opacity:.8;
+}
+
+.filamentSortMenu{
+    position:absolute;
+    top:calc(100% + 6px);
+    right:0;
+    z-index:40;
+    width:230px;
+    padding:12px;
+    border-radius:10px;
+    background:var(--panel2);
+    border:1px solid var(--line);
+    box-shadow:0 18px 44px rgba(0,0,0,.5);
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+}
+
+.filamentSortMenu[hidden]{
+    display:none;
+}
+
+.sortGroupLabel{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    margin:2px 0 4px;
+}
+
+.sortOpt{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:6px 4px;
+    border-radius:6px;
+    font-size:13px;
+    color:var(--text);
+    cursor:pointer;
+}
+
+.sortOpt:hover{
+    background:#0c0f11;
+}
+
+.sortOpt input{
+    width:15px;
+    height:15px;
+    accent-color:var(--cyan);
+    cursor:pointer;
+}
+
+.sortMenuSep{
+    height:1px;
+    margin:8px 2px;
+    background:var(--line);
+}
+
+.sortResetBtn{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    width:100%;
+    padding:8px 6px;
+    border:none;
+    border-radius:6px;
+    background:transparent;
+    color:var(--cyan);
+    font-family:inherit;
+    font-size:13px;
+    font-weight:700;
+    text-align:left;
+    cursor:pointer;
+}
+
+.sortResetBtn:hover{
+    background:#0c0f11;
 }
 
 .filamentStats{
@@ -2203,10 +2317,10 @@ dd{
 }
 
 .filamentSpool{
-    width:112px;
-    height:80px;
+    width:104px;
+    height:98px;
     flex:none;
-    margin:-2px -6px -4px -6px;
+    margin:-6px -6px -10px -8px;
     align-self:center;
     filter:drop-shadow(0 3px 5px rgba(0,0,0,.4));
 }
@@ -2264,11 +2378,22 @@ dd{
 
 .filamentCardSpecs{
     display:flex;
-    flex-wrap:wrap;
-    gap:6px 10px;
+    flex-direction:column;
+    gap:3px;
     color:var(--muted);
     font-size:12px;
     font-weight:700;
+}
+
+.filamentCardSpecs span{
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+
+.filamentCardSpecs .specIcon{
+    flex:none;
+    opacity:.7;
 }
 
 .filamentCardBottom{
@@ -2289,8 +2414,7 @@ dd{
     color:var(--muted);
     font-size:11px;
     font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:.03em;
+    letter-spacing:.02em;
 }
 
 .filamentRingWrap{
@@ -2412,14 +2536,14 @@ dd{
 
 .amsLiteTile .amsLiteSpool,
 .externalTile .amsLiteSpool{
-    width:88px;
-    height:60px;
+    width:82px;
+    height:76px;
     filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));
 }
 
 .externalTile .amsLiteSpool{
-    width:128px;
-    height:88px;
+    width:112px;
+    height:104px;
 }
 
 .amsLiteTile .amsLiteSpool svg,
@@ -2457,8 +2581,9 @@ dd{
     line-height:1;
 }
 
-.amsLitePct.low{ color:var(--yellow); }
-.amsLitePct.critical{ color:var(--red); }
+.amsLitePct.yellow{ color:var(--yellow); }
+.amsLitePct.orange{ color:var(--orange); }
+.amsLitePct.red{ color:var(--red); }
 
 .amsLiteTile .amsLiteBar,
 .externalTile .amsLiteBar{
@@ -2478,8 +2603,9 @@ dd{
     background:var(--green);
 }
 
-.amsLiteBar i.low{ background:var(--yellow); }
-.amsLiteBar i.critical{ background:var(--red); }
+.amsLiteBar i.yellow{ background:var(--yellow); }
+.amsLiteBar i.orange{ background:var(--orange); }
+.amsLiteBar i.red{ background:var(--red); }
 
 .externalWrap{
     display:flex;

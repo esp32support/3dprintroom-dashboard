@@ -559,7 +559,26 @@
 
                     <div class="filamentMainHead">
                         <h2>Filament Library</h2>
-                        <button type="button" class="infoBtn filamentAddBtn" id="filamentAddToggle">+ Add new spool</button>
+                        <div class="filamentHeadActions">
+                            <div class="filamentSortWrap">
+                                <button type="button" class="infoBtn filamentSortBtn" id="filamentSortBtn" aria-haspopup="true" aria-expanded="false">
+                                    <span class="filamentSortIcon">&#8645;</span> Sort <span class="filamentSortCaret">&#9662;</span>
+                                </button>
+                                <div class="filamentSortMenu" id="filamentSortMenu" role="menu" hidden>
+                                    <div class="sortGroupLabel">Sort by</div>
+                                    <label class="sortOpt"><input type="checkbox" data-sort-key="brand"> Brand</label>
+                                    <label class="sortOpt"><input type="checkbox" data-sort-key="color"> Color</label>
+                                    <label class="sortOpt"><input type="checkbox" data-sort-key="weight"> Weight (remaining)</label>
+                                    <div class="sortMenuSep"></div>
+                                    <div class="sortGroupLabel">Direction</div>
+                                    <label class="sortOpt"><input type="radio" name="filamentSortDir" value="asc" checked> Ascending (A &rarr; Z)</label>
+                                    <label class="sortOpt"><input type="radio" name="filamentSortDir" value="desc"> Descending (Z &rarr; A)</label>
+                                    <div class="sortMenuSep"></div>
+                                    <button type="button" class="sortResetBtn" id="filamentSortReset">&#8635; Reset sort</button>
+                                </div>
+                            </div>
+                            <button type="button" class="infoBtn filamentAddBtn" id="filamentAddToggle">+ Add new spool</button>
+                        </div>
                     </div>
 
                     <div class="filamentStats" id="filamentStats"></div>

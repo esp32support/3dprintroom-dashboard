@@ -680,23 +680,22 @@ function filamentSpoolSvg(colorHex, colorName)
     const translucent = /transparent|clear|natural|translu/i.test(colorName || "");
     const windOpacity = translucent ? 0.5 : 1;
 
-    // A DEEP reel seen along a near-horizontal axis, tipped ~6deg. The
-    // caps are tall, narrow ellipses (a circle foreshortened along a
-    // horizontal axis); the front flange sits at the left, the wound
-    // filament forms a long ridged cylinder running to the right, and the
-    // darker rear flange caps the far end - clear FRONT -> CYLINDER ->
-    // REAR separation. Only the winding colour varies.
-    const T = -6;
-    const FCX = 40, FCY = 52, FRX = 22, FRY = 34;   // front flange (left)
-    const RCX = 96, RCY = 46, RRX = 18, RRY = 28;   // rear flange (far right, smaller)
-    const NCX = 45, NCY = 52, NRX = 20, NRY = 31;   // winding near cap
-    const XCX = 92, XCY = 46, XRX = 17, XRY = 27;   // winding far cap
+    // A TALL reel at a ~3/4 angle. The front kraft flange is round and
+    // sits low-left; the wound filament forms a compact ridged cylinder
+    // that clearly shows as a coloured band curving over the TOP and down
+    // the RIGHT of the flange, ending in a smaller, darker rear flange
+    // up-right. Depth is modest (not a long horizontal tube) but the
+    // winding is unmistakable. Only the winding colour varies.
+    const T = -8;
+    const FCX = 42, FCY = 59, FRX = 31, FRY = 37;   // front flange
+    const NCX = 45, NCY = 53, NRX = 30, NRY = 35;   // winding near cap (raised above the flange centre)
+    const XCX = 74, XCY = 40, XRX = 25, XRY = 30;   // winding far cap (up + right, compact)
+    const RCX = 75, RCY = 39, RRX = 26, RRY = 31;   // rear flange
 
-    // Winding cylinder: a dense stack of tall ellipses from the far cap to
-    // the near cap. Each is stroked so the seam between neighbours reads
-    // as one turn of wound filament. Near slices paint last (lit); far
-    // slices sit in shadow and shrink slightly (perspective).
-    const nd = 40;
+    // Winding cylinder: tilted ellipses stacked far -> near, each stroked
+    // so the seam reads as one turn of wound filament. Near slices paint
+    // last (lit); far slices sit in shadow and shrink slightly.
+    const nd = 24;
     let barrel = "";
 
     for (let k = nd; k >= 0; k--)
@@ -706,9 +705,9 @@ function filamentSpoolSvg(colorHex, colorName)
         const cy = (NCY + (XCY - NCY) * s).toFixed(2);
         const rx = (NRX + (XRX - NRX) * s).toFixed(2);
         const ry = (NRY + (XRY - NRY) * s).toFixed(2);
-        const fill = lerpHex(wLight, wDarker, s * 0.7 + 0.16);
+        const fill = lerpHex(wLight, wDarker, s * 0.74 + 0.13);
         barrel += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(${T} ${cx} ${cy})"`
-            + ` fill="${fill}" stroke="${k % 2 ? wLight : wDark}" stroke-width="0.55" stroke-opacity="0.4" opacity="${windOpacity}"/>`;
+            + ` fill="${fill}" stroke="${k % 2 ? wLight : wDark}" stroke-width="0.7" stroke-opacity="0.5" opacity="${windOpacity}"/>`;
     }
 
     // Six radial vent slots on the front flange face.
@@ -716,8 +715,8 @@ function filamentSpoolSvg(colorHex, colorName)
     for (let i = 0; i < 6; i++)
     {
         const a = (i * 60 - 78) * Math.PI / 180;
-        const sx = (FCX + Math.cos(a) * 12).toFixed(2);
-        const sy = (FCY + Math.sin(a) * 20).toFixed(2);
+        const sx = (FCX + Math.cos(a) * 16.5).toFixed(2);
+        const sy = (FCY + Math.sin(a) * 19).toFixed(2);
         const deg = (i * 60 - 78 + 90).toFixed(1);
         slots += `<g transform="rotate(${deg} ${sx} ${sy})">`
             + `<rect x="${sx - 2}" y="${sy - 5.6}" width="4" height="11.2" rx="2" fill="#5f5a52"/>`
@@ -726,52 +725,51 @@ function filamentSpoolSvg(colorHex, colorName)
             + `</g>`;
     }
 
-    return `<svg viewBox="12 12 112 78" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">`
+    return `<svg viewBox="0 0 112 110" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">`
         + `<defs>`
         + `<radialGradient id="${id}ff" cx="32%" cy="26%" r="88%">`
         + `<stop offset="0" stop-color="#f6dcb6"/><stop offset="0.55" stop-color="#dab887"/><stop offset="1" stop-color="#a2783f"/>`
         + `</radialGradient>`
-        + `<radialGradient id="${id}rf" cx="58%" cy="52%" r="82%">`
-        + `<stop offset="0" stop-color="#977a52"/><stop offset="1" stop-color="#5a462d"/>`
+        + `<radialGradient id="${id}rf" cx="56%" cy="50%" r="82%">`
+        + `<stop offset="0" stop-color="#8a6f47"/><stop offset="1" stop-color="#4f3c27"/>`
         + `</radialGradient>`
-        + `<linearGradient id="${id}bs" x1="0" y1="0" x2="0" y2="1">`
-        + `<stop offset="0" stop-color="#fff" stop-opacity="0.22"/><stop offset="0.34" stop-color="#fff" stop-opacity="0"/>`
+        + `<linearGradient id="${id}bs" x1="0" y1="0" x2="0.2" y2="1">`
+        + `<stop offset="0" stop-color="#fff" stop-opacity="0.22"/><stop offset="0.38" stop-color="#fff" stop-opacity="0"/>`
         + `<stop offset="0.66" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.4"/>`
         + `</linearGradient>`
         + `</defs>`
         // contact shadow
-        + `<ellipse cx="66" cy="90" rx="52" ry="7" fill="#000" opacity="0.18"/>`
-        + `<ellipse cx="54" cy="90" rx="30" ry="5" fill="#000" opacity="0.22"/>`
-        // ---- rear flange (far end) ----
-        + `<ellipse cx="${RCX + 2}" cy="${RCY + 2}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="#000" opacity="0.2"/>`
+        + `<ellipse cx="52" cy="102" rx="42" ry="7" fill="#000" opacity="0.2"/>`
+        + `<ellipse cx="44" cy="102" rx="26" ry="5" fill="#000" opacity="0.22"/>`
+        // ---- rear flange ----
+        + `<ellipse cx="${RCX + 2}" cy="${RCY + 2}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="#000" opacity="0.18"/>`
         + `<ellipse cx="${RCX}" cy="${RCY}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="url(#${id}rf)"/>`
-        + `<ellipse cx="${RCX}" cy="${RCY}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="none" stroke="#3f301f" stroke-width="1.4" opacity="0.85"/>`
-        + `<ellipse cx="${RCX}" cy="${RCY}" rx="6" ry="9" transform="rotate(${T} ${RCX} ${RCY})" fill="#241b10"/>`
+        + `<ellipse cx="${RCX}" cy="${RCY}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="none" stroke="#382b1c" stroke-width="1.4" opacity="0.85"/>`
         // ---- filament winding cylinder ----
         + barrel
-        // cylindrical form shading (light top, dark underside) over the run
         + `<ellipse cx="${((NCX + XCX) / 2).toFixed(1)}" cy="${((NCY + XCY) / 2).toFixed(1)}" rx="${((NRX + XRX) / 2 + 1).toFixed(1)}" ry="${((NRY + XRY) / 2 + 1).toFixed(1)}" transform="rotate(${T} ${(NCX + XCX) / 2} ${(NCY + XCY) / 2})" fill="url(#${id}bs)" opacity="${windOpacity}"/>`
-        // crisp near edge of the coil
-        + `<ellipse cx="${NCX}" cy="${NCY}" rx="${NRX}" ry="${NRY}" transform="rotate(${T} ${NCX} ${NCY})" fill="none" stroke="${wDark}" stroke-width="1.1" opacity="0.5"/>`
-        // ---- front flange (left, over the near end of the coil) ----
+        + `<ellipse cx="${NCX}" cy="${NCY}" rx="${NRX}" ry="${NRY}" transform="rotate(${T} ${NCX} ${NCY})" fill="none" stroke="${wDark}" stroke-width="1.2" opacity="0.55"/>`
+        // AO where the coil tucks behind the front flange
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX - 1}" ry="${FRY - 1}" transform="rotate(${T} ${FCX} ${FCY})" fill="none" stroke="#000" stroke-width="3" opacity="0.14"/>`
+        // ---- front flange ----
         + `<g transform="rotate(${T} ${FCX} ${FCY})">`
-        + `<ellipse cx="${FCX + 1.5}" cy="${FCY + 1}" rx="${FRX + 1.5}" ry="${FRY + 1.5}" fill="#000" opacity="0.16"/>`
+        + `<ellipse cx="${FCX + 1.5}" cy="${FCY + 1.5}" rx="${FRX + 1.5}" ry="${FRY + 1.5}" fill="#000" opacity="0.16"/>`
         + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX}" ry="${FRY}" fill="url(#${id}ff)"/>`
-        + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX}" ry="${FRY}" fill="none" stroke="#785937" stroke-width="1.6" opacity="0.85"/>`
-        + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX - 2}" ry="${FRY - 2}" fill="none" stroke="#f4dcbb" stroke-width="1" opacity="0.26"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX}" ry="${FRY}" fill="none" stroke="#785937" stroke-width="1.7" opacity="0.85"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX - 2.5}" ry="${FRY - 2.5}" fill="none" stroke="#f4dcbb" stroke-width="1" opacity="0.26"/>`
         + slots
-        + `<text x="${FCX}" y="${FCY - 22}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="6" fill="#785937" opacity="0.9">3D</text>`
-        + `<text x="${FCX}" y="${FCY - 16.8}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="3.1" letter-spacing="0.3" fill="#785937" opacity="0.68">FILAMENT</text>`
-        + `<path d="M${FCX} ${FCY + 14} l3.6 6.4 -7.2 0 z" fill="none" stroke="#785937" stroke-width="1.2" stroke-linejoin="round" opacity="0.45"/>`
+        + `<text x="${FCX}" y="${FCY - 22}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="6.6" fill="#785937" opacity="0.9">3D</text>`
+        + `<text x="${FCX}" y="${FCY - 16.6}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="3.4" letter-spacing="0.4" fill="#785937" opacity="0.7">FILAMENT</text>`
+        + `<path d="M${FCX} ${FCY + 14} l4.2 7.2 -8.4 0 z" fill="none" stroke="#785937" stroke-width="1.3" stroke-linejoin="round" opacity="0.45"/>`
         // hub + recessed centre hole
-        + `<ellipse cx="${FCX}" cy="${FCY}" rx="9.5" ry="12" fill="#cda67a"/>`
-        + `<ellipse cx="${FCX}" cy="${FCY}" rx="9.5" ry="12" fill="none" stroke="#785937" stroke-width="1.3"/>`
-        + `<ellipse cx="${FCX}" cy="${FCY}" rx="4.8" ry="6.6" fill="#180f08"/>`
-        + `<ellipse cx="${FCX}" cy="${FCY}" rx="4.8" ry="6.6" fill="none" stroke="#0a0603" stroke-width="1"/>`
-        + `<path d="M${FCX - 3} ${FCY - 3.4} A4.8 6.6 0 0 1 ${FCX + 1.9} ${FCY - 5.6}" fill="none" stroke="#fff" stroke-width="1" opacity="0.12" stroke-linecap="round"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="11" ry="13" fill="#cda67a"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="11" ry="13" fill="none" stroke="#785937" stroke-width="1.4"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="5.5" ry="7.5" fill="#180f08"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="5.5" ry="7.5" fill="none" stroke="#0a0603" stroke-width="1"/>`
+        + `<path d="M${FCX - 3.4} ${FCY - 3.8} A5.5 7.5 0 0 1 ${FCX + 2.2} ${FCY - 6.2}" fill="none" stroke="#fff" stroke-width="1" opacity="0.12" stroke-linecap="round"/>`
         + `</g>`
-        // top rim highlight on the front flange
-        + `<path d="M${FCX - 17} ${FCY - 20} A${FRX} ${FRY} ${T} 0 1 ${FCX + 6} ${FCY - 32}" fill="none" stroke="#fff" stroke-width="1.7" opacity="0.3" stroke-linecap="round"/>`
+        // top-left rim highlight
+        + `<path d="M${FCX - 19} ${FCY - 19} A${FRX} ${FRY} ${T} 0 1 ${FCX + 4} ${FCY - 35}" fill="none" stroke="#fff" stroke-width="1.8" opacity="0.32" stroke-linecap="round"/>`
         + `</svg>`;
 }
 
@@ -1032,6 +1030,14 @@ function usageChip(entry)
 let lastAmsTrays = null;
 let lastAmsTrayNow = null;
 
+// The ONE physical-slot display order for AMS Lite, shared by the Printer
+// Info grid (renderAmsGrid) and the Filament tab panel
+// (renderFilamentAmsPanels) so the two can never disagree. Visual position
+// only - matches Bambu Studio's own AMS panel (A1/A4 top row, A2/A3 bottom
+// row); the data for each tile is still keyed purely by physical tray id,
+// this only decides the order tiles are appended in.
+const AMS_DISPLAY_ORDER = [0, 3, 1, 2];
+
 function renderAmsGrid(trays, trayNow)
 {
     lastAmsTrays = trays;
@@ -1112,13 +1118,11 @@ function renderAmsGrid(trays, trayNow)
         grid.appendChild(slot);
     }
 
-    // Visual position only - matches Bambu Studio's own AMS panel layout
-    // (A1/A4 on top, A2/A3 on bottom), which doesn't read left-to-right in
-    // slot-number order. The 2-column grid auto-flows in DOM order, so
-    // this reorders which tray gets appended when, not which data belongs
-    // to which slot (that's still purely driven by tray.id, untouched).
-    const DISPLAY_ORDER = [0, 3, 1, 2];
-    const orderedTrays = DISPLAY_ORDER
+    // Shared order (see AMS_DISPLAY_ORDER) - the 2-column grid auto-flows
+    // in DOM order, so this reorders which tray gets appended when, not
+    // which data belongs to which slot (that's still purely driven by
+    // tray.id, untouched).
+    const orderedTrays = AMS_DISPLAY_ORDER
         .map(id => trays.find(t => t.id === id))
         .filter(Boolean);
 
@@ -1202,13 +1206,10 @@ function renderFilamentAmsPanels(trays, trayNow)
         // 100 on this printer - see renderAmsGrid). The external mount does
         // report a real remain when something's loaded.
         let pct = null;
-        let barCls = "";
 
         if (assigned)
         {
             pct = filamentPercent(assigned);
-            const st = filamentStatus(assigned);
-            barCls = st === "critical" ? "critical" : (st === "low" ? "low" : "");
         }
         else if (slotId === 254 && hasRawTray && typeof tray.remain === "number" && tray.remain > 0)
         {
@@ -1217,9 +1218,14 @@ function renderFilamentAmsPanels(trays, trayNow)
 
         if (pct !== null)
         {
-            // The number and the bar are the same value - see filamentPercent.
+            // Number and bar are the same value; both coloured by the shared
+            // percentage bands (see filamentPercentBand) so this matches the
+            // library card's ring for the same filament.
+            const band = filamentPercentBand(pct);
+            const bandCls = band === "green" ? "" : band;
+
             const pctText = document.createElement("span");
-            pctText.className = "amsLitePct" + (barCls ? " " + barCls : "");
+            pctText.className = "amsLitePct" + (bandCls ? " " + bandCls : "");
             pctText.textContent = pct + "%";
             tile.appendChild(pctText);
 
@@ -1227,8 +1233,8 @@ function renderFilamentAmsPanels(trays, trayNow)
             bar.className = "amsLiteBar";
 
             const fill = document.createElement("i");
-            if (barCls)
-                fill.className = barCls;
+            if (bandCls)
+                fill.className = bandCls;
             fill.style.width = pct + "%";
 
             bar.appendChild(fill);
@@ -1256,7 +1262,9 @@ function renderFilamentAmsPanels(trays, trayNow)
 
     if (amsWrap)
     {
-        fillPanel(amsWrap, [0, 1, 2, 3].map(id =>
+        // Same physical-slot order as the Printer Info grid - see
+        // AMS_DISPLAY_ORDER. Each tile's data is still keyed by physical id.
+        fillPanel(amsWrap, AMS_DISPLAY_ORDER.map(id =>
             buildTile(id, `A${id + 1}`, haveData ? (trays.find(t => t.id === id) || null) : null)));
     }
 
@@ -3459,6 +3467,38 @@ const filamentFilterState = {
 // Which collapsible filter groups are currently folded shut.
 const filamentFilterCollapsed = new Set();
 
+// Sort state - view only, applied AFTER the filters (filter -> sort ->
+// display), never mutates filamentLibrary.filaments. `keys` is an ordered
+// subset of ["brand","color","weight"] (multi-key: first is primary, the
+// rest break ties); empty = the library's own natural order. Resets on
+// reload, same as the filters.
+const filamentSortState = {
+    keys: [],
+    dir: "asc",   // asc | desc
+};
+
+function filamentSortComparator(a, b)
+{
+    const mul = filamentSortState.dir === "desc" ? -1 : 1;
+
+    for (const key of filamentSortState.keys)
+    {
+        let d = 0;
+
+        if (key === "brand")
+            d = String(a.brand || "").localeCompare(String(b.brand || ""), undefined, { sensitivity: "base" });
+        else if (key === "color")
+            d = String(a.color || "").localeCompare(String(b.color || ""), undefined, { sensitivity: "base" });
+        else if (key === "weight")
+            d = filamentRemainingGrams(a) - filamentRemainingGrams(b);
+
+        if (d !== 0)
+            return d * mul;
+    }
+
+    return 0;
+}
+
 // One shared 3-dot menu element, re-targeted per card.
 let filamentCardMenuEl = null;
 let filamentCardMenuFor = null;
@@ -3522,6 +3562,28 @@ function filamentPercent(f)
         return 0;
 
     return Math.max(0, Math.min(100, Math.round((filamentRemainingGrams(f) / total) * 100)));
+}
+
+// Colour band for the % ring (library cards) and % bar + number (AMS
+// Lite) - driven by the displayed percentage, NOT the gram thresholds in
+// filamentStatus() (those still drive the "!" marker, the card border and
+// the "Low" filter count, and are left untouched). Same bands everywhere
+// so one filament reads the same in both places.
+//   <= 15  red    <= 25  orange    <= 35  yellow    > 35  green
+function filamentPercentBand(pct)
+{
+    if (pct <= 15) return "red";
+    if (pct <= 25) return "orange";
+    if (pct <= 35) return "yellow";
+    return "green";
+}
+
+function filamentBandVar(band)
+{
+    return band === "red" ? "var(--red)"
+        : band === "orange" ? "var(--orange)"
+            : band === "yellow" ? "var(--yellow)"
+                : "var(--green)";
 }
 
 function filamentMatchesFilters(f)
@@ -3869,7 +3931,13 @@ function renderFilamentLibrary()
         return;
     }
 
+    // filter -> sort -> display. `.filter` already made a fresh array, so
+    // sorting it in place never touches filamentLibrary.filaments' own
+    // order (Reset sort just clears the keys and the natural order is back).
     const shown = all.filter(filamentMatchesFilters);
+
+    if (filamentSortState.keys.length > 0)
+        shown.sort(filamentSortComparator);
 
     if (shown.length === 0)
     {
@@ -3944,19 +4012,24 @@ function renderFilamentLibrary()
         top.appendChild(menuBtn);
         card.appendChild(top);
 
-        // --- specs ---
+        // --- specs (stacked rows, each with a small spec icon) ---
+        const specIcon = `<svg class="specIcon" viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M2.5 6.5h11"/></svg>`;
         const specs = document.createElement("div");
         specs.className = "filamentCardSpecs";
-        specs.innerHTML = `<span>${filamentDiameterOf(f)} mm</span><span>${f.material || "—"}</span>`;
+        specs.innerHTML =
+            `<span>${specIcon}${filamentDiameterOf(f)} mm</span>` +
+            `<span>${specIcon}${f.material || "—"}</span>`;
         card.appendChild(specs);
 
         // --- weight + % ring + color square ---
         const bottom = document.createElement("div");
         bottom.className = "filamentCardBottom";
 
+        const gramsLabel = remainingG.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
         const weight = document.createElement("div");
         weight.className = "filamentCardWeight";
-        weight.innerHTML = `<strong>${remainingG.toLocaleString()} g</strong><span>${status === "unavailable" ? "no spool" : "remaining"}</span>`;
+        weight.innerHTML = `<strong>${gramsLabel} g</strong><span>${status === "unavailable" ? "no spool" : "remaining"}</span>`;
 
         const ringWrap = document.createElement("div");
         ringWrap.className = "filamentRingWrap";
@@ -3965,17 +4038,20 @@ function renderFilamentLibrary()
         square.className = "filamentColorSquare";
         square.style.background = trayColorCss(f.colorHex || "");
 
+        // Ring + number colour follow the percentage bands (see
+        // filamentPercentBand); "unavailable" (no active spool at all) has
+        // no meaningful percentage, so it stays a neutral grey dash.
+        const ringBand = status === "unavailable" ? null : filamentPercentBand(pct);
+
         const ring = document.createElement("div");
         ring.className = "filamentRing";
         ring.style.setProperty("--pct", status === "unavailable" ? 0 : pct);
-        ring.style.setProperty("--ring-color",
-            status === "critical" ? "var(--red)"
-                : status === "low" ? "var(--yellow)"
-                    : status === "unavailable" ? "var(--muted)"
-                        : "var(--green)");
+        ring.style.setProperty("--ring-color", ringBand ? filamentBandVar(ringBand) : "var(--muted)");
 
         const ringPct = document.createElement("span");
         ringPct.textContent = status === "unavailable" ? "—" : pct + "%";
+        if (ringBand)
+            ringPct.style.color = filamentBandVar(ringBand);
         ring.appendChild(ringPct);
 
         ringWrap.appendChild(square);
@@ -5318,6 +5394,99 @@ byId("filamentFilterReset")?.addEventListener("click", () =>
 
     renderFilamentLibrary();
 });
+
+// Filament tab: Sort control. Multi-key (Brand / Color / Weight),
+// direction radio, reset. Applied in renderFilamentLibrary AFTER the
+// filters, so it always sorts only the currently-visible set.
+const filamentSortBtn = byId("filamentSortBtn");
+const filamentSortMenu = byId("filamentSortMenu");
+
+function refreshFilamentSortBtn()
+{
+    if (filamentSortBtn)
+        filamentSortBtn.classList.toggle("hasSort", filamentSortState.keys.length > 0);
+}
+
+function closeFilamentSortMenu()
+{
+    if (filamentSortMenu && !filamentSortMenu.hidden)
+    {
+        filamentSortMenu.hidden = true;
+        filamentSortBtn?.setAttribute("aria-expanded", "false");
+    }
+}
+
+if (filamentSortBtn && filamentSortMenu)
+{
+    filamentSortBtn.addEventListener("click", (e) =>
+    {
+        e.stopPropagation();
+        const willOpen = filamentSortMenu.hidden;
+        filamentSortMenu.hidden = !willOpen;
+        filamentSortBtn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    });
+
+    filamentSortMenu.addEventListener("click", (e) => e.stopPropagation());
+
+    filamentSortMenu.querySelectorAll("input[data-sort-key]").forEach(cb =>
+    {
+        cb.addEventListener("change", () =>
+        {
+            const key = cb.getAttribute("data-sort-key");
+
+            if (cb.checked)
+            {
+                if (!filamentSortState.keys.includes(key))
+                    filamentSortState.keys.push(key);
+            }
+            else
+            {
+                filamentSortState.keys = filamentSortState.keys.filter(k => k !== key);
+            }
+
+            refreshFilamentSortBtn();
+            renderFilamentLibrary();
+        });
+    });
+
+    filamentSortMenu.querySelectorAll("input[name=filamentSortDir]").forEach(rb =>
+    {
+        rb.addEventListener("change", () =>
+        {
+            if (!rb.checked)
+                return;
+
+            filamentSortState.dir = rb.value === "desc" ? "desc" : "asc";
+            renderFilamentLibrary();
+        });
+    });
+
+    byId("filamentSortReset")?.addEventListener("click", () =>
+    {
+        filamentSortState.keys = [];
+        filamentSortState.dir = "asc";
+
+        filamentSortMenu.querySelectorAll("input[data-sort-key]").forEach(cb => { cb.checked = false; });
+        const asc = filamentSortMenu.querySelector("input[name=filamentSortDir][value=asc]");
+        if (asc) asc.checked = true;
+
+        refreshFilamentSortBtn();
+        renderFilamentLibrary();
+    });
+
+    document.addEventListener("click", (e) =>
+    {
+        if (filamentSortMenu.hidden) return;
+        if (filamentSortMenu.contains(e.target)) return;
+        if (e.target.closest && e.target.closest("#filamentSortBtn")) return;
+        closeFilamentSortMenu();
+    });
+
+    document.addEventListener("keydown", (e) =>
+    {
+        if (e.key === "Escape") closeFilamentSortMenu();
+    });
+}
 
 if (filamentAddToggle && filamentModal)
 {
