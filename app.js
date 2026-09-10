@@ -3772,7 +3772,7 @@ function renderFilamentStats()
         // filter state ever holds it, just not offered as a visible category.
         statsWrap.innerHTML =
             stat("total", "Total", totalCount) +
-            stat("available", "Available", (availableG / 1000).toFixed(1) + " kg") +
+            stat("available", "Available", (availableG / 1000).toFixed(2) + " kg") +
             stat("loaded", "Loaded", loaded) +
             stat("low", "Low", low);
     }
