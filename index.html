@@ -542,17 +542,22 @@
 
             <div class="filamentLayout">
 
-                <aside class="panel filamentFilters">
-                    <div class="panelHeader">
+                <aside class="panel filamentFilters" id="filamentFiltersPanel">
+                    <div class="panelHeader filamentFiltersHead" id="filamentFiltersToggle" role="button" tabindex="0" aria-expanded="true" aria-controls="filamentFiltersBody">
                         <span>Filters</span>
-                        <button type="button" class="filamentFilterResetLink" id="filamentFilterReset">Reset</button>
+                        <span class="filamentFiltersHeadRight">
+                            <button type="button" class="filamentFilterResetLink" id="filamentFilterReset">Reset</button>
+                            <span class="filamentFiltersCaret" aria-hidden="true">&#9662;</span>
+                        </span>
                     </div>
 
-                    <label class="filamentSearchWrap">
-                        <input type="search" id="filamentFilterSearch" class="filamentSearchInput" placeholder="Search filaments..." autocomplete="off">
-                    </label>
+                    <div class="filamentFiltersBody" id="filamentFiltersBody">
+                        <label class="filamentSearchWrap">
+                            <input type="search" id="filamentFilterSearch" class="filamentSearchInput" placeholder="Search filaments..." autocomplete="off">
+                        </label>
 
-                    <div class="filterGroups" id="filamentFilterGroups"></div>
+                        <div class="filterGroups" id="filamentFilterGroups"></div>
+                    </div>
                 </aside>
 
                 <section class="filamentMain">

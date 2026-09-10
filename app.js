@@ -5489,6 +5489,58 @@ if (filamentSortBtn && filamentSortMenu)
     });
 }
 
+// Filament tab: the Filters panel is a plain always-open column on
+// desktop, but on the stacked (<=1200px) layout it starts collapsed and
+// the header toggles it - so the spool list isn't pushed a screenful
+// down. Desktop stays untouched: the header is inert and always expanded.
+const filamentFiltersPanel = byId("filamentFiltersPanel");
+const filamentFiltersToggle = byId("filamentFiltersToggle");
+const filamentFiltersMQ = window.matchMedia ? window.matchMedia("(max-width: 1200px)") : null;
+
+function syncFilamentFiltersDefault()
+{
+    if (!filamentFiltersPanel)
+        return;
+
+    const stacked = filamentFiltersMQ ? filamentFiltersMQ.matches : false;
+    filamentFiltersPanel.classList.toggle("is-collapsed", stacked);
+    filamentFiltersToggle?.setAttribute("aria-expanded", stacked ? "false" : "true");
+}
+
+if (filamentFiltersToggle && filamentFiltersPanel)
+{
+    syncFilamentFiltersDefault();
+
+    if (filamentFiltersMQ)
+    {
+        const onMQ = () => syncFilamentFiltersDefault();
+        if (filamentFiltersMQ.addEventListener) filamentFiltersMQ.addEventListener("change", onMQ);
+        else if (filamentFiltersMQ.addListener) filamentFiltersMQ.addListener(onMQ);
+    }
+
+    const toggleFilters = (e) =>
+    {
+        // Desktop: header does nothing. Also ignore clicks on the Reset
+        // button living inside the header.
+        if (filamentFiltersMQ && !filamentFiltersMQ.matches) return;
+        if (e.target.closest && e.target.closest("#filamentFilterReset")) return;
+
+        const collapsed = filamentFiltersPanel.classList.toggle("is-collapsed");
+        filamentFiltersToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    };
+
+    filamentFiltersToggle.addEventListener("click", toggleFilters);
+    filamentFiltersToggle.addEventListener("keydown", (e) =>
+    {
+        if (e.target.closest && e.target.closest("#filamentFilterReset")) return;
+        if (e.key === "Enter" || e.key === " ")
+        {
+            e.preventDefault();
+            toggleFilters(e);
+        }
+    });
+}
+
 if (filamentAddToggle && filamentModal)
 {
     filamentAddToggle.addEventListener("click", openFilamentModal);

@@ -131,6 +131,17 @@ h1{
     margin:0;
     font-size:clamp(32px,5vw,58px);
     line-height:1;
+    /* "3DPrintRoomMonitor" is one unbreakable word - let it break as a
+       last resort so it can never force the page wider than the screen. */
+    overflow-wrap:anywhere;
+}
+
+/* Below ~375px (iPhone SE etc.) the 32px min above makes the one-word
+   title slightly wider than the viewport - scale it with the screen. */
+@media(max-width:374px){
+    h1{
+        font-size:clamp(22px,8.5vw,32px);
+    }
 }
 
 .panel,
@@ -542,17 +553,22 @@ dd{
 
 .historyItem{
     display:grid;
-    grid-template-columns:1fr auto;
+    /* minmax(0,1fr) + overflow-wrap so a long unbroken print filename
+       wraps instead of forcing the whole row (and the tab) past a
+       phone's viewport width. */
+    grid-template-columns:minmax(0,1fr) auto;
     gap:12px;
     align-items:center;
     padding:12px;
     border-radius:6px;
     background:#14181b;
     border-left:6px solid var(--green);
+    overflow-wrap:anywhere;
 }
 
 .historyItem strong{
     display:block;
+    overflow-wrap:anywhere;
 }
 
 .historyItem span{
@@ -1719,7 +1735,18 @@ dd{
     .primaryGrid,
     .secondaryGrid,
     .powerGrid{
-        grid-template-columns:1fr;
+        /* minmax(0,1fr), not 1fr - a bare 1fr track keeps its auto
+           minimum (the widest grid item's content), which on a phone
+           lets a panel push past the viewport. minmax(0,...) plus
+           min-width:0 on the items lets every column shrink to fit. */
+        grid-template-columns:minmax(0,1fr);
+    }
+
+    .primaryGrid > *,
+    .secondaryGrid > *,
+    .powerGrid > *,
+    .stackedColumn{
+        min-width:0;
     }
 
     .filamentGrid{
@@ -1899,6 +1926,25 @@ dd{
     display:flex;
     flex-direction:column;
     gap:14px;
+}
+
+.filamentFiltersBody{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+}
+
+.filamentFiltersHeadRight{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+}
+
+/* The collapse caret only exists on the stacked (mobile/tablet) layout -
+   see the max-width:1200px block. On desktop the panel is always open and
+   the header is inert. */
+.filamentFiltersCaret{
+    display:none;
 }
 
 .filamentFilterResetLink{
@@ -2693,6 +2739,33 @@ dd{
     .filamentFilters,
     .filamentSide{
         position:static;
+    }
+
+    /* Collapsible Filters - starts closed on the stacked layout so the
+       spool list is right there; tap the header to expand. */
+    .filamentFiltersHead{
+        cursor:pointer;
+        margin-bottom:0;
+        user-select:none;
+    }
+
+    .filamentFiltersCaret{
+        display:inline-block;
+        font-size:11px;
+        color:var(--muted);
+        transition:transform .15s ease;
+    }
+
+    .filamentFilters.is-collapsed{
+        gap:0;
+    }
+
+    .filamentFilters.is-collapsed .filamentFiltersCaret{
+        transform:rotate(-90deg);
+    }
+
+    .filamentFilters.is-collapsed .filamentFiltersBody{
+        display:none;
     }
 
     .filamentSide{
