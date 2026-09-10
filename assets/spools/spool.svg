@@ -1,4 +1,4 @@
-<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">
+<svg viewBox="0 0 86 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">
 <!--
   Canonical filament-reel artwork for 3DPrintRoomMonitor - the readable
   design source only. The dashboard does NOT load this file; app.js's
@@ -6,11 +6,11 @@
   the winding colour can be set per-card from the existing
   filamentLibrary colorHex / AMS tray.color data (one colour system, no
   duplicated per-colour assets). The winding here is a neutral placeholder
-  grey. Traced from Bambu Studio's own filament-card spool: a kraft reel
-  at a slight 3/4 turn about a vertical axis, so the front flange reads as
-  a VERTICAL ellipse and dominates; the wound-filament cylinder recedes to
-  the right at a moderate depth showing a ridged coloured band, and the
-  darker kraft rear flange peeks past it upper-right. Concentric cardboard
+  grey. Traced from Bambu Studio's own filament-card spool: a SLENDER
+  kraft reel at a slight 3/4 turn about a vertical axis - the front flange
+  is a tall vertical ellipse that dominates, the wound-filament cylinder
+  is a THIN ridged band receding a short way to the right, and only a
+  sliver of the darker rear flange peeks past it. Concentric cardboard
   rings, a small printed stamp, a raised hub and a dark recessed hole.
   Transparent background, all vector, dark-UI friendly.
 -->
@@ -33,46 +33,46 @@
 </defs>
 
 <!-- contact shadow -->
-<ellipse cx="46" cy="91" rx="36" ry="6" fill="#000" opacity="0.2"/>
-<ellipse cx="38" cy="91" rx="20" ry="4" fill="#000" opacity="0.2"/>
+<ellipse cx="42" cy="91" rx="33" ry="6" fill="#000" opacity="0.2"/>
+<ellipse cx="36" cy="91" rx="19" ry="4" fill="#000" opacity="0.2"/>
 
-<!-- rear flange (kraft, in shadow, peeks upper-right) -->
-<ellipse cx="68.5" cy="47.5" rx="25" ry="33" transform="rotate(-3 67 46)" fill="#000" opacity="0.16"/>
-<ellipse cx="67" cy="46" rx="25" ry="33" transform="rotate(-3 67 46)" fill="url(#spoolrf)"/>
-<ellipse cx="67" cy="46" rx="25" ry="33" transform="rotate(-3 67 46)" fill="none" stroke="#3d2f1f" stroke-width="1.3" opacity="0.8"/>
+<!-- rear flange - small, only a sliver peeks -->
+<ellipse cx="55.5" cy="47.5" rx="22" ry="32" transform="rotate(-3 54 46)" fill="#000" opacity="0.16"/>
+<ellipse cx="54" cy="46" rx="22" ry="32" transform="rotate(-3 54 46)" fill="url(#spoolrf)"/>
+<ellipse cx="54" cy="46" rx="22" ry="32" transform="rotate(-3 54 46)" fill="none" stroke="#3d2f1f" stroke-width="1.3" opacity="0.8"/>
 
-<!-- wound-filament cylinder: app.js stacks ~20 tilted ellipses from the
+<!-- wound-filament cylinder: app.js stacks ~16 tilted ellipses from the
      far cap to the near cap, each stroked so the seam reads as one turn
      of coil; near slices lit, far slices in shadow and slightly smaller.
      A representative subset is shown here. -->
-<g stroke-width="0.55" stroke-opacity="0.4">
-<ellipse cx="66" cy="46" rx="22" ry="30" transform="rotate(-3 66 46)" fill="#4a4d50" stroke="#53595e"/>
-<ellipse cx="60.25" cy="46.5" rx="23.5" ry="31.75" transform="rotate(-3 60.25 46.5)" fill="#64686b" stroke="#cbcfd2"/>
-<ellipse cx="54.5" cy="47" rx="25" ry="33.5" transform="rotate(-3 54.5 47)" fill="#7f8285" stroke="#53595e"/>
-<ellipse cx="48.75" cy="47.5" rx="26.5" ry="35.25" transform="rotate(-3 48.75 47.5)" fill="#999c9f" stroke="#cbcfd2"/>
-<ellipse cx="43" cy="48" rx="28" ry="37" transform="rotate(-3 43 48)" fill="#b3b7ba" stroke="#53595e"/>
+<g stroke-width="0.5" stroke-opacity="0.4">
+<ellipse cx="53" cy="47" rx="21" ry="31" transform="rotate(-3 53 47)" fill="#4a4d50" stroke="#53595e"/>
+<ellipse cx="49.75" cy="47.5" rx="22" ry="32.25" transform="rotate(-3 49.75 47.5)" fill="#64686b" stroke="#cbcfd2"/>
+<ellipse cx="46.5" cy="48" rx="23" ry="33.5" transform="rotate(-3 46.5 48)" fill="#7f8285" stroke="#53595e"/>
+<ellipse cx="43.25" cy="48.5" rx="24" ry="34.75" transform="rotate(-3 43.25 48.5)" fill="#999c9f" stroke="#cbcfd2"/>
+<ellipse cx="40" cy="49" rx="25" ry="36" transform="rotate(-3 40 49)" fill="#b3b7ba" stroke="#53595e"/>
 </g>
-<ellipse cx="54.5" cy="47" rx="26" ry="34.5" transform="rotate(-3 54.5 47)" fill="url(#spoolbs)"/>
-<ellipse cx="43" cy="48" rx="28" ry="37" transform="rotate(-3 43 48)" fill="none" stroke="#53595e" stroke-width="1" opacity="0.5"/>
-<ellipse cx="40" cy="50" rx="27.5" ry="36.5" transform="rotate(-3 40 50)" fill="none" stroke="#000" stroke-width="2.5" opacity="0.12"/>
+<ellipse cx="46.5" cy="48" rx="24" ry="34.5" transform="rotate(-3 46.5 48)" fill="url(#spoolbs)"/>
+<ellipse cx="40" cy="49" rx="25" ry="36" transform="rotate(-3 40 49)" fill="none" stroke="#53595e" stroke-width="1" opacity="0.5"/>
+<ellipse cx="38" cy="50" rx="25.5" ry="37.5" transform="rotate(-3 38 50)" fill="none" stroke="#000" stroke-width="2.5" opacity="0.12"/>
 
-<!-- front flange -->
-<g transform="rotate(-3 40 50)">
-<ellipse cx="41.2" cy="51.5" rx="29.2" ry="38.2" fill="#000" opacity="0.15"/>
-<ellipse cx="40" cy="50" rx="28" ry="37" fill="url(#spoolff)"/>
-<ellipse cx="40" cy="50" rx="28" ry="37" fill="none" stroke="#785937" stroke-width="1.6" opacity="0.85"/>
-<ellipse cx="40" cy="50" rx="23" ry="30.5" fill="none" stroke="#b78c5d" stroke-width="0.9" opacity="0.4"/>
-<ellipse cx="40" cy="50" rx="17" ry="23" fill="none" stroke="#b78c5d" stroke-width="0.9" opacity="0.34"/>
-<ellipse cx="40" cy="50" rx="26" ry="35" fill="none" stroke="#f4dcbb" stroke-width="1" opacity="0.22"/>
-<ellipse cx="40" cy="31" rx="8" ry="6" fill="none" stroke="#836747" stroke-width="0.8" opacity="0.5"/>
-<text x="40" y="33" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="5" fill="#7a5c3a" opacity="0.6">3D</text>
-<ellipse cx="40" cy="50" rx="11" ry="13" fill="#d0a978"/>
-<ellipse cx="40" cy="50" rx="11" ry="13" fill="none" stroke="#7a5c3a" stroke-width="1.3"/>
-<ellipse cx="40" cy="50" rx="5.5" ry="6.8" fill="#160f08"/>
-<ellipse cx="40" cy="50" rx="5.5" ry="6.8" fill="none" stroke="#090603" stroke-width="1"/>
-<path d="M36.8 46.4 A5.5 6.8 0 0 1 42 44.4" fill="none" stroke="#fff" stroke-width="0.9" opacity="0.12" stroke-linecap="round"/>
+<!-- front flange - tall vertical ellipse, dominant -->
+<g transform="rotate(-3 38 50)">
+<ellipse cx="39.2" cy="51.5" rx="27.2" ry="39.2" fill="#000" opacity="0.15"/>
+<ellipse cx="38" cy="50" rx="26" ry="38" fill="url(#spoolff)"/>
+<ellipse cx="38" cy="50" rx="26" ry="38" fill="none" stroke="#785937" stroke-width="1.6" opacity="0.85"/>
+<ellipse cx="38" cy="50" rx="21" ry="31.5" fill="none" stroke="#b78c5d" stroke-width="0.9" opacity="0.4"/>
+<ellipse cx="38" cy="50" rx="15" ry="24" fill="none" stroke="#b78c5d" stroke-width="0.9" opacity="0.34"/>
+<ellipse cx="38" cy="50" rx="24" ry="36" fill="none" stroke="#f4dcbb" stroke-width="1" opacity="0.22"/>
+<ellipse cx="38" cy="31" rx="8" ry="6" fill="none" stroke="#836747" stroke-width="0.8" opacity="0.5"/>
+<text x="38" y="33" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="5" fill="#7a5c3a" opacity="0.6">3D</text>
+<ellipse cx="38" cy="50" rx="11" ry="13" fill="#d0a978"/>
+<ellipse cx="38" cy="50" rx="11" ry="13" fill="none" stroke="#7a5c3a" stroke-width="1.3"/>
+<ellipse cx="38" cy="50" rx="5.5" ry="6.8" fill="#160f08"/>
+<ellipse cx="38" cy="50" rx="5.5" ry="6.8" fill="none" stroke="#090603" stroke-width="1"/>
+<path d="M34.8 46.4 A5.5 6.8 0 0 1 40 44.4" fill="none" stroke="#fff" stroke-width="0.9" opacity="0.12" stroke-linecap="round"/>
 </g>
 
 <!-- top-left sheen -->
-<path d="M24 28 A28 37 -3 0 1 42 15" fill="none" stroke="#fff" stroke-width="1.6" opacity="0.3" stroke-linecap="round"/>
+<path d="M22 28 A26 38 -3 0 1 40 15" fill="none" stroke="#fff" stroke-width="1.6" opacity="0.3" stroke-linecap="round"/>
 </svg>

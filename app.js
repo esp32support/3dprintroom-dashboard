@@ -690,15 +690,15 @@ function filamentSpoolSvg(colorHex, colorName)
     // raised hub and a dark recessed hole finish the flange. Only the
     // winding colour varies with the filament.
     const T = -3;
-    const FCX = 40, FCY = 50, FRX = 28, FRY = 37;   // front flange - vertical ellipse, dominant
-    const NCX = 43, NCY = 48, NRX = 28, NRY = 37;   // winding near cap - at the flange edge
-    const XCX = 66, XCY = 46, XRX = 22, XRY = 30;   // winding far cap - cylinder recedes right, moderate depth
-    const RCX = 67, RCY = 46, RRX = 25, RRY = 33;   // rear flange - kraft, darker, peeks upper-right
+    const FCX = 38, FCY = 50, FRX = 26, FRY = 38;   // front flange - vertically elongated, dominant
+    const NCX = 40, NCY = 49, NRX = 25, NRY = 36;   // winding near cap - just inside the flange edge
+    const XCX = 53, XCY = 47, XRX = 21, XRY = 31;   // winding far cap - SHALLOW depth, thin body
+    const RCX = 54, RCY = 46, RRX = 22, RRY = 32;   // rear flange - small, only a sliver peeks
 
     // Wound-filament cylinder: ellipses stacked far -> near, each stroked
     // so the seam between layers reads as one turn of coil. Near slices
     // paint last (lit); far slices sit in shadow and shrink slightly.
-    const nd = 20;
+    const nd = 16;
     let barrel = "";
 
     for (let k = nd; k >= 0; k--)
@@ -710,10 +710,10 @@ function filamentSpoolSvg(colorHex, colorName)
         const ry = (NRY + (XRY - NRY) * s).toFixed(2);
         const fill = lerpHex(wLight, wDarker, s * 0.7 + 0.16);
         barrel += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(${T} ${cx} ${cy})"`
-            + ` fill="${fill}" stroke="${k % 2 ? wLight : wDark}" stroke-width="0.55" stroke-opacity="0.4" opacity="${windOpacity}"/>`;
+            + ` fill="${fill}" stroke="${k % 2 ? wLight : wDark}" stroke-width="0.5" stroke-opacity="0.4" opacity="${windOpacity}"/>`;
     }
 
-    return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">`
+    return `<svg viewBox="0 0 86 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">`
         + `<defs>`
         + `<radialGradient id="${id}ff" cx="32%" cy="26%" r="90%">`
         + `<stop offset="0" stop-color="#f4d9b1"/><stop offset="0.55" stop-color="#d8b384"/><stop offset="1" stop-color="#a07a48"/>`
@@ -727,8 +727,8 @@ function filamentSpoolSvg(colorHex, colorName)
         + `</linearGradient>`
         + `</defs>`
         // contact shadow
-        + `<ellipse cx="46" cy="91" rx="36" ry="6" fill="#000" opacity="0.2"/>`
-        + `<ellipse cx="38" cy="91" rx="20" ry="4" fill="#000" opacity="0.2"/>`
+        + `<ellipse cx="42" cy="91" rx="33" ry="6" fill="#000" opacity="0.2"/>`
+        + `<ellipse cx="36" cy="91" rx="19" ry="4" fill="#000" opacity="0.2"/>`
         // ---- rear flange (kraft, in shadow) ----
         + `<ellipse cx="${RCX + 1.5}" cy="${RCY + 1.5}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="#000" opacity="0.16"/>`
         + `<ellipse cx="${RCX}" cy="${RCY}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="url(#${id}rf)"/>`
