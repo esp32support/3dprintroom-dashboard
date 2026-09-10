@@ -2305,8 +2305,11 @@ dd{
     border:1px solid #2f363d;
 }
 
-.filamentCard.isLow{ border-color:color-mix(in srgb,var(--yellow) 45%,#2f363d); }
-.filamentCard.isCritical{ border-color:color-mix(in srgb,var(--red) 50%,#2f363d); }
+/* Warning border follows the percentage band (filamentPercentBand):
+   >=35 green -> no border; 25-34 yellow; 15-24 orange; <15 red. */
+.filamentCard.band-yellow{ border-color:color-mix(in srgb,var(--yellow) 55%,#2f363d); }
+.filamentCard.band-orange{ border-color:color-mix(in srgb,var(--orange) 55%,#2f363d); }
+.filamentCard.band-red{ border-color:color-mix(in srgb,var(--red) 60%,#2f363d); }
 .filamentCard.isUnavailable{ opacity:.72; }
 
 .filamentCardTop{

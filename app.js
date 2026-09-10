@@ -3554,17 +3554,16 @@ function filamentPercent(f)
     return Math.max(0, Math.min(100, Math.round((filamentRemainingGrams(f) / total) * 100)));
 }
 
-// Colour band for the % ring (library cards) and % bar + number (AMS
-// Lite) - driven by the displayed percentage, NOT the gram thresholds in
-// filamentStatus() (those still drive the "!" marker, the card border and
-// the "Low" filter count, and are left untouched). Same bands everywhere
-// so one filament reads the same in both places.
-//   <= 15  red    <= 25  orange    <= 35  yellow    > 35  green
+// THE single source of truth for every percentage-driven status colour:
+// the % ring + its number (library cards), the % bar + its number (AMS
+// Lite), the card warning border, and (via filamentIsLow) the LOW
+// classification. Driven only by the displayed percentage.
+//   < 15  red    15-24  orange    25-34  yellow    >= 35  green
 function filamentPercentBand(pct)
 {
-    if (pct <= 15) return "red";
-    if (pct <= 25) return "orange";
-    if (pct <= 35) return "yellow";
+    if (pct < 15) return "red";
+    if (pct < 25) return "orange";
+    if (pct < 35) return "yellow";
     return "green";
 }
 
@@ -3574,6 +3573,16 @@ function filamentBandVar(band)
         : band === "orange" ? "var(--orange)"
             : band === "yellow" ? "var(--yellow)"
                 : "var(--green)";
+}
+
+// LOW = anything below the green threshold, i.e. remaining percentage
+// < 35 (every yellow / orange / red band). Single source of truth for the
+// Low count, the Low chip, the Low filter and the card's "!" marker. A
+// filament with no active spool is "unavailable", not "low". This is a
+// pure calculation - no stored low flag.
+function filamentIsLow(f)
+{
+    return filamentActiveSpools(f).length > 0 && filamentPercent(f) < 35;
 }
 
 function filamentMatchesFilters(f)
@@ -3599,15 +3608,13 @@ function filamentMatchesFilters(f)
 
     if (s.status !== "all")
     {
-        const st = filamentStatus(f);
-
         if (s.status === "loaded" && !filamentIsLoaded(f))
             return false;
 
-        if (s.status === "low" && !(st === "low" || st === "critical"))
+        if (s.status === "low" && !filamentIsLow(f))
             return false;
 
-        if (s.status === "unavailable" && st !== "unavailable")
+        if (s.status === "unavailable" && filamentStatus(f) !== "unavailable")
             return false;
     }
 
@@ -3641,9 +3648,8 @@ function renderFilamentFilters()
     fils.forEach(f =>
     {
         if (filamentIsLoaded(f)) statusCounts.loaded++;
-        const st = filamentStatus(f);
-        if (st === "low" || st === "critical") statusCounts.low++;
-        if (st === "unavailable") statusCounts.unavailable++;
+        if (filamentIsLow(f)) statusCounts.low++;
+        if (filamentStatus(f) === "unavailable") statusCounts.unavailable++;
     });
 
     wrap.innerHTML = "";
@@ -3757,9 +3763,8 @@ function renderFilamentStats()
     fils.forEach(f =>
     {
         if (filamentIsLoaded(f)) loaded++;
-        const st = filamentStatus(f);
-        if (st === "low" || st === "critical") low++;
-        if (st === "unavailable") unavailable++;
+        if (filamentIsLow(f)) low++;
+        if (filamentStatus(f) === "unavailable") unavailable++;
     });
 
     if (statsWrap)
@@ -3944,10 +3949,15 @@ function renderFilamentLibrary()
         const pct = filamentPercent(f);
         const remainingG = filamentRemainingGrams(f);
 
+        // One source of truth: the percentage band drives the ring colour,
+        // the % number colour, the "!" marker and the card's warning
+        // border. "unavailable" (no active spool) has no meaningful % and
+        // gets no warning border.
+        const band = status === "unavailable" ? null : filamentPercentBand(pct);
+
         const card = document.createElement("div");
         card.className = "filamentCard"
-            + (status === "low" ? " isLow" : "")
-            + (status === "critical" ? " isCritical" : "")
+            + (band && band !== "green" ? " band-" + band : "")
             + (status === "unavailable" ? " isUnavailable" : "");
 
         // --- top: spool render + brand/name/color + 3-dot ---
@@ -3969,11 +3979,12 @@ function renderFilamentLibrary()
         name.className = "filamentCardName";
         name.textContent = [f.material, f.variant].filter(Boolean).join(" ") || (f.material || "Filament");
 
-        // Same "!" low-stock marker (and same thresholds) as before.
-        if (status === "low" || status === "critical")
+        // "!" low-stock marker - shown for anything below the green
+        // threshold (filamentIsLow), coloured red in the critical band.
+        if (filamentIsLow(f))
         {
             const mark = document.createElement("span");
-            mark.className = status === "critical" ? "lowFilamentMark critical" : "lowFilamentMark";
+            mark.className = band === "red" ? "lowFilamentMark critical" : "lowFilamentMark";
             mark.textContent = "!";
             name.appendChild(mark);
         }
