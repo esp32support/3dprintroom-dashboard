@@ -59,6 +59,7 @@
         <nav class="tabNav" role="tablist">
             <button type="button" class="tabBtn active" id="tabBtn-room" role="tab" aria-selected="true" aria-controls="tab-room">Room</button>
             <button type="button" class="tabBtn" id="tabBtn-printer" role="tab" aria-selected="false" aria-controls="tab-printer">Printer Info</button>
+            <button type="button" class="tabBtn" id="tabBtn-filament" role="tab" aria-selected="false" aria-controls="tab-filament">Filament</button>
             <button type="button" class="tabBtn" id="tabBtn-power" role="tab" aria-selected="false" aria-controls="tab-power">Power</button>
         </nav>
 
@@ -522,23 +523,6 @@
 
             </section>
 
-            <section class="panel amsPanel filamentSection">
-                <div class="panelHeader">
-                    <span>Filament library</span>
-                    <button type="button" class="infoBtn" id="filamentAddToggle">+ Add filament</button>
-                </div>
-
-                <p class="hint">
-                    Your own inventory, not what's loaded right now (see AMS above).
-                    Finished prints automatically deduct their acquired weight from
-                    the matching spool.
-                </p>
-
-                <div class="filamentList filamentGrid" id="filamentList">
-                    <div class="historyItem">No filaments added yet.</div>
-                </div>
-            </section>
-
             <section class="panel toolsPanel printerDevicePanel">
                 <div class="panelHeader">
                     <span>Device</span>
@@ -553,6 +537,68 @@
             </section>
 
         </div><!-- /tab-printer -->
+
+        <div class="tabPanel" id="tab-filament" role="tabpanel" aria-labelledby="tabBtn-filament" hidden>
+
+            <div class="filamentLayout">
+
+                <aside class="panel filamentFilters">
+                    <div class="panelHeader">
+                        <span>Filters</span>
+                        <button type="button" class="filamentFilterResetLink" id="filamentFilterReset">Reset</button>
+                    </div>
+
+                    <label class="filamentSearchWrap">
+                        <input type="search" id="filamentFilterSearch" class="filamentSearchInput" placeholder="Search filaments..." autocomplete="off">
+                    </label>
+
+                    <div class="filterGroups" id="filamentFilterGroups"></div>
+                </aside>
+
+                <section class="filamentMain">
+
+                    <div class="filamentMainHead">
+                        <h2>Filament Library</h2>
+                        <button type="button" class="infoBtn filamentAddBtn" id="filamentAddToggle">+ Add new spool</button>
+                    </div>
+
+                    <div class="filamentStats" id="filamentStats"></div>
+
+                    <div class="filamentStatusChips" id="filamentStatusChips"></div>
+
+                    <div class="filamentList filamentGrid" id="filamentList">
+                        <div class="historyItem">No filaments added yet.</div>
+                    </div>
+
+                </section>
+
+                <aside class="filamentSide">
+
+                    <section class="panel amsLitePanel">
+                        <div class="panelHeader">
+                            <span>AMS Lite</span>
+                            <strong class="amsLiteState" id="filamentAmsLiteState">Offline</strong>
+                        </div>
+                        <div class="amsLiteGrid" id="filamentAmsLite">
+                            <div class="historyItem">Waiting for data...</div>
+                        </div>
+                    </section>
+
+                    <section class="panel externalPanel">
+                        <div class="panelHeader">
+                            <span>External</span>
+                            <strong class="amsLiteState" id="filamentExternalState">Offline</strong>
+                        </div>
+                        <div class="externalWrap" id="filamentExternal">
+                            <div class="historyItem">Waiting for data...</div>
+                        </div>
+                    </section>
+
+                </aside>
+
+            </div>
+
+        </div><!-- /tab-filament -->
 
         <div class="tabPanel" id="tab-power" role="tabpanel" aria-labelledby="tabBtn-power" hidden>
 

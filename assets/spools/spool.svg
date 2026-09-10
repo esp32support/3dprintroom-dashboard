@@ -1,0 +1,60 @@
+<svg viewBox="0 0 120 108" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool">
+  <!--
+    Canonical filament-reel artwork for 3DPrintRoomMonitor.
+    The dashboard does NOT load this file at runtime - app.js's
+    filamentSpoolSvg(colorHex, colorName) builds this same shape inline so
+    the winding colour can be driven per-card from the existing
+    filamentLibrary colorHex data (one colour system, no duplicated assets).
+    This file is the human-readable reference / design source for that
+    function. The winding here is a neutral placeholder grey.
+  -->
+  <defs>
+    <radialGradient id="wind" cx="38%" cy="30%" r="82%">
+      <stop offset="0" stop-color="#c7ced4"/>
+      <stop offset="0.55" stop-color="#8b949c"/>
+      <stop offset="1" stop-color="#464c52"/>
+    </radialGradient>
+    <radialGradient id="flange" cx="38%" cy="32%" r="78%">
+      <stop offset="0" stop-color="#f2d7b0"/>
+      <stop offset="0.6" stop-color="#d9b586"/>
+      <stop offset="1" stop-color="#a67c4d"/>
+    </radialGradient>
+  </defs>
+
+  <g transform="rotate(-7 60 54)">
+    <!-- contact shadow -->
+    <ellipse cx="60" cy="99" rx="41" ry="7" fill="#000" opacity="0.33"/>
+
+    <!-- rear flange peeking behind the winding (depth) -->
+    <ellipse cx="63" cy="50" rx="45" ry="43" fill="#836b47"/>
+
+    <!-- wound-filament pack: outer edge (thickness) then lit face -->
+    <ellipse cx="61.5" cy="52.5" rx="43" ry="41" fill="#464c52"/>
+    <ellipse cx="60" cy="54" rx="41" ry="39" fill="url(#wind)"/>
+
+    <!-- coil striations -->
+    <g fill="none" stroke-width="0.7">
+      <ellipse cx="60" cy="54" rx="17" ry="16" stroke="#c7ced4" opacity="0.20"/>
+      <ellipse cx="60" cy="54" rx="21" ry="20" stroke="#464c52" opacity="0.24"/>
+      <ellipse cx="60" cy="54" rx="25" ry="24" stroke="#c7ced4" opacity="0.20"/>
+      <ellipse cx="60" cy="54" rx="29" ry="27" stroke="#464c52" opacity="0.24"/>
+      <ellipse cx="60" cy="54" rx="33" ry="31" stroke="#c7ced4" opacity="0.20"/>
+      <ellipse cx="60" cy="54" rx="37" ry="35" stroke="#464c52" opacity="0.24"/>
+    </g>
+
+    <!-- lower-half shading + top sheen on the winding -->
+    <path d="M20 56 A41 39 0 0 0 100 56 A41 39 0 0 1 20 56 Z" fill="#464c52" opacity="0.40"/>
+    <path d="M26 38 A40 34 0 0 1 90 34" fill="none" stroke="#fff" stroke-width="3" opacity="0.13" stroke-linecap="round"/>
+
+    <!-- front (kraft) flange disc -->
+    <ellipse cx="59" cy="52" rx="26.5" ry="25.5" fill="url(#flange)"/>
+    <ellipse cx="59" cy="52" rx="26.5" ry="25.5" fill="none" stroke="#8a6a44" stroke-width="1.4" opacity="0.7"/>
+    <ellipse cx="59" cy="52" rx="19" ry="18" fill="none" stroke="#b98d5e" stroke-width="1" opacity="0.5"/>
+    <path d="M40 36 A25 24 0 0 1 78 33" fill="none" stroke="#fff" stroke-width="2" opacity="0.28" stroke-linecap="round"/>
+
+    <!-- hub recess + centre hole -->
+    <ellipse cx="59" cy="52" rx="12.5" ry="12" fill="#c6a074"/>
+    <ellipse cx="59" cy="52" rx="12.5" ry="12" fill="none" stroke="#82633f" stroke-width="1.4"/>
+    <ellipse cx="59" cy="52" rx="6" ry="5.6" fill="#1c130a"/>
+  </g>
+</svg>

@@ -618,6 +618,129 @@ function trayColorCss(hex)
     return "#" + hex.slice(0, 6);
 }
 
+// Mix a hex colour toward black (amt < 0) or white (amt > 0), |amt| in
+// 0..1. Used only to derive the light/shadow stops of the spool artwork
+// below from the one real filament colour.
+function spoolShade(hex, amt)
+{
+    let h = String(hex || "").replace("#", "").slice(0, 6);
+
+    if (h.length !== 6 || /[^0-9a-fA-F]/.test(h))
+        h = "9aa4ad";
+
+    let r = parseInt(h.slice(0, 2), 16);
+    let g = parseInt(h.slice(2, 4), 16);
+    let b = parseInt(h.slice(4, 6), 16);
+
+    const target = amt < 0 ? 0 : 255;
+    const p = Math.min(1, Math.abs(amt));
+
+    r = Math.round((target - r) * p + r);
+    g = Math.round((target - g) * p + g);
+    b = Math.round((target - b) * p + b);
+
+    return "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+// Straight-line RGB interpolation between two #rrggbb strings.
+function lerpHex(a, b, t)
+{
+    const pa = String(a).replace("#", "");
+    const pb = String(b).replace("#", "");
+    const ar = parseInt(pa.slice(0, 2), 16), ag = parseInt(pa.slice(2, 4), 16), ab = parseInt(pa.slice(4, 6), 16);
+    const br = parseInt(pb.slice(0, 2), 16), bg = parseInt(pb.slice(2, 4), 16), bb = parseInt(pb.slice(4, 6), 16);
+    const r = Math.round(ar + (br - ar) * t);
+    const g = Math.round(ag + (bg - ag) * t);
+    const bl = Math.round(ab + (bb - ab) * t);
+    return "#" + [r, g, bl].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+let spoolSvgUid = 0;
+
+// The reusable filament-reel graphic - one inline SVG (see
+// assets/spools/spool.svg for the readable design source). Drawn as an
+// OBLIQUE cylinder: two kraft flange ellipses at a ~35deg three-quarter
+// tilt with a stack of rotated ellipse "coils" between them, so the
+// filament winding reads as a thick cylindrical band with real depth, not
+// a flat disc. Winding colour comes entirely from the passed hex (the
+// existing f.colorHex / tray.color - NOT a second colour system); the
+// flanges are fixed kraft. colorName only picks a translucent treatment
+// for clear/natural stock. Same asset at every size: library cards, AMS
+// Lite tiles, External.
+function filamentSpoolSvg(colorHex, colorName)
+{
+    const id = "sp" + (++spoolSvgUid);
+    const base = spoolShade(colorHex, 0);
+    const light = spoolShade(colorHex, 0.44);
+    const dark = spoolShade(colorHex, -0.30);
+    const darker = spoolShade(colorHex, -0.52);
+
+    const translucent = /transparent|clear|natural|translu/i.test(colorName || "");
+    const windOpacity = translucent ? 0.6 : 1;
+
+    // Spool axis points up-and-back (away from the viewer). Front flange
+    // low-left, rear flange high-right.
+    const AX = -54;                 // tilt of every ellipse, degrees
+    const FX = 44, FY = 70;         // front flange centre
+    const RX = 68, RY = 38;         // rear flange centre
+    const FLRX = 17, FLRY = 35;     // flange ellipse radii (rx = foreshortened along axis)
+    const BRX = 13, BRY = 27;       // winding-barrel ellipse radii (sits inside the flanges)
+
+    // Winding barrel: a stack of tilted ellipses from rear to front. Front
+    // discs paint last (on top) and are lighter; rear discs are in shadow.
+    const nd = 24;
+    let barrel = "";
+
+    for (let k = nd; k >= 0; k--)
+    {
+        const s = k / nd;                                   // 1 = rear, 0 = front
+        const cx = (FX + (RX - FX) * s).toFixed(2);
+        const cy = (FY + (RY - FY) * s).toFixed(2);
+        const col = lerpHex(light, darker, s * 0.82 + 0.06);
+        barrel += `<ellipse cx="${cx}" cy="${cy}" rx="${BRX}" ry="${BRY}" transform="rotate(${AX} ${cx} ${cy})" fill="${col}"`
+            + (k % 3 === 0 ? ` stroke="${darker}" stroke-width="0.5" stroke-opacity="0.45"` : "")
+            + ` opacity="${windOpacity}"/>`;
+    }
+
+    return `<svg viewBox="0 0 116 112" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">`
+        + `<defs>`
+        + `<radialGradient id="${id}f" cx="36%" cy="30%" r="80%">`
+        + `<stop offset="0" stop-color="#f4dab4"/><stop offset="0.58" stop-color="#d7b283"/><stop offset="1" stop-color="#9c723f"/>`
+        + `</radialGradient>`
+        + `<radialGradient id="${id}r" cx="60%" cy="60%" r="80%">`
+        + `<stop offset="0" stop-color="#a4835a"/><stop offset="1" stop-color="#6f583a"/>`
+        + `</radialGradient>`
+        + `</defs>`
+        // contact shadow on the ground
+        + `<ellipse cx="52" cy="101" rx="38" ry="7" fill="#000" opacity="0.30"/>`
+        // rear flange (in shadow), partly visible behind the winding
+        + `<ellipse cx="${RX}" cy="${RY}" rx="${FLRX}" ry="${FLRY}" transform="rotate(${AX} ${RX} ${RY})" fill="url(#${id}r)"/>`
+        + `<ellipse cx="${RX}" cy="${RY}" rx="${FLRX}" ry="${FLRY}" transform="rotate(${AX} ${RX} ${RY})" fill="none" stroke="#4f3f29" stroke-width="1.4" opacity="0.7"/>`
+        // filament winding barrel
+        + barrel
+        // soft form shading down the underside of the barrel + sheen along the top
+        + `<ellipse cx="${((FX + RX) / 2 + 3).toFixed(1)}" cy="${((FY + RY) / 2 + 9).toFixed(1)}" rx="21" ry="10" transform="rotate(${AX + 6} ${(FX + RX) / 2} ${(FY + RY) / 2})" fill="#000" opacity="0.22"/>`
+        + `<ellipse cx="${((FX + RX) / 2 - 5).toFixed(1)}" cy="${((FY + RY) / 2 - 8).toFixed(1)}" rx="16" ry="6" transform="rotate(${AX} ${(FX + RX) / 2} ${(FY + RY) / 2})" fill="#fff" opacity="0.12"/>`
+        // front flange
+        + `<ellipse cx="${FX}" cy="${FY}" rx="${FLRX}" ry="${FLRY}" transform="rotate(${AX} ${FX} ${FY})" fill="url(#${id}f)"/>`
+        + `<ellipse cx="${FX}" cy="${FY}" rx="${FLRX}" ry="${FLRY}" transform="rotate(${AX} ${FX} ${FY})" fill="none" stroke="#7c5f3d" stroke-width="1.5" opacity="0.8"/>`
+        + `<ellipse cx="${FX}" cy="${FY}" rx="${FLRX - 6}" ry="${FLRY - 12}" transform="rotate(${AX} ${FX} ${FY})" fill="none" stroke="#b58a58" stroke-width="1" opacity="0.55"/>`
+        // printed label on the flange face
+        + `<g transform="rotate(${AX} ${FX} ${FY})">`
+        + `<rect x="${FX - 8}" y="${FY - 26}" width="16" height="9" rx="1.6" fill="#fbf3e4" opacity="0.8"/>`
+        + `<rect x="${FX - 6}" y="${FY - 23.5}" width="12" height="1.4" rx="0.7" fill="#8a6c46" opacity="0.75"/>`
+        + `<rect x="${FX - 6}" y="${FY - 20.5}" width="8" height="1.4" rx="0.7" fill="#8a6c46" opacity="0.6"/>`
+        + `</g>`
+        // flange highlight arc
+        + `<path d="M${FX - 15} ${FY - 20} A${FLRY} ${FLRX} ${AX} 0 1 ${FX + 9} ${FY - 30}" fill="none" stroke="#fff" stroke-width="1.8" opacity="0.32" stroke-linecap="round"/>`
+        // hub recess + elliptical centre hole (angled, so NOT a perfect circle)
+        + `<ellipse cx="${FX}" cy="${FY}" rx="8" ry="15" transform="rotate(${AX} ${FX} ${FY})" fill="#c3a074"/>`
+        + `<ellipse cx="${FX}" cy="${FY}" rx="8" ry="15" transform="rotate(${AX} ${FX} ${FY})" fill="none" stroke="#6f5436" stroke-width="1.4"/>`
+        + `<ellipse cx="${FX}" cy="${FY}" rx="4" ry="8" transform="rotate(${AX} ${FX} ${FY})" fill="#170e06"/>`
+        + `<ellipse cx="${FX - 1.5}" cy="${FY - 3}" rx="1.3" ry="2.4" transform="rotate(${AX} ${FX} ${FY})" fill="#fff" opacity="0.14"/>`
+        + `</svg>`;
+}
+
 // Euclidean RGB distance - used to match a Task API color against the
 // library tolerantly instead of requiring an exact hex string match. Task
 // API's amsDetail color is confirmed to sometimes report a generic/default
@@ -977,6 +1100,146 @@ function renderAmsGrid(trays, trayNow)
     // picked up that firmware update yet. Always shown alongside A1-A4,
     // even with nothing assigned - not hidden behind any toggle.
     buildSlotTile(254, "EXT", trays.find(t => t.id === 254) || null);
+
+    // Same data, mirrored into the Filament tab's right column (AMS Lite +
+    // External). A second VIEW, not a second system - identical trays /
+    // trayNow / slotAssignments source. No-op when that tab's DOM is absent.
+    renderFilamentAmsPanels(trays, trayNow);
+}
+
+// AMS Lite (A1-A4) and External (single id-254 slot) panels on the Filament
+// tab. Driven entirely by the same printer MQTT `trays` payload and
+// filamentLibrary.slotAssignments that renderAmsGrid() above uses.
+function renderFilamentAmsPanels(trays, trayNow)
+{
+    const amsWrap = byId("filamentAmsLite");
+    const extWrap = byId("filamentExternal");
+    const amsState = byId("filamentAmsLiteState");
+    const extState = byId("filamentExternalState");
+
+    if (!amsWrap && !extWrap)
+        return;
+
+    const haveData = Array.isArray(trays) && trays.length > 0;
+
+    function buildTile(slotId, label, tray)
+    {
+        const isActive = slotId === trayNow;
+        const assignedId = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slotId];
+        const assigned = assignedId ? filamentLibrary.filaments.find(f => f.id === assignedId) : null;
+
+        // Same "explicit 0 means empty, null means not-reported" rule as
+        // renderAmsGrid()'s buildSlotTile - only the external mount.
+        const extEmpty = slotId === 254 && tray && tray.remain === 0;
+        const hasRawTray = tray && tray.type && !extEmpty;
+
+        const tile = document.createElement("div");
+        tile.className = (slotId === 254 ? "externalTile" : "amsLiteTile") + (isActive ? " active" : "");
+
+        const labelEl = document.createElement("span");
+        labelEl.className = "amsLiteLabel";
+        labelEl.textContent = label;
+
+        const sp = document.createElement("span");
+        sp.className = "amsLiteSpool";
+        sp.innerHTML = filamentSpoolSvg(
+            assigned ? (assigned.colorHex || "") : (hasRawTray ? tray.color : ""),
+            assigned ? (assigned.color || "") : "");
+        sp.style.opacity = (assigned || hasRawTray) ? "" : "0.35";
+
+        const mat = document.createElement("span");
+        mat.className = "amsLiteMaterial" + (assigned || hasRawTray ? "" : " empty");
+        mat.textContent = assigned ? assigned.material : (hasRawTray ? tray.type : "Empty");
+
+        tile.appendChild(labelEl);
+        tile.appendChild(sp);
+        tile.appendChild(mat);
+
+        if (assigned && assigned.color)
+        {
+            const cn = document.createElement("span");
+            cn.className = "amsLiteColor";
+            cn.textContent = assigned.color;
+            tile.appendChild(cn);
+        }
+
+        // A real percentage only exists for a slot that's been explicitly
+        // mapped to a library spool (A1-A4's own reported `remain` is a flat
+        // 100 on this printer - see renderAmsGrid). The external mount does
+        // report a real remain when something's loaded.
+        let pct = null;
+        let barCls = "";
+
+        if (assigned)
+        {
+            pct = filamentPercent(assigned);
+            const st = filamentStatus(assigned);
+            barCls = st === "critical" ? "critical" : (st === "low" ? "low" : "");
+        }
+        else if (slotId === 254 && hasRawTray && typeof tray.remain === "number" && tray.remain > 0)
+        {
+            pct = Math.max(0, Math.min(100, Math.round(tray.remain)));
+        }
+
+        if (pct !== null)
+        {
+            const bar = document.createElement("span");
+            bar.className = "amsLiteBar";
+
+            const fill = document.createElement("i");
+            if (barCls)
+                fill.className = barCls;
+            fill.style.width = pct + "%";
+
+            bar.appendChild(fill);
+            tile.appendChild(bar);
+        }
+
+        return tile;
+    }
+
+    function fillPanel(wrap, tiles)
+    {
+        wrap.innerHTML = "";
+
+        if (!haveData)
+        {
+            const e = document.createElement("div");
+            e.className = "historyItem";
+            e.textContent = "Waiting for data...";
+            wrap.appendChild(e);
+            return;
+        }
+
+        tiles.forEach(t => wrap.appendChild(t));
+    }
+
+    if (amsWrap)
+    {
+        fillPanel(amsWrap, [0, 1, 2, 3].map(id =>
+            buildTile(id, `A${id + 1}`, haveData ? (trays.find(t => t.id === id) || null) : null)));
+    }
+
+    if (extWrap)
+    {
+        fillPanel(extWrap, [
+            buildTile(254, "Ext. 1", haveData ? (trays.find(t => t.id === 254) || null) : null),
+        ]);
+    }
+
+    if (amsState)
+    {
+        amsState.textContent = haveData ? "Online" : "Offline";
+        amsState.classList.toggle("online", haveData);
+    }
+
+    if (extState)
+    {
+        const extTray = haveData ? trays.find(t => t.id === 254) : null;
+        const extLoaded = !!(extTray && extTray.type && extTray.remain !== 0);
+        extState.textContent = !haveData ? "Offline" : (extLoaded ? "Online" : "Empty");
+        extState.classList.toggle("online", extLoaded);
+    }
 }
 
 let lastHistoryItems = [];
@@ -3136,8 +3399,417 @@ function buildSpoolHistoryPanel(f)
     return panel;
 }
 
+// ===== Filament tab: filters / stats / spool cards =====
+//
+// View state only - never persisted, never sent anywhere. Every filter and
+// the search box operate purely on the already-in-memory
+// filamentLibrary.filaments; there is no new data source and no backend
+// change. The library itself, its CRUD handlers (onEditFilament,
+// onNewLibrarySpool, toggleSpoolHistory, onRemoveFilament,
+// onToggleSlotAssignment, onEditSpoolRemaining, onRemoveSpool) and the KV
+// load/save path are all unchanged - this is presentation only.
+const filamentFilterState = {
+    search: "",
+    materials: new Set(),
+    brands: new Set(),
+    diameters: new Set(),
+    status: "all",   // all | loaded | low | unavailable
+};
+
+// Which collapsible filter groups are currently folded shut.
+const filamentFilterCollapsed = new Set();
+
+// One shared 3-dot menu element, re-targeted per card.
+let filamentCardMenuEl = null;
+let filamentCardMenuFor = null;
+
+function filamentActiveSpools(f)
+{
+    return (f.spools || []).filter(s => !s.removedAt);
+}
+
+// No diameter has ever been stored (the Add-filament form doesn't collect
+// one) - every spool this room runs is 1.75 mm. A helper so a real value
+// can be introduced later without touching call sites.
+function filamentDiameterOf(f)
+{
+    return (f && f.diameter) ? String(f.diameter) : "1.75";
+}
+
+// Status mirrors the long-standing low-filament warning EXACTLY: fixed
+// grams against the LOWEST active spool (not a percentage, not a sum) -
+// same thresholds as CYD's own Filament Library screen and the old card's
+// inline check. Only the presentation changed.
+function filamentStatus(f)
+{
+    const active = filamentActiveSpools(f);
+
+    if (active.length === 0)
+        return "unavailable";
+
+    const lowest = Math.min(...active.map(s => s.remaining));
+
+    if (lowest <= 150)
+        return "critical";
+
+    if (lowest <= 200)
+        return "low";
+
+    return "ok";
+}
+
+function filamentIsLoaded(f)
+{
+    const a = filamentLibrary.slotAssignments || {};
+    return Object.keys(a).some(slot => a[slot] === f.id);
+}
+
+function filamentRemainingGrams(f)
+{
+    return filamentActiveSpools(f).reduce((sum, s) => sum + Math.max(0, s.remaining), 0);
+}
+
+function filamentTotalGrams(f)
+{
+    return filamentActiveSpools(f).reduce((sum, s) => sum + Math.max(0, s.total || 0), 0);
+}
+
+function filamentPercent(f)
+{
+    const total = filamentTotalGrams(f);
+
+    if (total <= 0)
+        return 0;
+
+    return Math.max(0, Math.min(100, Math.round((filamentRemainingGrams(f) / total) * 100)));
+}
+
+function filamentMatchesFilters(f)
+{
+    const s = filamentFilterState;
+
+    if (s.search)
+    {
+        const hay = `${f.brand || ""} ${f.material || ""} ${f.variant || ""} ${f.color || ""} ${f.note || ""}`.toLowerCase();
+
+        if (!hay.includes(s.search))
+            return false;
+    }
+
+    if (s.materials.size && !s.materials.has(f.material || "Other"))
+        return false;
+
+    if (s.brands.size && !s.brands.has(f.brand || "Other"))
+        return false;
+
+    if (s.diameters.size && !s.diameters.has(filamentDiameterOf(f)))
+        return false;
+
+    if (s.status !== "all")
+    {
+        const st = filamentStatus(f);
+
+        if (s.status === "loaded" && !filamentIsLoaded(f))
+            return false;
+
+        if (s.status === "low" && !(st === "low" || st === "critical"))
+            return false;
+
+        if (s.status === "unavailable" && st !== "unavailable")
+            return false;
+    }
+
+    return true;
+}
+
+// Left column - collapsible Material / Brand / Diameter / Status sections,
+// every option and count derived live from filamentLibrary.filaments.
+function renderFilamentFilters()
+{
+    const wrap = byId("filamentFilterGroups");
+
+    if (!wrap)
+        return;
+
+    const fils = filamentLibrary.filaments || [];
+
+    const countBy = (keyFn) =>
+    {
+        const m = new Map();
+        fils.forEach(f => { const k = keyFn(f); m.set(k, (m.get(k) || 0) + 1); });
+        return m;
+    };
+
+    const materialCounts = countBy(f => f.material || "Other");
+    const brandCounts = countBy(f => f.brand || "Other");
+    const diameterCounts = countBy(filamentDiameterOf);
+
+    const statusCounts = { loaded: 0, low: 0, unavailable: 0 };
+
+    fils.forEach(f =>
+    {
+        if (filamentIsLoaded(f)) statusCounts.loaded++;
+        const st = filamentStatus(f);
+        if (st === "low" || st === "critical") statusCounts.low++;
+        if (st === "unavailable") statusCounts.unavailable++;
+    });
+
+    wrap.innerHTML = "";
+
+    const makeOpt = (checked, onToggle, label, count, dotClass) =>
+    {
+        const row = document.createElement("label");
+        row.className = "filterOpt";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = checked;
+        cb.addEventListener("change", () => onToggle(cb.checked));
+        row.appendChild(cb);
+
+        if (dotClass)
+        {
+            const dot = document.createElement("span");
+            dot.className = "filterStatusDot " + dotClass;
+            row.appendChild(dot);
+        }
+
+        const name = document.createElement("span");
+        name.className = "filterOptName";
+        name.textContent = label;
+        row.appendChild(name);
+
+        const c = document.createElement("span");
+        c.className = "filterOptCount";
+        c.textContent = count;
+        row.appendChild(c);
+
+        return row;
+    };
+
+    const makeGroup = (id, title, rows) =>
+    {
+        const group = document.createElement("div");
+        group.className = "filterGroup" + (filamentFilterCollapsed.has(id) ? " collapsed" : "");
+
+        const head = document.createElement("button");
+        head.type = "button";
+        head.className = "filterGroupHead";
+        head.innerHTML = `<span>${title}</span><span class="filterCaret">&#9660;</span>`;
+        head.addEventListener("click", () =>
+        {
+            if (filamentFilterCollapsed.has(id)) filamentFilterCollapsed.delete(id);
+            else filamentFilterCollapsed.add(id);
+            renderFilamentFilters();
+        });
+
+        const body = document.createElement("div");
+        body.className = "filterGroupBody";
+        rows.forEach(r => body.appendChild(r));
+
+        group.appendChild(head);
+        group.appendChild(body);
+        wrap.appendChild(group);
+    };
+
+    const setToggle = (set) => (val) => (on) =>
+    {
+        if (on) set.add(val); else set.delete(val);
+        renderFilamentLibrary();
+    };
+
+    const toggleMaterial = setToggle(filamentFilterState.materials);
+    const toggleBrand = setToggle(filamentFilterState.brands);
+    const toggleDiameter = setToggle(filamentFilterState.diameters);
+
+    const sortedKeys = (map) => [...map.keys()].sort((a, b) => String(a).localeCompare(String(b)));
+
+    makeGroup("material", "Material", sortedKeys(materialCounts).map(k =>
+        makeOpt(filamentFilterState.materials.has(k), toggleMaterial(k), k, materialCounts.get(k))));
+
+    makeGroup("brand", "Brand", sortedKeys(brandCounts).map(k =>
+        makeOpt(filamentFilterState.brands.has(k), toggleBrand(k), k, brandCounts.get(k))));
+
+    makeGroup("diameter", "Diameter", sortedKeys(diameterCounts).map(k =>
+        makeOpt(filamentFilterState.diameters.has(k), toggleDiameter(k), `${k} mm`, diameterCounts.get(k))));
+
+    // Status is single-select (matches the chip row above the grid) -
+    // ticking one option clears the rest and returns "all" if unticked.
+    const statusRows = [
+        ["loaded", "Loaded", statusCounts.loaded],
+        ["low", "Low", statusCounts.low],
+        ["unavailable", "Unavailable", statusCounts.unavailable],
+    ].map(([val, label, count]) =>
+        makeOpt(filamentFilterState.status === val, (on) =>
+        {
+            filamentFilterState.status = on ? val : "all";
+            renderFilamentLibrary();
+        }, label, count, val));
+
+    makeGroup("status", "Status", statusRows);
+}
+
+// Center column header - Total / Available / Loaded / Low / Unavailable
+// tiles plus the All / Loaded / Low / Unavailable quick-filter chips.
+function renderFilamentStats()
+{
+    const statsWrap = byId("filamentStats");
+    const chipsWrap = byId("filamentStatusChips");
+    const fils = filamentLibrary.filaments || [];
+
+    const totalCount = fils.length;
+    const availableG = fils.reduce((sum, f) => sum + filamentRemainingGrams(f), 0);
+
+    let loaded = 0, low = 0, unavailable = 0;
+
+    fils.forEach(f =>
+    {
+        if (filamentIsLoaded(f)) loaded++;
+        const st = filamentStatus(f);
+        if (st === "low" || st === "critical") low++;
+        if (st === "unavailable") unavailable++;
+    });
+
+    if (statsWrap)
+    {
+        const stat = (dot, label, value) =>
+            `<div class="filamentStat"><span class="filamentStatLabel"><span class="filamentStatDot ${dot}"></span>${label}</span><span class="filamentStatValue">${value}</span></div>`;
+
+        statsWrap.innerHTML =
+            stat("total", "Total", totalCount) +
+            stat("available", "Available", (availableG / 1000).toFixed(1) + " kg") +
+            stat("loaded", "Loaded", loaded) +
+            stat("low", "Low", low) +
+            stat("unavailable", "Unavailable", unavailable);
+    }
+
+    if (chipsWrap)
+    {
+        chipsWrap.innerHTML = "";
+
+        [
+            ["all", "All", totalCount, null],
+            ["loaded", "Loaded", loaded, "loaded"],
+            ["low", "Low", low, "low"],
+            ["unavailable", "Unavailable", unavailable, "unavailable"],
+        ].forEach(([val, label, count, dot]) =>
+        {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "filamentChip" + (filamentFilterState.status === val ? " active" : "");
+            b.innerHTML = (dot ? `<span class="filamentChipDot ${dot}"></span>` : "") + `${label} ${count}`;
+            b.addEventListener("click", () =>
+            {
+                filamentFilterState.status = val;
+                renderFilamentLibrary();
+            });
+            chipsWrap.appendChild(b);
+        });
+    }
+}
+
+function closeFilamentCardMenu()
+{
+    if (filamentCardMenuEl)
+        filamentCardMenuEl.hidden = true;
+
+    filamentCardMenuFor = null;
+}
+
+// The card's 3-dot menu: Edit / New spool / History / Remove, each calling
+// the SAME existing handler the old inline buttons did. One element reused
+// for every card; dismissed on outside click / Escape / scroll / resize.
+function openFilamentCardMenu(filamentId, anchorEl)
+{
+    if (!filamentCardMenuEl)
+    {
+        filamentCardMenuEl = document.createElement("div");
+        filamentCardMenuEl.className = "filamentMenu";
+        filamentCardMenuEl.hidden = true;
+        document.body.appendChild(filamentCardMenuEl);
+
+        document.addEventListener("click", (e) =>
+        {
+            if (filamentCardMenuEl.hidden) return;
+            if (filamentCardMenuEl.contains(e.target)) return;
+            if (e.target.closest && e.target.closest(".filamentMenuBtn")) return;
+            closeFilamentCardMenu();
+        });
+        document.addEventListener("keydown", (e) =>
+        {
+            if (e.key === "Escape") closeFilamentCardMenu();
+        });
+        window.addEventListener("scroll", closeFilamentCardMenu, true);
+        window.addEventListener("resize", closeFilamentCardMenu);
+    }
+
+    if (!filamentCardMenuEl.hidden && filamentCardMenuFor === filamentId)
+    {
+        closeFilamentCardMenu();
+        return;
+    }
+
+    filamentCardMenuFor = filamentId;
+    filamentCardMenuEl.innerHTML = "";
+
+    [
+        { icon: "&#9998;", label: "Edit", fn: () => onEditFilament(filamentId) },
+        { icon: "&#43;", label: "New spool", fn: () => onNewLibrarySpool(filamentId) },
+        { icon: "&#9203;", label: "History", fn: () => toggleSpoolHistory(filamentId) },
+        { sep: true },
+        { icon: "&#128465;", label: "Remove", danger: true, fn: () => onRemoveFilament(filamentId) },
+    ].forEach(it =>
+    {
+        if (it.sep)
+        {
+            const s = document.createElement("div");
+            s.className = "filamentMenuSep";
+            filamentCardMenuEl.appendChild(s);
+            return;
+        }
+
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "filamentMenuItem" + (it.danger ? " danger" : "");
+        b.innerHTML = `<span class="filamentMenuIcon">${it.icon}</span><span>${it.label}</span>`;
+        b.addEventListener("click", () =>
+        {
+            closeFilamentCardMenu();
+            it.fn();
+        });
+        filamentCardMenuEl.appendChild(b);
+    });
+
+    filamentCardMenuEl.hidden = false;
+
+    const r = anchorEl.getBoundingClientRect();
+    const menuW = filamentCardMenuEl.offsetWidth || 168;
+    const menuH = filamentCardMenuEl.offsetHeight || 190;
+
+    let left = r.right - menuW;
+    if (left < 8) left = 8;
+
+    let top = r.bottom + 4;
+    if (top + menuH > window.innerHeight - 8)
+        top = Math.max(8, r.top - menuH - 4);
+
+    filamentCardMenuEl.style.left = left + "px";
+    filamentCardMenuEl.style.top = top + "px";
+}
+
+const FILAMENT_SLOTS = [
+    { id: 0, label: "A1" },
+    { id: 1, label: "A2" },
+    { id: 2, label: "A3" },
+    { id: 3, label: "A4" },
+    { id: 254, label: "EXT" },
+];
+
 function renderFilamentLibrary()
 {
+    renderFilamentFilters();
+    renderFilamentStats();
+
     const list = byId("filamentList");
 
     if (!list)
@@ -3145,7 +3817,9 @@ function renderFilamentLibrary()
 
     list.innerHTML = "";
 
-    if (filamentLibrary.filaments.length === 0)
+    const all = filamentLibrary.filaments || [];
+
+    if (all.length === 0)
     {
         const empty = document.createElement("div");
         empty.className = "historyItem";
@@ -3154,98 +3828,130 @@ function renderFilamentLibrary()
         return;
     }
 
-    filamentLibrary.filaments.forEach(f =>
+    const shown = all.filter(filamentMatchesFilters);
+
+    if (shown.length === 0)
     {
-        const entry = document.createElement("div");
-        entry.className = "filamentEntry";
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No filaments match the current filters.";
+        list.appendChild(empty);
+        return;
+    }
 
-        const head = document.createElement("div");
-        head.className = "filamentEntryHead";
+    shown.forEach(f =>
+    {
+        const status = filamentStatus(f);          // ok | low | critical | unavailable
+        const pct = filamentPercent(f);
+        const remainingG = filamentRemainingGrams(f);
 
-        const sw = document.createElement("span");
-        sw.className = "swatch";
-        sw.style.background = trayColorCss(f.colorHex || "");
+        const card = document.createElement("div");
+        card.className = "filamentCard"
+            + (status === "low" ? " isLow" : "")
+            + (status === "critical" ? " isCritical" : "")
+            + (status === "unavailable" ? " isUnavailable" : "");
+
+        // --- top: spool render + brand/name/color + 3-dot ---
+        const top = document.createElement("div");
+        top.className = "filamentCardTop";
+
+        const spool = document.createElement("span");
+        spool.className = "filamentSpool";
+        spool.innerHTML = filamentSpoolSvg(f.colorHex || "", f.color || "");
 
         const meta = document.createElement("div");
-        const title = document.createElement("strong");
-        title.textContent = `${f.material} - ${f.color}`;
+        meta.className = "filamentCardMeta";
 
-        // Warns against the LOWEST active (non-removed) spool of this
-        // color, not the sum across all its spools - a fresh backup spool
-        // would otherwise mask a nearly-empty one still loaded and at
-        // risk of slipping off the spool (confirmed live: ~93g remaining
-        // on the loaded spool, well past the point where that's a real
-        // risk). Fixed gram thresholds, not a percentage of that spool's
-        // own total, so a small and a large spool warn at the same
-        // physical remaining amount - same thresholds as CYD's own
-        // Filament Library screen.
-        const activeSpools = (f.spools || []).filter(s => !s.removedAt);
+        const brand = document.createElement("span");
+        brand.className = "filamentCardBrand";
+        brand.textContent = f.brand || "Filament";
 
-        if (activeSpools.length > 0)
+        const name = document.createElement("strong");
+        name.className = "filamentCardName";
+        name.textContent = [f.material, f.variant].filter(Boolean).join(" ") || (f.material || "Filament");
+
+        // Same "!" low-stock marker (and same thresholds) as before.
+        if (status === "low" || status === "critical")
         {
-            const lowest = Math.min(...activeSpools.map(s => s.remaining));
-
-            if (lowest <= 200)
-            {
-                const mark = document.createElement("span");
-                mark.className = lowest <= 150 ? "lowFilamentMark critical" : "lowFilamentMark";
-                mark.textContent = "!";
-                title.appendChild(mark);
-            }
+            const mark = document.createElement("span");
+            mark.className = status === "critical" ? "lowFilamentMark critical" : "lowFilamentMark";
+            mark.textContent = "!";
+            name.appendChild(mark);
         }
 
-        meta.appendChild(title);
+        const colorName = document.createElement("span");
+        colorName.className = "filamentCardColor";
+        colorName.textContent = f.color || "—";
 
-        // Brand and the marketing sub-type ("Matte", "Silk") are details
-        // under the title - the title itself stays the base material so it
-        // matches what the printer reports for deduction.
-        const subParts = [f.brand, f.variant].filter(Boolean);
+        meta.appendChild(brand);
+        meta.appendChild(name);
+        meta.appendChild(colorName);
 
-        if (subParts.length)
+        const menuBtn = document.createElement("button");
+        menuBtn.type = "button";
+        menuBtn.className = "filamentMenuBtn";
+        menuBtn.setAttribute("aria-label", "Filament actions");
+        menuBtn.textContent = "⋮";
+        menuBtn.addEventListener("click", (e) =>
         {
-            const sub = document.createElement("small");
-            sub.textContent = subParts.join(" - ");
-            meta.appendChild(sub);
-        }
+            e.stopPropagation();
+            openFilamentCardMenu(f.id, menuBtn);
+        });
 
-        head.appendChild(sw);
-        head.appendChild(meta);
-        entry.appendChild(head);
+        top.appendChild(spool);
+        top.appendChild(meta);
+        top.appendChild(menuBtn);
+        card.appendChild(top);
 
-        // Marks which AMS slot (if any) physically has this filament
-        // loaded right now - see slotAssignments' own declaration comment.
-        // Exclusive per slot by construction (a slot is a single object
-        // key), so clicking a slot here bumps out whatever filament
-        // previously claimed it, matching swapping a physical spool.
+        // --- specs ---
+        const specs = document.createElement("div");
+        specs.className = "filamentCardSpecs";
+        specs.innerHTML = `<span>${filamentDiameterOf(f)} mm</span><span>${f.material || "—"}</span>`;
+        card.appendChild(specs);
+
+        // --- weight + % ring + color square ---
+        const bottom = document.createElement("div");
+        bottom.className = "filamentCardBottom";
+
+        const weight = document.createElement("div");
+        weight.className = "filamentCardWeight";
+        weight.innerHTML = `<strong>${remainingG.toLocaleString()} g</strong><span>${status === "unavailable" ? "no spool" : "remaining"}</span>`;
+
+        const ringWrap = document.createElement("div");
+        ringWrap.className = "filamentRingWrap";
+
+        const square = document.createElement("span");
+        square.className = "filamentColorSquare";
+        square.style.background = trayColorCss(f.colorHex || "");
+
+        const ring = document.createElement("div");
+        ring.className = "filamentRing";
+        ring.style.setProperty("--pct", status === "unavailable" ? 0 : pct);
+        ring.style.setProperty("--ring-color",
+            status === "critical" ? "var(--red)"
+                : status === "low" ? "var(--yellow)"
+                    : status === "unavailable" ? "var(--muted)"
+                        : "var(--green)");
+
+        const ringPct = document.createElement("span");
+        ringPct.textContent = status === "unavailable" ? "—" : pct + "%";
+        ring.appendChild(ringPct);
+
+        ringWrap.appendChild(square);
+        ringWrap.appendChild(ring);
+
+        bottom.appendChild(weight);
+        bottom.appendChild(ringWrap);
+        card.appendChild(bottom);
+
+        // --- slot-assignment pills (unchanged behaviour, incl. the
+        // mid-print lock) ---
         const slotRow = document.createElement("div");
-        slotRow.className = "slotAssignRow";
+        slotRow.className = "filamentCardSlots";
 
-        // 254 is Bambu's own reserved id for the external spool (see
-        // renderAmsGrid()'s identical use of it) - included here alongside
-        // the 4 real AMS slots so a filament loaded on the external mount
-        // can be assigned the same way.
-        const SLOTS = [
-            { id: 0, label: "A1" },
-            { id: 1, label: "A2" },
-            { id: 2, label: "A3" },
-            { id: 3, label: "A4" },
-            { id: 254, label: "EXT" },
-        ];
-
-        SLOTS.forEach(({ id: slot, label: slotLabel }) =>
+        FILAMENT_SLOTS.forEach(({ id: slot, label: slotLabel }) =>
         {
             const isAssigned = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slot] === f.id;
-
-            // Only locks REASSIGNING or unassigning a slot that already has
-            // SOME assignment - a pending (still-running, not yet deducted)
-            // print's eventual deduction could be relying on that existing
-            // mapping. Setting a currently-EMPTY slot for the first time is
-            // always safe to allow mid-print, even encouraged - it can only
-            // ever help a pending deduction resolve correctly instead of
-            // falling back to a guessed color match. Confirmed live: this
-            // was blocking exactly that useful case, right when it mattered
-            // (a print already running against a slot nobody had assigned
-            // yet).
             const slotHasAnyAssignment = filamentLibrary.slotAssignments && filamentLibrary.slotAssignments[slot] !== undefined;
             const locked = printCurrentlyRunning && slotHasAnyAssignment;
 
@@ -3263,85 +3969,49 @@ function renderFilamentLibrary()
             slotRow.appendChild(btn);
         });
 
-        entry.appendChild(slotRow);
+        card.appendChild(slotRow);
 
+        // --- expandable: spool history + per-spool remaining editors
+        // (toggled by the menu's "History") - keeps every bit of the old
+        // card's editing power, just tucked away by default ---
         if (expandedSpoolHistory.has(f.id))
-            entry.appendChild(buildSpoolHistoryPanel(f));
-
-        const spoolList = document.createElement("div");
-        spoolList.className = "spoolList";
-
-        // Removed spools stay in the data (see onRemoveSpool) so the
-        // History panel above can still show when they were added/
-        // removed - just hidden from the active/editable list here.
-        (f.spools || []).filter(s => !s.removedAt).forEach(spool =>
         {
-            const row = document.createElement("div");
-            row.className = "spoolRow";
+            const expand = document.createElement("div");
+            expand.className = "filamentCardExpand";
+            expand.appendChild(buildSpoolHistoryPanel(f));
 
-            const input = document.createElement("input");
-            input.type = "number";
-            input.min = "0";
-            input.step = "0.01";
-            input.value = Math.max(0, spool.remaining).toFixed(2);
-            input.title = "Edit remaining weight - e.g. correct a partial spool";
-            input.addEventListener("change", () => onEditSpoolRemaining(f.id, spool.id, input.value));
+            filamentActiveSpools(f).forEach(sp =>
+            {
+                const row = document.createElement("div");
+                row.className = "spoolRow";
 
-            const totalLabel = document.createElement("span");
-            totalLabel.textContent = `/ ${spool.total}g`;
+                const input = document.createElement("input");
+                input.type = "number";
+                input.min = "0";
+                input.step = "0.01";
+                input.value = Math.max(0, sp.remaining).toFixed(2);
+                input.title = "Edit remaining weight - e.g. correct a partial spool";
+                input.addEventListener("change", () => onEditSpoolRemaining(f.id, sp.id, input.value));
 
-            const delBtn = document.createElement("button");
-            delBtn.type = "button";
-            delBtn.className = "infoBtn";
-            delBtn.textContent = "Remove spool";
-            delBtn.addEventListener("click", () => onRemoveSpool(f.id, spool.id));
+                const totalLabel = document.createElement("span");
+                totalLabel.textContent = `/ ${sp.total}g`;
 
-            row.appendChild(input);
-            row.appendChild(totalLabel);
-            row.appendChild(delBtn);
-            spoolList.appendChild(row);
-        });
+                const delBtn = document.createElement("button");
+                delBtn.type = "button";
+                delBtn.className = "infoBtn";
+                delBtn.textContent = "Remove spool";
+                delBtn.addEventListener("click", () => onRemoveSpool(f.id, sp.id));
 
-        entry.appendChild(spoolList);
+                row.appendChild(input);
+                row.appendChild(totalLabel);
+                row.appendChild(delBtn);
+                expand.appendChild(row);
+            });
 
-        // All entry-level actions on one row (was Edit/Remove/History up
-        // in the header, "New spool" separate at the bottom) - consolidated
-        // per request, and frees up header space for the title/brand in
-        // the narrower 4-column grid layout.
-        const actions = document.createElement("div");
-        actions.className = "filamentEntryActions";
+            card.appendChild(expand);
+        }
 
-        const editBtn = document.createElement("button");
-        editBtn.type = "button";
-        editBtn.className = "infoBtn";
-        editBtn.textContent = "Edit";
-        editBtn.addEventListener("click", () => onEditFilament(f.id));
-
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "infoBtn";
-        removeBtn.textContent = "Remove";
-        removeBtn.addEventListener("click", () => onRemoveFilament(f.id));
-
-        const historyBtn = document.createElement("button");
-        historyBtn.type = "button";
-        historyBtn.className = "infoBtn";
-        historyBtn.textContent = "History";
-        historyBtn.addEventListener("click", () => toggleSpoolHistory(f.id));
-
-        const newSpoolBtn = document.createElement("button");
-        newSpoolBtn.type = "button";
-        newSpoolBtn.className = "infoBtn";
-        newSpoolBtn.textContent = "New spool";
-        newSpoolBtn.addEventListener("click", () => onNewLibrarySpool(f.id));
-
-        actions.appendChild(editBtn);
-        actions.appendChild(removeBtn);
-        actions.appendChild(historyBtn);
-        actions.appendChild(newSpoolBtn);
-
-        entry.appendChild(actions);
-        list.appendChild(entry);
+        list.appendChild(card);
     });
 }
 
@@ -4581,6 +5251,33 @@ function closeFilamentModal()
         filamentModal.hidden = true;
 }
 
+// Filament tab: search box + reset link. Pure view state - both just
+// re-run renderFilamentLibrary() against the data already in memory.
+const filamentFilterSearchInput = byId("filamentFilterSearch");
+
+if (filamentFilterSearchInput)
+{
+    filamentFilterSearchInput.addEventListener("input", () =>
+    {
+        filamentFilterState.search = filamentFilterSearchInput.value.trim().toLowerCase();
+        renderFilamentLibrary();
+    });
+}
+
+byId("filamentFilterReset")?.addEventListener("click", () =>
+{
+    filamentFilterState.search = "";
+    filamentFilterState.materials.clear();
+    filamentFilterState.brands.clear();
+    filamentFilterState.diameters.clear();
+    filamentFilterState.status = "all";
+
+    if (filamentFilterSearchInput)
+        filamentFilterSearchInput.value = "";
+
+    renderFilamentLibrary();
+});
+
 if (filamentAddToggle && filamentModal)
 {
     filamentAddToggle.addEventListener("click", openFilamentModal);
@@ -5083,7 +5780,7 @@ setInterval(() =>
 
 // ===== Tabs =====
 
-const TABS = ["room", "printer", "power"];
+const TABS = ["room", "printer", "filament", "power"];
 const ACTIVE_TAB_STORAGE_KEY = "activeTabV1";
 
 function selectTab(name)
@@ -5130,6 +5827,16 @@ function selectTab(name)
     {
         schedulePowerChartDraw();
         loadPowerHistoryCard();
+    }
+
+    // Rebuild the library and the AMS Lite / External views from the data
+    // already in memory when the tab is opened - both are otherwise only
+    // refreshed on their own triggers (a library edit, a printer MQTT tick)
+    // which may not have fired since this tab was last hidden.
+    if (name === "filament")
+    {
+        renderFilamentLibrary();
+        renderFilamentAmsPanels(lastAmsTrays, lastAmsTrayNow);
     }
 }
 

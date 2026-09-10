@@ -1881,3 +1881,705 @@ dd{
         flex:1;
     }
 }
+
+/* ===== Filament tab ===== */
+
+.filamentLayout{
+    display:grid;
+    grid-template-columns:230px minmax(0,1fr) 330px;
+    gap:18px;
+    align-items:start;
+}
+
+/* --- Left: filters --- */
+
+.filamentFilters{
+    position:sticky;
+    top:14px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+}
+
+.filamentFilterResetLink{
+    border:none;
+    background:transparent;
+    color:var(--cyan);
+    font-family:inherit;
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    cursor:pointer;
+    padding:0;
+}
+
+.filamentFilterResetLink:hover{
+    text-decoration:underline;
+}
+
+.filamentSearchWrap{
+    display:block;
+}
+
+.filamentSearchInput{
+    width:100%;
+    padding:9px 12px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:#0c0f11;
+    color:var(--text);
+    font-family:inherit;
+    font-size:13px;
+}
+
+.filamentSearchInput:focus{
+    outline:none;
+    border-color:var(--cyan);
+}
+
+.filterGroups{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+}
+
+.filterGroup{
+    border-top:1px solid var(--line);
+    padding-top:10px;
+}
+
+.filterGroup:first-child{
+    border-top:none;
+    padding-top:0;
+}
+
+.filterGroupHead{
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:2px 0;
+    border:none;
+    background:transparent;
+    color:var(--muted);
+    font-family:inherit;
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    cursor:pointer;
+}
+
+.filterGroupHead:hover{
+    color:var(--text);
+}
+
+.filterGroupHead .filterCaret{
+    transition:transform .15s ease;
+    font-size:10px;
+    color:var(--muted);
+}
+
+.filterGroup.collapsed .filterGroupHead .filterCaret{
+    transform:rotate(-90deg);
+}
+
+.filterGroupBody{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    margin-top:6px;
+}
+
+.filterGroup.collapsed .filterGroupBody{
+    display:none;
+}
+
+.filterOpt{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:5px 6px;
+    border-radius:6px;
+    font-size:13px;
+    color:var(--text);
+    cursor:pointer;
+}
+
+.filterOpt:hover{
+    background:#0c0f11;
+}
+
+.filterOpt input{
+    accent-color:var(--cyan);
+    width:14px;
+    height:14px;
+    cursor:pointer;
+}
+
+.filterOpt .filterOptName{
+    flex:1;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.filterOpt .filterOptCount{
+    color:var(--muted);
+    font-size:12px;
+    font-weight:700;
+}
+
+.filterOpt .filterStatusDot{
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    flex:none;
+}
+
+.filterStatusDot.loaded{ background:var(--green); }
+.filterStatusDot.low{ background:var(--yellow); }
+.filterStatusDot.unavailable{ background:var(--muted); }
+
+/* --- Center: library --- */
+
+.filamentMain{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    min-width:0;
+}
+
+.filamentMainHead{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+}
+
+.filamentMainHead h2{
+    margin:0;
+    font-size:24px;
+    font-weight:800;
+}
+
+.filamentAddBtn{
+    margin-top:0;
+    background:var(--cyan);
+    border-color:var(--cyan);
+    color:#08181c;
+    padding:8px 14px;
+    font-size:12px;
+}
+
+.filamentAddBtn:hover{
+    filter:brightness(1.08);
+}
+
+.filamentStats{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:10px;
+}
+
+.filamentStat{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    padding:10px 12px;
+    border-radius:8px;
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line);
+}
+
+.filamentStat .filamentStatLabel{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+
+.filamentStat .filamentStatDot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+}
+
+.filamentStatDot.total{ background:var(--cyan); }
+.filamentStatDot.available{ background:var(--blue); }
+.filamentStatDot.loaded{ background:var(--green); }
+.filamentStatDot.low{ background:var(--yellow); }
+.filamentStatDot.unavailable{ background:var(--muted); }
+
+.filamentStat .filamentStatValue{
+    font-size:19px;
+    font-weight:800;
+    color:var(--text);
+}
+
+.filamentStatusChips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+}
+
+.filamentChip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:transparent;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:5px 12px;
+    color:var(--muted);
+    font-family:inherit;
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    cursor:pointer;
+}
+
+.filamentChip:hover{
+    color:var(--text);
+    border-color:var(--muted);
+}
+
+.filamentChip.active{
+    background:var(--cyan);
+    border-color:var(--cyan);
+    color:#08181c;
+}
+
+.filamentChip .filamentChipDot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+}
+
+.filamentChipDot.loaded{ background:var(--green); }
+.filamentChipDot.low{ background:var(--yellow); }
+.filamentChipDot.unavailable{ background:var(--muted); }
+
+.filamentChip.active .filamentChipDot{
+    background:#08181c;
+}
+
+/* --- Spool card grid --- */
+
+#filamentList.filamentGrid{
+    grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+    gap:14px;
+}
+
+.filamentCard{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding:14px;
+    border-radius:10px;
+    background:#14181b;
+    border:1px solid #2f363d;
+}
+
+.filamentCard.isLow{ border-color:color-mix(in srgb,var(--yellow) 45%,#2f363d); }
+.filamentCard.isCritical{ border-color:color-mix(in srgb,var(--red) 50%,#2f363d); }
+.filamentCard.isUnavailable{ opacity:.72; }
+
+.filamentCardTop{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    gap:10px;
+    align-items:start;
+}
+
+.filamentSpool{
+    width:80px;
+    height:76px;
+    flex:none;
+    margin:-4px 0 -6px -4px;
+    filter:drop-shadow(0 3px 5px rgba(0,0,0,.4));
+}
+
+.filamentSpool svg{
+    display:block;
+    width:100%;
+    height:100%;
+}
+
+.filamentCardMeta{
+    min-width:0;
+}
+
+.filamentCardBrand{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+
+.filamentCardName{
+    display:block;
+    font-size:14px;
+    font-weight:800;
+    line-height:1.25;
+    overflow-wrap:break-word;
+}
+
+.filamentCardColor{
+    color:var(--muted);
+    font-size:13px;
+    font-weight:700;
+}
+
+.filamentMenuBtn{
+    flex:none;
+    width:26px;
+    height:26px;
+    border-radius:6px;
+    border:1px solid transparent;
+    background:transparent;
+    color:var(--muted);
+    font-size:17px;
+    line-height:1;
+    cursor:pointer;
+}
+
+.filamentMenuBtn:hover{
+    background:#0c0f11;
+    border-color:#2f363d;
+    color:var(--text);
+}
+
+.filamentCardSpecs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 10px;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:700;
+}
+
+.filamentCardBottom{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-top:auto;
+}
+
+.filamentCardWeight strong{
+    font-size:16px;
+    font-weight:800;
+}
+
+.filamentCardWeight span{
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+
+.filamentRingWrap{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.filamentColorSquare{
+    width:16px;
+    height:16px;
+    border-radius:4px;
+    border:1px solid rgba(255,255,255,.2);
+    flex:none;
+}
+
+.filamentRing{
+    --pct:0;
+    --ring-color:var(--green);
+    position:relative;
+    width:52px;
+    height:52px;
+    border-radius:50%;
+    flex:none;
+    background:conic-gradient(var(--ring-color) calc(var(--pct) * 1%),#242b30 0);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+.filamentRing::before{
+    content:"";
+    position:absolute;
+    inset:5px;
+    border-radius:50%;
+    background:#14181b;
+}
+
+.filamentRing span{
+    position:relative;
+    font-size:12px;
+    font-weight:800;
+}
+
+.filamentCardSlots{
+    display:flex;
+    gap:4px;
+}
+
+.filamentCardSlots .slotAssignBtn{
+    padding:4px 2px;
+    font-size:10px;
+    letter-spacing:-.01em;
+}
+
+.filamentCardExpand{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    border-top:1px solid #2f363d;
+    padding-top:10px;
+}
+
+/* --- Right: AMS Lite + External --- */
+
+.filamentSide{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    position:sticky;
+    top:14px;
+}
+
+.amsLiteState{
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    color:var(--muted);
+}
+
+.amsLiteState.online{
+    color:var(--green);
+}
+
+.amsLiteGrid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+}
+
+.amsLiteTile,
+.externalTile{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    padding:12px 8px;
+    border-radius:8px;
+    background:#14181b;
+    border:2px solid #2f363d;
+    text-align:center;
+}
+
+.amsLiteTile.active,
+.externalTile.active{
+    border-color:var(--cyan);
+    box-shadow:0 0 12px 1px color-mix(in srgb,var(--cyan) 40%,transparent);
+}
+
+.amsLiteTile .amsLiteLabel,
+.externalTile .amsLiteLabel{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+}
+
+.amsLiteTile .amsLiteSpool,
+.externalTile .amsLiteSpool{
+    width:62px;
+    height:58px;
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));
+}
+
+.externalTile .amsLiteSpool{
+    width:82px;
+    height:76px;
+}
+
+.amsLiteTile .amsLiteSpool svg,
+.externalTile .amsLiteSpool svg{
+    display:block;
+    width:100%;
+    height:100%;
+}
+
+.amsLiteTile .amsLiteMaterial,
+.externalTile .amsLiteMaterial{
+    font-size:13px;
+    font-weight:800;
+    line-height:1.2;
+}
+
+.amsLiteTile .amsLiteMaterial.empty,
+.externalTile .amsLiteMaterial.empty{
+    color:var(--muted);
+    font-weight:600;
+}
+
+.amsLiteTile .amsLiteColor,
+.externalTile .amsLiteColor{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:700;
+}
+
+.amsLiteTile .amsLiteBar,
+.externalTile .amsLiteBar{
+    width:100%;
+    height:6px;
+    border-radius:999px;
+    background:#0c0f11;
+    border:1px solid #2d343a;
+    overflow:hidden;
+}
+
+.amsLiteTile .amsLiteBar i,
+.externalTile .amsLiteBar i{
+    display:block;
+    height:100%;
+    border-radius:999px;
+    background:var(--green);
+}
+
+.amsLiteBar i.low{ background:var(--yellow); }
+.amsLiteBar i.critical{ background:var(--red); }
+
+.externalWrap{
+    display:flex;
+    justify-content:center;
+}
+
+.externalTile{
+    width:100%;
+    max-width:180px;
+}
+
+/* --- Filament card menu (3-dot) --- */
+
+.filamentMenu{
+    position:fixed;
+    z-index:60;
+    min-width:168px;
+    padding:6px;
+    border-radius:8px;
+    background:var(--panel2);
+    border:1px solid var(--line);
+    box-shadow:0 18px 44px rgba(0,0,0,.5);
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+}
+
+.filamentMenu[hidden]{
+    display:none;
+}
+
+.filamentMenuItem{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    width:100%;
+    padding:9px 10px;
+    border:none;
+    border-radius:6px;
+    background:transparent;
+    color:var(--text);
+    font-family:inherit;
+    font-size:13px;
+    font-weight:600;
+    text-align:left;
+    cursor:pointer;
+}
+
+.filamentMenuItem:hover{
+    background:#0c0f11;
+}
+
+.filamentMenuItem .filamentMenuIcon{
+    width:16px;
+    text-align:center;
+    color:var(--muted);
+}
+
+.filamentMenuItem.danger{
+    color:var(--red);
+}
+
+.filamentMenuItem.danger:hover{
+    background:color-mix(in srgb,var(--red) 16%,transparent);
+}
+
+.filamentMenuItem.danger .filamentMenuIcon{
+    color:var(--red);
+}
+
+.filamentMenuSep{
+    height:1px;
+    margin:4px 2px;
+    background:var(--line);
+}
+
+@media(max-width:1200px){
+    .filamentLayout{
+        grid-template-columns:1fr;
+    }
+
+    .filamentFilters,
+    .filamentSide{
+        position:static;
+    }
+
+    .filamentSide{
+        flex-direction:row;
+        flex-wrap:wrap;
+    }
+
+    .filamentSide > .panel{
+        flex:1 1 280px;
+    }
+}
+
+@media(max-width:900px){
+    #filamentList.filamentGrid{
+        grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+    }
+}
+
+@media(max-width:640px){
+    .filamentStats{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
+    #filamentList.filamentGrid{
+        grid-template-columns:1fr;
+    }
+
+    .filamentMainHead h2{
+        font-size:20px;
+    }
+}
