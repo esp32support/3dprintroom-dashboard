@@ -657,87 +657,121 @@ function lerpHex(a, b, t)
 
 let spoolSvgUid = 0;
 
-// The reusable filament-reel graphic - one inline SVG (see
-// assets/spools/spool.svg for the readable design source). Drawn as an
-// OBLIQUE cylinder: two kraft flange ellipses at a ~35deg three-quarter
-// tilt with a stack of rotated ellipse "coils" between them, so the
-// filament winding reads as a thick cylindrical band with real depth, not
-// a flat disc. Winding colour comes entirely from the passed hex (the
-// existing f.colorHex / tray.color - NOT a second colour system); the
-// flanges are fixed kraft. colorName only picks a translucent treatment
-// for clear/natural stock. Same asset at every size: library cards, AMS
-// Lite tiles, External.
+// The reusable filament-reel graphic - one inline SVG, no bitmap, no
+// background (see assets/spools/spool.svg for the readable design source).
+// A real 1 kg reel seen from a ~3/4 front angle: near-circular front kraft
+// flange (vent slots, hub, recessed hole, printed marks), a ridged
+// filament cylinder wound around the core and extending back to a darker,
+// partly-hidden rear flange, plus contact shadow / edge highlights for
+// depth. The winding colour is the ONLY thing that varies - taken
+// straight from the passed hex (the existing f.colorHex / tray.color, not
+// a second colour system); colorName only triggers a translucent
+// treatment for clear/natural stock. Same asset at every size: library
+// cards, AMS Lite tiles, External.
 function filamentSpoolSvg(colorHex, colorName)
 {
     const id = "sp" + (++spoolSvgUid);
     const base = spoolShade(colorHex, 0);
-    const light = spoolShade(colorHex, 0.44);
-    const dark = spoolShade(colorHex, -0.30);
-    const darker = spoolShade(colorHex, -0.52);
+    const wLight = lerpHex(base, spoolShade(colorHex, 0.55), 1);
+    const wMid = base;
+    const wDark = spoolShade(colorHex, -0.40);
+    const wDarker = spoolShade(colorHex, -0.62);
 
     const translucent = /transparent|clear|natural|translu/i.test(colorName || "");
-    const windOpacity = translucent ? 0.6 : 1;
+    const windOpacity = translucent ? 0.5 : 1;
 
-    // Spool axis points up-and-back (away from the viewer). Front flange
-    // low-left, rear flange high-right.
-    const AX = -54;                 // tilt of every ellipse, degrees
-    const FX = 44, FY = 70;         // front flange centre
-    const RX = 68, RY = 38;         // rear flange centre
-    const FLRX = 17, FLRY = 35;     // flange ellipse radii (rx = foreshortened along axis)
-    const BRX = 13, BRY = 27;       // winding-barrel ellipse radii (sits inside the flanges)
+    // A DEEP reel seen along a near-horizontal axis, tipped ~6deg. The
+    // caps are tall, narrow ellipses (a circle foreshortened along a
+    // horizontal axis); the front flange sits at the left, the wound
+    // filament forms a long ridged cylinder running to the right, and the
+    // darker rear flange caps the far end - clear FRONT -> CYLINDER ->
+    // REAR separation. Only the winding colour varies.
+    const T = -6;
+    const FCX = 40, FCY = 52, FRX = 22, FRY = 34;   // front flange (left)
+    const RCX = 96, RCY = 46, RRX = 18, RRY = 28;   // rear flange (far right, smaller)
+    const NCX = 45, NCY = 52, NRX = 20, NRY = 31;   // winding near cap
+    const XCX = 92, XCY = 46, XRX = 17, XRY = 27;   // winding far cap
 
-    // Winding barrel: a stack of tilted ellipses from rear to front. Front
-    // discs paint last (on top) and are lighter; rear discs are in shadow.
-    const nd = 24;
+    // Winding cylinder: a dense stack of tall ellipses from the far cap to
+    // the near cap. Each is stroked so the seam between neighbours reads
+    // as one turn of wound filament. Near slices paint last (lit); far
+    // slices sit in shadow and shrink slightly (perspective).
+    const nd = 40;
     let barrel = "";
 
     for (let k = nd; k >= 0; k--)
     {
-        const s = k / nd;                                   // 1 = rear, 0 = front
-        const cx = (FX + (RX - FX) * s).toFixed(2);
-        const cy = (FY + (RY - FY) * s).toFixed(2);
-        const col = lerpHex(light, darker, s * 0.82 + 0.06);
-        barrel += `<ellipse cx="${cx}" cy="${cy}" rx="${BRX}" ry="${BRY}" transform="rotate(${AX} ${cx} ${cy})" fill="${col}"`
-            + (k % 3 === 0 ? ` stroke="${darker}" stroke-width="0.5" stroke-opacity="0.45"` : "")
-            + ` opacity="${windOpacity}"/>`;
+        const s = k / nd;                                    // 1 = far, 0 = near
+        const cx = (NCX + (XCX - NCX) * s).toFixed(2);
+        const cy = (NCY + (XCY - NCY) * s).toFixed(2);
+        const rx = (NRX + (XRX - NRX) * s).toFixed(2);
+        const ry = (NRY + (XRY - NRY) * s).toFixed(2);
+        const fill = lerpHex(wLight, wDarker, s * 0.7 + 0.16);
+        barrel += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(${T} ${cx} ${cy})"`
+            + ` fill="${fill}" stroke="${k % 2 ? wLight : wDark}" stroke-width="0.55" stroke-opacity="0.4" opacity="${windOpacity}"/>`;
     }
 
-    return `<svg viewBox="0 0 116 112" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">`
+    // Six radial vent slots on the front flange face.
+    let slots = "";
+    for (let i = 0; i < 6; i++)
+    {
+        const a = (i * 60 - 78) * Math.PI / 180;
+        const sx = (FCX + Math.cos(a) * 12).toFixed(2);
+        const sy = (FCY + Math.sin(a) * 20).toFixed(2);
+        const deg = (i * 60 - 78 + 90).toFixed(1);
+        slots += `<g transform="rotate(${deg} ${sx} ${sy})">`
+            + `<rect x="${sx - 2}" y="${sy - 5.6}" width="4" height="11.2" rx="2" fill="#5f5a52"/>`
+            + `<rect x="${sx - 2}" y="${sy - 5.6}" width="4" height="11.2" rx="2" fill="none" stroke="#3c382f" stroke-width="0.5"/>`
+            + `<rect x="${sx - 1.1}" y="${sy - 4.6}" width="1.2" height="9.2" rx="0.6" fill="#8f887c" opacity="0.55"/>`
+            + `</g>`;
+    }
+
+    return `<svg viewBox="12 12 112 78" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Filament spool" focusable="false">`
         + `<defs>`
-        + `<radialGradient id="${id}f" cx="36%" cy="30%" r="80%">`
-        + `<stop offset="0" stop-color="#f4dab4"/><stop offset="0.58" stop-color="#d7b283"/><stop offset="1" stop-color="#9c723f"/>`
+        + `<radialGradient id="${id}ff" cx="32%" cy="26%" r="88%">`
+        + `<stop offset="0" stop-color="#f6dcb6"/><stop offset="0.55" stop-color="#dab887"/><stop offset="1" stop-color="#a2783f"/>`
         + `</radialGradient>`
-        + `<radialGradient id="${id}r" cx="60%" cy="60%" r="80%">`
-        + `<stop offset="0" stop-color="#a4835a"/><stop offset="1" stop-color="#6f583a"/>`
+        + `<radialGradient id="${id}rf" cx="58%" cy="52%" r="82%">`
+        + `<stop offset="0" stop-color="#977a52"/><stop offset="1" stop-color="#5a462d"/>`
         + `</radialGradient>`
+        + `<linearGradient id="${id}bs" x1="0" y1="0" x2="0" y2="1">`
+        + `<stop offset="0" stop-color="#fff" stop-opacity="0.22"/><stop offset="0.34" stop-color="#fff" stop-opacity="0"/>`
+        + `<stop offset="0.66" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.4"/>`
+        + `</linearGradient>`
         + `</defs>`
-        // contact shadow on the ground
-        + `<ellipse cx="52" cy="101" rx="38" ry="7" fill="#000" opacity="0.30"/>`
-        // rear flange (in shadow), partly visible behind the winding
-        + `<ellipse cx="${RX}" cy="${RY}" rx="${FLRX}" ry="${FLRY}" transform="rotate(${AX} ${RX} ${RY})" fill="url(#${id}r)"/>`
-        + `<ellipse cx="${RX}" cy="${RY}" rx="${FLRX}" ry="${FLRY}" transform="rotate(${AX} ${RX} ${RY})" fill="none" stroke="#4f3f29" stroke-width="1.4" opacity="0.7"/>`
-        // filament winding barrel
+        // contact shadow
+        + `<ellipse cx="66" cy="90" rx="52" ry="7" fill="#000" opacity="0.18"/>`
+        + `<ellipse cx="54" cy="90" rx="30" ry="5" fill="#000" opacity="0.22"/>`
+        // ---- rear flange (far end) ----
+        + `<ellipse cx="${RCX + 2}" cy="${RCY + 2}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="#000" opacity="0.2"/>`
+        + `<ellipse cx="${RCX}" cy="${RCY}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="url(#${id}rf)"/>`
+        + `<ellipse cx="${RCX}" cy="${RCY}" rx="${RRX}" ry="${RRY}" transform="rotate(${T} ${RCX} ${RCY})" fill="none" stroke="#3f301f" stroke-width="1.4" opacity="0.85"/>`
+        + `<ellipse cx="${RCX}" cy="${RCY}" rx="6" ry="9" transform="rotate(${T} ${RCX} ${RCY})" fill="#241b10"/>`
+        // ---- filament winding cylinder ----
         + barrel
-        // soft form shading down the underside of the barrel + sheen along the top
-        + `<ellipse cx="${((FX + RX) / 2 + 3).toFixed(1)}" cy="${((FY + RY) / 2 + 9).toFixed(1)}" rx="21" ry="10" transform="rotate(${AX + 6} ${(FX + RX) / 2} ${(FY + RY) / 2})" fill="#000" opacity="0.22"/>`
-        + `<ellipse cx="${((FX + RX) / 2 - 5).toFixed(1)}" cy="${((FY + RY) / 2 - 8).toFixed(1)}" rx="16" ry="6" transform="rotate(${AX} ${(FX + RX) / 2} ${(FY + RY) / 2})" fill="#fff" opacity="0.12"/>`
-        // front flange
-        + `<ellipse cx="${FX}" cy="${FY}" rx="${FLRX}" ry="${FLRY}" transform="rotate(${AX} ${FX} ${FY})" fill="url(#${id}f)"/>`
-        + `<ellipse cx="${FX}" cy="${FY}" rx="${FLRX}" ry="${FLRY}" transform="rotate(${AX} ${FX} ${FY})" fill="none" stroke="#7c5f3d" stroke-width="1.5" opacity="0.8"/>`
-        + `<ellipse cx="${FX}" cy="${FY}" rx="${FLRX - 6}" ry="${FLRY - 12}" transform="rotate(${AX} ${FX} ${FY})" fill="none" stroke="#b58a58" stroke-width="1" opacity="0.55"/>`
-        // printed label on the flange face
-        + `<g transform="rotate(${AX} ${FX} ${FY})">`
-        + `<rect x="${FX - 8}" y="${FY - 26}" width="16" height="9" rx="1.6" fill="#fbf3e4" opacity="0.8"/>`
-        + `<rect x="${FX - 6}" y="${FY - 23.5}" width="12" height="1.4" rx="0.7" fill="#8a6c46" opacity="0.75"/>`
-        + `<rect x="${FX - 6}" y="${FY - 20.5}" width="8" height="1.4" rx="0.7" fill="#8a6c46" opacity="0.6"/>`
+        // cylindrical form shading (light top, dark underside) over the run
+        + `<ellipse cx="${((NCX + XCX) / 2).toFixed(1)}" cy="${((NCY + XCY) / 2).toFixed(1)}" rx="${((NRX + XRX) / 2 + 1).toFixed(1)}" ry="${((NRY + XRY) / 2 + 1).toFixed(1)}" transform="rotate(${T} ${(NCX + XCX) / 2} ${(NCY + XCY) / 2})" fill="url(#${id}bs)" opacity="${windOpacity}"/>`
+        // crisp near edge of the coil
+        + `<ellipse cx="${NCX}" cy="${NCY}" rx="${NRX}" ry="${NRY}" transform="rotate(${T} ${NCX} ${NCY})" fill="none" stroke="${wDark}" stroke-width="1.1" opacity="0.5"/>`
+        // ---- front flange (left, over the near end of the coil) ----
+        + `<g transform="rotate(${T} ${FCX} ${FCY})">`
+        + `<ellipse cx="${FCX + 1.5}" cy="${FCY + 1}" rx="${FRX + 1.5}" ry="${FRY + 1.5}" fill="#000" opacity="0.16"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX}" ry="${FRY}" fill="url(#${id}ff)"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX}" ry="${FRY}" fill="none" stroke="#785937" stroke-width="1.6" opacity="0.85"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="${FRX - 2}" ry="${FRY - 2}" fill="none" stroke="#f4dcbb" stroke-width="1" opacity="0.26"/>`
+        + slots
+        + `<text x="${FCX}" y="${FCY - 22}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="6" fill="#785937" opacity="0.9">3D</text>`
+        + `<text x="${FCX}" y="${FCY - 16.8}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="3.1" letter-spacing="0.3" fill="#785937" opacity="0.68">FILAMENT</text>`
+        + `<path d="M${FCX} ${FCY + 14} l3.6 6.4 -7.2 0 z" fill="none" stroke="#785937" stroke-width="1.2" stroke-linejoin="round" opacity="0.45"/>`
+        // hub + recessed centre hole
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="9.5" ry="12" fill="#cda67a"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="9.5" ry="12" fill="none" stroke="#785937" stroke-width="1.3"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="4.8" ry="6.6" fill="#180f08"/>`
+        + `<ellipse cx="${FCX}" cy="${FCY}" rx="4.8" ry="6.6" fill="none" stroke="#0a0603" stroke-width="1"/>`
+        + `<path d="M${FCX - 3} ${FCY - 3.4} A4.8 6.6 0 0 1 ${FCX + 1.9} ${FCY - 5.6}" fill="none" stroke="#fff" stroke-width="1" opacity="0.12" stroke-linecap="round"/>`
         + `</g>`
-        // flange highlight arc
-        + `<path d="M${FX - 15} ${FY - 20} A${FLRY} ${FLRX} ${AX} 0 1 ${FX + 9} ${FY - 30}" fill="none" stroke="#fff" stroke-width="1.8" opacity="0.32" stroke-linecap="round"/>`
-        // hub recess + elliptical centre hole (angled, so NOT a perfect circle)
-        + `<ellipse cx="${FX}" cy="${FY}" rx="8" ry="15" transform="rotate(${AX} ${FX} ${FY})" fill="#c3a074"/>`
-        + `<ellipse cx="${FX}" cy="${FY}" rx="8" ry="15" transform="rotate(${AX} ${FX} ${FY})" fill="none" stroke="#6f5436" stroke-width="1.4"/>`
-        + `<ellipse cx="${FX}" cy="${FY}" rx="4" ry="8" transform="rotate(${AX} ${FX} ${FY})" fill="#170e06"/>`
-        + `<ellipse cx="${FX - 1.5}" cy="${FY - 3}" rx="1.3" ry="2.4" transform="rotate(${AX} ${FX} ${FY})" fill="#fff" opacity="0.14"/>`
+        // top rim highlight on the front flange
+        + `<path d="M${FCX - 17} ${FCY - 20} A${FRX} ${FRY} ${T} 0 1 ${FCX + 6} ${FCY - 32}" fill="none" stroke="#fff" stroke-width="1.7" opacity="0.3" stroke-linecap="round"/>`
         + `</svg>`;
 }
 
@@ -1183,6 +1217,12 @@ function renderFilamentAmsPanels(trays, trayNow)
 
         if (pct !== null)
         {
+            // The number and the bar are the same value - see filamentPercent.
+            const pctText = document.createElement("span");
+            pctText.className = "amsLitePct" + (barCls ? " " + barCls : "");
+            pctText.textContent = pct + "%";
+            tile.appendChild(pctText);
+
             const bar = document.createElement("span");
             bar.className = "amsLiteBar";
 
@@ -3635,10 +3675,10 @@ function renderFilamentFilters()
 
     // Status is single-select (matches the chip row above the grid) -
     // ticking one option clears the rest and returns "all" if unticked.
+    // "Unavailable" is intentionally omitted as a visible category.
     const statusRows = [
         ["loaded", "Loaded", statusCounts.loaded],
         ["low", "Low", statusCounts.low],
-        ["unavailable", "Unavailable", statusCounts.unavailable],
     ].map(([val, label, count]) =>
         makeOpt(filamentFilterState.status === val, (on) =>
         {
@@ -3675,12 +3715,14 @@ function renderFilamentStats()
         const stat = (dot, label, value) =>
             `<div class="filamentStat"><span class="filamentStatLabel"><span class="filamentStatDot ${dot}"></span>${label}</span><span class="filamentStatValue">${value}</span></div>`;
 
+        // "Unavailable" is deliberately not surfaced here (or in the chips /
+        // status filter) - it's still computed above and honoured if the
+        // filter state ever holds it, just not offered as a visible category.
         statsWrap.innerHTML =
             stat("total", "Total", totalCount) +
             stat("available", "Available", (availableG / 1000).toFixed(1) + " kg") +
             stat("loaded", "Loaded", loaded) +
-            stat("low", "Low", low) +
-            stat("unavailable", "Unavailable", unavailable);
+            stat("low", "Low", low);
     }
 
     if (chipsWrap)
@@ -3691,7 +3733,6 @@ function renderFilamentStats()
             ["all", "All", totalCount, null],
             ["loaded", "Loaded", loaded, "loaded"],
             ["low", "Low", low, "low"],
-            ["unavailable", "Unavailable", unavailable, "unavailable"],
         ].forEach(([val, label, count, dot]) =>
         {
             const b = document.createElement("button");

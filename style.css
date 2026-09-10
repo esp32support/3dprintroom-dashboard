@@ -2082,7 +2082,7 @@ dd{
 
 .filamentStats{
     display:grid;
-    grid-template-columns:repeat(5,minmax(0,1fr));
+    grid-template-columns:repeat(4,minmax(0,1fr));
     gap:10px;
 }
 
@@ -2176,7 +2176,7 @@ dd{
 /* --- Spool card grid --- */
 
 #filamentList.filamentGrid{
-    grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
     gap:14px;
 }
 
@@ -2203,10 +2203,11 @@ dd{
 }
 
 .filamentSpool{
-    width:80px;
-    height:76px;
+    width:112px;
+    height:80px;
     flex:none;
-    margin:-4px 0 -6px -4px;
+    margin:-2px -6px -4px -6px;
+    align-self:center;
     filter:drop-shadow(0 3px 5px rgba(0,0,0,.4));
 }
 
@@ -2411,14 +2412,14 @@ dd{
 
 .amsLiteTile .amsLiteSpool,
 .externalTile .amsLiteSpool{
-    width:62px;
-    height:58px;
+    width:88px;
+    height:60px;
     filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));
 }
 
 .externalTile .amsLiteSpool{
-    width:82px;
-    height:76px;
+    width:128px;
+    height:88px;
 }
 
 .amsLiteTile .amsLiteSpool svg,
@@ -2447,6 +2448,17 @@ dd{
     font-size:11px;
     font-weight:700;
 }
+
+.amsLiteTile .amsLitePct,
+.externalTile .amsLitePct{
+    font-size:14px;
+    font-weight:800;
+    color:var(--green);
+    line-height:1;
+}
+
+.amsLitePct.low{ color:var(--yellow); }
+.amsLitePct.critical{ color:var(--red); }
 
 .amsLiteTile .amsLiteBar,
 .externalTile .amsLiteBar{
