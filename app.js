@@ -3461,12 +3461,90 @@ const filamentFilterCollapsed = new Set();
 // Sort state - view only, applied AFTER the filters (filter -> sort ->
 // display), never mutates filamentLibrary.filaments. `keys` is an ordered
 // subset of ["brand","color","weight"] (multi-key: first is primary, the
-// rest break ties); empty = the library's own natural order. Resets on
-// reload, same as the filters.
+// rest break ties); empty = the library's own natural order.
 const filamentSortState = {
     keys: [],
     dir: "asc",   // asc | desc
 };
+
+// Persist the Filament tab's filters + sort to THIS browser's
+// localStorage - same pattern as ACTIVE_TAB_STORAGE_KEY / power history
+// below, deliberately not Cloudflare KV (this is pure view state, and
+// every KV write is quota-limited - see the KV-storm incidents this
+// dashboard has already had). Survives closing the tab, reopening the
+// dashboard and a full page reload; it's per-browser, not shared.
+const FILAMENT_VIEW_STORAGE_KEY = "filamentViewStateV1";
+const FILAMENT_SORT_KEYS = ["brand", "color", "weight"];
+
+function saveFilamentViewState()
+{
+    try
+    {
+        localStorage.setItem(FILAMENT_VIEW_STORAGE_KEY, JSON.stringify({
+            filters: {
+                search: filamentFilterState.search,
+                materials: [...filamentFilterState.materials],
+                brands: [...filamentFilterState.brands],
+                colors: [...filamentFilterState.colors],
+                diameters: [...filamentFilterState.diameters],
+                status: filamentFilterState.status,
+            },
+            sort: {
+                keys: filamentSortState.keys,
+                dir: filamentSortState.dir,
+            },
+        }));
+    }
+    catch (err)
+    {
+        // Storage disabled (private browsing) / quota exceeded - the
+        // filters just won't survive a reload this time, not worth
+        // surfacing for a view-only preference.
+    }
+}
+
+// Mutates the two state objects in place (both are `const`, captured by
+// reference everywhere else in this file) rather than reassigning them -
+// called once, before anything reads filamentFilterState/filamentSortState
+// for the first render or builds the static sort-menu controls from them.
+function loadFilamentViewState()
+{
+    let saved;
+
+    try
+    {
+        saved = JSON.parse(localStorage.getItem(FILAMENT_VIEW_STORAGE_KEY));
+    }
+    catch (err)
+    {
+        return;
+    }
+
+    if (!saved)
+        return;
+
+    const f = saved.filters;
+
+    if (f)
+    {
+        filamentFilterState.search = typeof f.search === "string" ? f.search : "";
+        filamentFilterState.materials = new Set(Array.isArray(f.materials) ? f.materials : []);
+        filamentFilterState.brands = new Set(Array.isArray(f.brands) ? f.brands : []);
+        filamentFilterState.colors = new Set(Array.isArray(f.colors) ? f.colors : []);
+        filamentFilterState.diameters = new Set(Array.isArray(f.diameters) ? f.diameters : []);
+        filamentFilterState.status = ["all", "loaded", "low", "unavailable"].includes(f.status) ? f.status : "all";
+    }
+
+    const s = saved.sort;
+
+    if (s)
+    {
+        filamentSortState.keys = Array.isArray(s.keys) ? s.keys.filter(k => FILAMENT_SORT_KEYS.includes(k)) : [];
+        filamentSortState.dir = s.dir === "desc" ? "desc" : "asc";
+    }
+}
+
+loadFilamentViewState();
 
 function filamentSortComparator(a, b)
 {
@@ -3807,6 +3885,7 @@ function renderFilamentFilters()
     const setToggle = (set) => (val) => (on) =>
     {
         if (on) set.add(val); else set.delete(val);
+        saveFilamentViewState();
         renderFilamentLibrary();
     };
 
@@ -3844,6 +3923,7 @@ function renderFilamentFilters()
         makeOpt(filamentFilterState.status === val, (on) =>
         {
             filamentFilterState.status = on ? val : "all";
+            saveFilamentViewState();
             renderFilamentLibrary();
         }, label, count, val));
 
@@ -3902,6 +3982,7 @@ function renderFilamentStats()
             b.addEventListener("click", () =>
             {
                 filamentFilterState.status = val;
+                saveFilamentViewState();
                 renderFilamentLibrary();
             });
             chipsWrap.appendChild(b);
@@ -5472,15 +5553,23 @@ function closeFilamentModal()
         filamentModal.hidden = true;
 }
 
-// Filament tab: search box + reset link. Pure view state - both just
-// re-run renderFilamentLibrary() against the data already in memory.
+// Filament tab: search box + reset link. Pure view state, persisted via
+// saveFilamentViewState() (see its own comment) so it survives closing
+// the tab or reloading the page - both otherwise just re-run
+// renderFilamentLibrary() against the data already in memory.
 const filamentFilterSearchInput = byId("filamentFilterSearch");
 
 if (filamentFilterSearchInput)
 {
+    // Restore whatever was typed last session - loadFilamentViewState()
+    // already ran (it only touches the state object), this is the first
+    // point the actual <input> element exists to reflect it in.
+    filamentFilterSearchInput.value = filamentFilterState.search;
+
     filamentFilterSearchInput.addEventListener("input", () =>
     {
         filamentFilterState.search = filamentFilterSearchInput.value.trim().toLowerCase();
+        saveFilamentViewState();
         renderFilamentLibrary();
     });
 }
@@ -5497,6 +5586,7 @@ byId("filamentFilterReset")?.addEventListener("click", () =>
     if (filamentFilterSearchInput)
         filamentFilterSearchInput.value = "";
 
+    saveFilamentViewState();
     renderFilamentLibrary();
 });
 
@@ -5523,6 +5613,18 @@ function closeFilamentSortMenu()
 
 if (filamentSortBtn && filamentSortMenu)
 {
+    // Restore last session's sort selection into the (static HTML)
+    // checkboxes/radios - loadFilamentViewState() already populated
+    // filamentSortState itself, this is the first point the actual
+    // <input> elements exist to reflect it in.
+    filamentSortMenu.querySelectorAll("input[data-sort-key]").forEach(cb =>
+    {
+        cb.checked = filamentSortState.keys.includes(cb.getAttribute("data-sort-key"));
+    });
+    const savedDirInput = filamentSortMenu.querySelector(`input[name=filamentSortDir][value="${filamentSortState.dir}"]`);
+    if (savedDirInput) savedDirInput.checked = true;
+    refreshFilamentSortBtn();
+
     filamentSortBtn.addEventListener("click", (e) =>
     {
         e.stopPropagation();
@@ -5550,6 +5652,7 @@ if (filamentSortBtn && filamentSortMenu)
             }
 
             refreshFilamentSortBtn();
+            saveFilamentViewState();
             renderFilamentLibrary();
         });
     });
@@ -5562,6 +5665,7 @@ if (filamentSortBtn && filamentSortMenu)
                 return;
 
             filamentSortState.dir = rb.value === "desc" ? "desc" : "asc";
+            saveFilamentViewState();
             renderFilamentLibrary();
         });
     });
@@ -5576,6 +5680,7 @@ if (filamentSortBtn && filamentSortMenu)
         if (asc) asc.checked = true;
 
         refreshFilamentSortBtn();
+        saveFilamentViewState();
         renderFilamentLibrary();
     });
 
