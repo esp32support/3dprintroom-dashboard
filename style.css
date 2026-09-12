@@ -2090,6 +2090,16 @@ dd{
 .filterStatusDot.low{ background:var(--yellow); }
 .filterStatusDot.unavailable{ background:var(--muted); }
 
+/* Color filter's family swatch - a small square (vs. the round status
+   dot) so it reads as "a colour sample", not another status indicator. */
+.filterOpt .filterColorDot{
+    width:10px;
+    height:10px;
+    border-radius:3px;
+    border:1px solid rgba(255,255,255,.18);
+    flex:none;
+}
+
 /* --- Center: library --- */
 
 .filamentMain{

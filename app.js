@@ -3450,6 +3450,7 @@ const filamentFilterState = {
     search: "",
     materials: new Set(),
     brands: new Set(),
+    colors: new Set(),
     diameters: new Set(),
     status: "all",   // all | loaded | low | unavailable
 };
@@ -3505,6 +3506,86 @@ function filamentDiameterOf(f)
 {
     return (f && f.diameter) ? String(f.diameter) : "1.75";
 }
+
+// #rrggbb -> {h:0-360, s:0-100, l:0-100}. Only used to derive the general
+// colour-family filter below from the ONE colour value already stored
+// (f.colorHex) - no second colour field, no manual per-filament tagging.
+function hexToHsl(hex)
+{
+    let h = String(hex || "").replace("#", "").slice(0, 6);
+
+    if (h.length !== 6 || /[^0-9a-fA-F]/.test(h))
+        h = "888888";
+
+    const r = parseInt(h.slice(0, 2), 16) / 255;
+    const g = parseInt(h.slice(2, 4), 16) / 255;
+    const b = parseInt(h.slice(4, 6), 16) / 255;
+
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    const d = max - min;
+
+    let hue = 0, sat = 0;
+
+    if (d !== 0)
+    {
+        sat = d / (1 - Math.abs(2 * l - 1));
+
+        if (max === r) hue = ((g - b) / d) % 6;
+        else if (max === g) hue = (b - r) / d + 2;
+        else hue = (r - g) / d + 4;
+
+        hue *= 60;
+        if (hue < 0) hue += 360;
+    }
+
+    return { h: hue, s: sat * 100, l: l * 100 };
+}
+
+// General colour family for the Filters panel - "check blue and see every
+// blue" rather than matching the exact marketing name (Sapphire Blue,
+// Basic Light Blue, ...). Achromatic hexes (low saturation) bucket by
+// lightness into Black/Gray/Silver/White; everything else buckets by hue
+// around the colour wheel. Confirmed against this library's real colours
+// (2026-09-12): Sapphire Blue/Basic Light Blue -> Blue, Basic Silver
+// (C0C0C0) -> Silver, Fossil Gray (BBBBBB, 73% lightness) -> Silver too
+// (a light neutral grey reads as "silver" without a metallic flag to go
+// on), Fuchsia Pink -> Pink, Basic Purple -> Purple, Charcoal/Basic Black
+// -> Black, Original Red / Red -> Red, Basic Green -> Green, Basic Yellow
+// / Basic Beige -> Yellow. "Transparent" is name-detected first (same
+// regex used for the spool's translucent rendering), since clear stock
+// has no real hue to bucket by.
+function filamentColorFamily(f)
+{
+    if (/transparent|clear|natural|translu/i.test(f.color || ""))
+        return "Transparent";
+
+    const { h, s, l } = hexToHsl(f.colorHex || "");
+
+    if (s < 12)
+    {
+        if (l < 15) return "Black";
+        if (l < 60) return "Gray";
+        if (l < 88) return "Silver";
+        return "White";
+    }
+
+    if (h < 15 || h >= 345) return "Red";
+    if (h < 45) return "Orange";
+    if (h < 70) return "Yellow";
+    if (h < 170) return "Green";
+    if (h < 255) return "Blue";
+    if (h < 290) return "Purple";
+    return "Pink";
+}
+
+// Reference swatch per family for the filter row's colour dot - NOT the
+// filament's own hex (that's a bucket of many different exact shades).
+const COLOR_FAMILY_SWATCH = {
+    Black: "#1a1a1a", White: "#f4f4f0", Gray: "#8a8d90", Silver: "#c9cdd0",
+    Red: "#d9463f", Orange: "#e0873c", Yellow: "#e6cf46", Green: "#4caf6b",
+    Blue: "#3d78d8", Purple: "#8a5cc9", Pink: "#d968a8", Transparent: "#dfe4e7",
+};
 
 // Status mirrors the long-standing low-filament warning EXACTLY: fixed
 // grams against the LOWEST active spool (not a percentage, not a sum) -
@@ -3603,6 +3684,9 @@ function filamentMatchesFilters(f)
     if (s.brands.size && !s.brands.has(f.brand || "Other"))
         return false;
 
+    if (s.colors.size && !s.colors.has(filamentColorFamily(f)))
+        return false;
+
     if (s.diameters.size && !s.diameters.has(filamentDiameterOf(f)))
         return false;
 
@@ -3641,6 +3725,7 @@ function renderFilamentFilters()
 
     const materialCounts = countBy(f => f.material || "Other");
     const brandCounts = countBy(f => f.brand || "Other");
+    const colorCounts = countBy(filamentColorFamily);
     const diameterCounts = countBy(filamentDiameterOf);
 
     const statusCounts = { loaded: 0, low: 0, unavailable: 0 };
@@ -3654,7 +3739,7 @@ function renderFilamentFilters()
 
     wrap.innerHTML = "";
 
-    const makeOpt = (checked, onToggle, label, count, dotClass) =>
+    const makeOpt = (checked, onToggle, label, count, dotClass, dotColorHex) =>
     {
         const row = document.createElement("label");
         row.className = "filterOpt";
@@ -3669,6 +3754,15 @@ function renderFilamentFilters()
         {
             const dot = document.createElement("span");
             dot.className = "filterStatusDot " + dotClass;
+            row.appendChild(dot);
+        }
+        else if (dotColorHex)
+        {
+            // Colour family swatch - the bucket's reference shade, not any
+            // one filament's exact hex (a bucket holds many shades).
+            const dot = document.createElement("span");
+            dot.className = "filterColorDot";
+            dot.style.background = dotColorHex;
             row.appendChild(dot);
         }
 
@@ -3718,6 +3812,7 @@ function renderFilamentFilters()
 
     const toggleMaterial = setToggle(filamentFilterState.materials);
     const toggleBrand = setToggle(filamentFilterState.brands);
+    const toggleColor = setToggle(filamentFilterState.colors);
     const toggleDiameter = setToggle(filamentFilterState.diameters);
 
     const sortedKeys = (map) => [...map.keys()].sort((a, b) => String(a).localeCompare(String(b)));
@@ -3727,6 +3822,14 @@ function renderFilamentFilters()
 
     makeGroup("brand", "Brand", sortedKeys(brandCounts).map(k =>
         makeOpt(filamentFilterState.brands.has(k), toggleBrand(k), k, brandCounts.get(k))));
+
+    // General colour family (Black/Blue/Gray/...) so checking "Blue" here
+    // matches every shade of blue in the library, not one exact marketing
+    // name - see filamentColorFamily's own comment for how the bucket is
+    // derived straight from each filament's existing colorHex.
+    makeGroup("color", "Color", sortedKeys(colorCounts).map(k =>
+        makeOpt(filamentFilterState.colors.has(k), toggleColor(k), k, colorCounts.get(k),
+            null, COLOR_FAMILY_SWATCH[k] || "#8a8d90")));
 
     makeGroup("diameter", "Diameter", sortedKeys(diameterCounts).map(k =>
         makeOpt(filamentFilterState.diameters.has(k), toggleDiameter(k), `${k} mm`, diameterCounts.get(k))));
@@ -5387,6 +5490,7 @@ byId("filamentFilterReset")?.addEventListener("click", () =>
     filamentFilterState.search = "";
     filamentFilterState.materials.clear();
     filamentFilterState.brands.clear();
+    filamentFilterState.colors.clear();
     filamentFilterState.diameters.clear();
     filamentFilterState.status = "all";
 
