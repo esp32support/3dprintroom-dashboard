@@ -875,6 +875,30 @@ dd{
     line-height:1.5;
 }
 
+/* Usage History's per-print energy list */
+.powerPerPrintHead{
+    margin:4px 0 10px;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+
+#powerPerPrintList{
+    max-height:340px;
+    overflow-y:auto;
+    margin-bottom:14px;
+}
+
+#powerPerPrintList .historyItem{
+    border-left-color:var(--cyan);
+}
+
+.powerPerPrintHint{
+    margin-top:-6px;
+}
+
 .amsGrid{
     display:grid;
     grid-template-columns:repeat(2,minmax(0,1fr));

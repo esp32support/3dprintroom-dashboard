@@ -735,33 +735,6 @@
                     </div>
                 </div>
 
-                <div class="powerStatsTable">
-                    <div class="powerStatsHead">
-                        <span></span>
-                        <span>Min</span>
-                        <span>Max</span>
-                        <span>Avg</span>
-                    </div>
-                    <div class="powerStatsRow">
-                        <span class="powerStatsLabel"><i class="powerDot powerDotW"></i>W</span>
-                        <span id="powerHistMinW">--</span>
-                        <span id="powerHistMaxW">--</span>
-                        <span id="powerHistAvgW">--</span>
-                    </div>
-                    <div class="powerStatsRow">
-                        <span class="powerStatsLabel"><i class="powerDot powerDotV"></i>V</span>
-                        <span id="powerHistMinV">--</span>
-                        <span id="powerHistMaxV">--</span>
-                        <span id="powerHistAvgV">--</span>
-                    </div>
-                    <div class="powerStatsRow">
-                        <span class="powerStatsLabel"><i class="powerDot powerDotA"></i>A</span>
-                        <span id="powerHistMinA">--</span>
-                        <span id="powerHistMaxA">--</span>
-                        <span id="powerHistAvgA">--</span>
-                    </div>
-                </div>
-
                 <dl class="statusList">
                     <div>
                         <dt>Total energy</dt>
@@ -773,7 +746,16 @@
                     </div>
                 </dl>
 
+                <div class="powerPerPrintHead">
+                    <span>Energy per print</span>
+                </div>
+
+                <div class="historyList" id="powerPerPrintList">
+                    <div class="historyItem">No prints in this period.</div>
+                </div>
+
                 <p class="hint" id="powerHistHint">Collecting data - check back once a few days have passed.</p>
+                <p class="hint powerPerPrintHint">kWh per print is only tracked for prints that ran while this browser tab was open - a print without one still shows here, and still counts toward Total energy above.</p>
 
             </section>
 

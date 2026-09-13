@@ -1863,6 +1863,13 @@ function updatePower(data)
     setText("powerYesterday", `${(Number(data.yesterdayKwh) || 0).toFixed(3)} kWh`);
     setText("powerTotal", `${(Number(data.totalKwh) || 0).toFixed(3)} kWh`);
 
+    // The plug's own cumulative counter - the anchor value energy-per-
+    // print (see finalizeTrackedPrintPower) diffs against. Kept even when
+    // a later message omits/zeroes totalKwh, so a single bad reading
+    // can't corrupt an in-progress print's tracked start point.
+    if (Number.isFinite(Number(data.totalKwh)))
+        lastKnownTotalKwh = Number(data.totalKwh);
+
     // relayState is best-effort on the device side (a separate lightweight
     // poll from the wattage/voltage/current numbers above) - absent if
     // that particular request failed, not necessarily if the relay is off.
@@ -2270,6 +2277,96 @@ const powerStats = {
     a: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
 };
 
+// ===== Energy per print (Usage History card) =====
+//
+// The old Usage History table showed the whole DAY's min/max/avg watts
+// smeared across every print and every idle gap in between - not
+// actionable ("is 626W good or bad?" has no answer without knowing which
+// print that was). What's actually useful is "how much did THIS print
+// cost", so this tracks a real per-print kWh instead: the plug's own
+// cumulative Total kWh counter (already relayed every ~10s, see
+// updatePower) is sampled at the moment a print starts and again the
+// moment it stops running - the delta is that print's real energy use,
+// not an estimate reconstructed from instantaneous W samples.
+//
+// Same trade-off as the "This print" min/max/avg box above: this only
+// sees a print at all while a browser tab is open and connected, so a
+// print that ran entirely while nothing was open has no entry here (it
+// still counts toward the day-level Total energy, which power_watch.py
+// samples independently, hourly, server-side).
+const POWER_PER_PRINT_STORAGE_KEY = "powerPerPrintLogV1";
+const POWER_PER_PRINT_MAX = 200;
+
+let powerPerPrintLog = [];   // [{ key, name, start, kwh }], newest appended last
+let lastKnownTotalKwh = null;
+let trackedPrint = null;     // { name, start, startKwh, finalized }
+
+function loadPowerPerPrintLog()
+{
+    try
+    {
+        const saved = JSON.parse(localStorage.getItem(POWER_PER_PRINT_STORAGE_KEY));
+
+        if (Array.isArray(saved))
+            powerPerPrintLog.push(...saved);
+    }
+    catch (err)
+    {
+        // Storage disabled/corrupt - starts empty, not worth surfacing.
+    }
+}
+
+function savePowerPerPrintLog()
+{
+    try
+    {
+        localStorage.setItem(POWER_PER_PRINT_STORAGE_KEY, JSON.stringify(powerPerPrintLog.slice(-POWER_PER_PRINT_MAX)));
+    }
+    catch (err)
+    {
+        // Storage full/disabled - this entry just won't survive a reload.
+    }
+}
+
+// Upsert by key so calling this twice for the same print (the running
+// -> idle transition AND the next print's own start both call it, as a
+// belt-and-suspenders pair - see updatePrinter()) never creates a
+// duplicate row, it just refines the same one.
+function recordPrintPowerUsage(name, start, kwh)
+{
+    if (!start || !Number.isFinite(kwh))
+        return;
+
+    const key = `${name || "Untitled print"}__${start}`;
+    const entry = { key, name: name || "Untitled print", start, kwh: Math.max(0, kwh) };
+    const idx = powerPerPrintLog.findIndex(p => p.key === key);
+
+    if (idx !== -1) powerPerPrintLog[idx] = entry;
+    else powerPerPrintLog.push(entry);
+
+    if (powerPerPrintLog.length > POWER_PER_PRINT_MAX)
+        powerPerPrintLog.splice(0, powerPerPrintLog.length - POWER_PER_PRINT_MAX);
+
+    savePowerPerPrintLog();
+    renderPowerPerPrintList();
+}
+
+// Closes out whatever print is currently being tracked, using the latest
+// known Total-kWh reading as the end point. Safe to call more than once
+// for the same print (see `finalized`) and safe to call with nothing
+// being tracked yet (freshly loaded page, plug not yet reporting).
+function finalizeTrackedPrintPower()
+{
+    if (!trackedPrint || trackedPrint.finalized)
+        return;
+
+    if (trackedPrint.startKwh == null || lastKnownTotalKwh == null)
+        return;
+
+    recordPrintPowerUsage(trackedPrint.name, trackedPrint.start, lastKnownTotalKwh - trackedPrint.startKwh);
+    trackedPrint.finalized = true;
+}
+
 function savePowerHistory()
 {
     try
@@ -2532,51 +2629,10 @@ async function loadPowerHistoryCard()
 
 function renderPowerHistoryCard(dayRecords)
 {
-    const agg = {
-        w: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
-        v: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
-        a: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
-    };
     let totalKwh = 0;
 
     for (const day of dayRecords)
-    {
-        for (const [key, upper] of [["w", "W"], ["v", "V"], ["a", "A"]])
-        {
-            const min = day[`min${upper}`];
-            const max = day[`max${upper}`];
-
-            if (min !== null && min < agg[key].min) agg[key].min = min;
-            if (max !== null && max > agg[key].max) agg[key].max = max;
-
-            agg[key].sum += Number(day[`sum${upper}`]) || 0;
-            agg[key].count += Number(day[`count${upper}`]) || 0;
-        }
-
         totalKwh += Number(day.kwh) || 0;
-    }
-
-    const fmt = (agg, digits) => ({
-        min: Number.isFinite(agg.min) ? agg.min.toFixed(digits) : "--",
-        max: Number.isFinite(agg.max) ? agg.max.toFixed(digits) : "--",
-        avg: agg.count ? (agg.sum / agg.count).toFixed(digits) : "--",
-    });
-
-    const w = fmt(agg.w, 0);
-    const v = fmt(agg.v, 0);
-    const a = fmt(agg.a, 2);
-
-    setText("powerHistMinW", w.min);
-    setText("powerHistMaxW", w.max);
-    setText("powerHistAvgW", w.avg);
-
-    setText("powerHistMinV", v.min);
-    setText("powerHistMaxV", v.max);
-    setText("powerHistAvgV", v.avg);
-
-    setText("powerHistMinA", a.min);
-    setText("powerHistMaxA", a.max);
-    setText("powerHistAvgA", a.avg);
 
     // Same 3-decimal reasoning as the live kWh readouts above - this sums
     // per-day totals that are themselves sub-0.1 kWh, so 2 decimals lost
@@ -2598,17 +2654,11 @@ function renderPowerHistoryCard(dayRecords)
     // already loaded for the History panel elsewhere on the page) -
     // reusing spendPeriodStart/End's exact day-boundary logic keeps this
     // consistent with how the Filament panel already counts "prints
-    // today" for the same three period names.
-    const periodStart = spendPeriodStart(powerHistoryPeriod);
-    const periodEnd = spendPeriodEnd(powerHistoryPeriod);
+    // today" for the same three period names, and with the per-print list
+    // below (same filtered set, not just its count).
+    const printsInPeriod = powerHistoryPrintsInPeriod(powerHistoryPeriod);
 
-    const printsInPeriod = lastHistoryItems.filter(item =>
-    {
-        const start = parseDeviceTime(item.start);
-        return start && start >= periodStart && start < periodEnd;
-    }).length;
-
-    setText("powerHistDayCount", String(printsInPeriod));
+    setText("powerHistDayCount", String(printsInPeriod.length));
 
     const dayCountLabel = byId("powerHistDayCountLabel");
 
@@ -2629,6 +2679,95 @@ function renderPowerHistoryCard(dayRecords)
 
         hintEl.hidden = dayRecords.length > 0;
     }
+
+    renderPowerPerPrintList(printsInPeriod);
+}
+
+// Shared by the "Prints today/recorded" count above and the per-print
+// list below, so the two always agree on exactly which prints are "in
+// this period" - same day-boundary helpers the Filament tab's own
+// prints-today count uses.
+function powerHistoryPrintsInPeriod(period)
+{
+    const periodStart = spendPeriodStart(period);
+    const periodEnd = spendPeriodEnd(period);
+
+    return lastHistoryItems.filter(item =>
+    {
+        const start = parseDeviceTime(item.start);
+        return start && start >= periodStart && start < periodEnd;
+    });
+}
+
+// The actual "how much did THIS print cost" list - real per-print kWh
+// from powerPerPrintLog (see its own comment for how that's captured),
+// looked up by the exact same key the filament side already uses
+// (`${name}__${start}`). A print with no logged entry (dashboard wasn't
+// open while it ran) still shows, just without a number - it's honest
+// about what wasn't tracked rather than silently dropping the print or
+// making up a number for it.
+function renderPowerPerPrintList(printsInPeriod)
+{
+    const list = byId("powerPerPrintList");
+
+    if (!list)
+        return;
+
+    // Called with no argument from recordPrintPowerUsage() (a print just
+    // got tracked, possibly while the Power tab is already open) - recompute
+    // the current period's set rather than requiring every caller to pass it.
+    if (!printsInPeriod)
+        printsInPeriod = powerHistoryPrintsInPeriod(powerHistoryPeriod);
+
+    list.innerHTML = "";
+
+    if (printsInPeriod.length === 0)
+    {
+        const empty = document.createElement("div");
+        empty.className = "historyItem";
+        empty.textContent = "No prints in this period.";
+        list.appendChild(empty);
+        return;
+    }
+
+    printsInPeriod
+        .slice()
+        .sort((a, b) => (parseDeviceTime(b.start) || 0) - (parseDeviceTime(a.start) || 0))
+        .forEach(item =>
+        {
+            const key = `${item.name}__${item.start}`;
+            const logged = powerPerPrintLog.find(p => p.key === key);
+
+            const row = document.createElement("div");
+            row.className = "historyItem";
+
+            const meta = document.createElement("div");
+
+            const title = document.createElement("strong");
+            title.textContent = item.name;
+            meta.appendChild(title);
+
+            const when = document.createElement("small");
+            when.textContent = formatDeviceDate(item.start);
+            meta.appendChild(when);
+
+            row.appendChild(meta);
+
+            const kwh = document.createElement("span");
+
+            if (logged)
+            {
+                kwh.textContent = `${logged.kwh.toFixed(3)} kWh`;
+            }
+            else
+            {
+                kwh.textContent = "not tracked";
+                kwh.style.color = "var(--muted)";
+            }
+
+            row.appendChild(kwh);
+            list.appendChild(row);
+        });
 }
 
 document.querySelectorAll("[data-power-period]").forEach(btn =>
@@ -2645,6 +2784,7 @@ document.querySelectorAll("[data-power-period]").forEach(btn =>
 // powerChartCanvas/powerChartCtx above are declared, since
 // schedulePowerChartDraw()/drawPowerChart() read them.
 loadPowerHistory();
+loadPowerPerPrintLog();
 
 // Read by the power-toggle confirm dialog, so turning the plug off while
 // a print is actively running gets an extra, more specific warning.
@@ -2663,8 +2803,21 @@ async function updatePrinter(data)
     // signal the Power tab's Min/Max/Average card needs.
     if (data.currentStart && data.currentStart !== lastPrintStart)
     {
+        // Belt-and-suspenders close-out for whatever was being tracked -
+        // the running->idle transition below normally already finalized
+        // it, this only matters if that never fired (e.g. queued prints
+        // with no observed idle gap in between). No-ops if already done.
+        finalizeTrackedPrintPower();
+
         lastPrintStart = data.currentStart;
         resetPowerStatsForNewPrint();
+
+        trackedPrint = {
+            name: trimProjectName(data.subtaskName) || "Untitled print",
+            start: data.currentStart,
+            startKwh: lastKnownTotalKwh,
+            finalized: false,
+        };
     }
 
     setDot("printerWifiDot", data.wifiConnected === true);
@@ -2738,6 +2891,13 @@ async function updatePrinter(data)
     if (running !== printCurrentlyRunning)
     {
         printCurrentlyRunning = running;
+
+        // The print just STOPPED running (finished/failed/cancelled) -
+        // this is the real end point for its energy tracking, right as it
+        // happens rather than waiting for whatever prints after it.
+        if (!running)
+            finalizeTrackedPrintPower();
+
         renderFilamentLibrary();
     }
     const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE" || holdingLastJob);
