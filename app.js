@@ -1863,13 +1863,6 @@ function updatePower(data)
     setText("powerYesterday", `${(Number(data.yesterdayKwh) || 0).toFixed(3)} kWh`);
     setText("powerTotal", `${(Number(data.totalKwh) || 0).toFixed(3)} kWh`);
 
-    // The plug's own cumulative counter - the anchor value energy-per-
-    // print (see finalizeTrackedPrintPower) diffs against. Kept even when
-    // a later message omits/zeroes totalKwh, so a single bad reading
-    // can't corrupt an in-progress print's tracked start point.
-    if (Number.isFinite(Number(data.totalKwh)))
-        lastKnownTotalKwh = Number(data.totalKwh);
-
     // relayState is best-effort on the device side (a separate lightweight
     // poll from the wattage/voltage/current numbers above) - absent if
     // that particular request failed, not necessarily if the relay is off.
@@ -2283,89 +2276,19 @@ const powerStats = {
 // smeared across every print and every idle gap in between - not
 // actionable ("is 626W good or bad?" has no answer without knowing which
 // print that was). What's actually useful is "how much did THIS print
-// cost", so this tracks a real per-print kWh instead: the plug's own
-// cumulative Total kWh counter (already relayed every ~10s, see
-// updatePower) is sampled at the moment a print starts and again the
-// moment it stops running - the delta is that print's real energy use,
-// not an estimate reconstructed from instantaneous W samples.
+// cost", so this shows a real per-print kWh instead.
 //
-// Same trade-off as the "This print" min/max/avg box above: this only
-// sees a print at all while a browser tab is open and connected, so a
-// print that ran entirely while nothing was open has no entry here (it
-// still counts toward the day-level Total energy, which power_watch.py
-// samples independently, hourly, server-side).
-const POWER_PER_PRINT_STORAGE_KEY = "powerPerPrintLogV1";
-const POWER_PER_PRINT_MAX = 200;
-
-let powerPerPrintLog = [];   // [{ key, name, start, kwh }], newest appended last
-let lastKnownTotalKwh = null;
-let trackedPrint = null;     // { name, start, startKwh, finalized }
-
-function loadPowerPerPrintLog()
-{
-    try
-    {
-        const saved = JSON.parse(localStorage.getItem(POWER_PER_PRINT_STORAGE_KEY));
-
-        if (Array.isArray(saved))
-            powerPerPrintLog.push(...saved);
-    }
-    catch (err)
-    {
-        // Storage disabled/corrupt - starts empty, not worth surfacing.
-    }
-}
-
-function savePowerPerPrintLog()
-{
-    try
-    {
-        localStorage.setItem(POWER_PER_PRINT_STORAGE_KEY, JSON.stringify(powerPerPrintLog.slice(-POWER_PER_PRINT_MAX)));
-    }
-    catch (err)
-    {
-        // Storage full/disabled - this entry just won't survive a reload.
-    }
-}
-
-// Upsert by key so calling this twice for the same print (the running
-// -> idle transition AND the next print's own start both call it, as a
-// belt-and-suspenders pair - see updatePrinter()) never creates a
-// duplicate row, it just refines the same one.
-function recordPrintPowerUsage(name, start, kwh)
-{
-    if (!start || !Number.isFinite(kwh))
-        return;
-
-    const key = `${name || "Untitled print"}__${start}`;
-    const entry = { key, name: name || "Untitled print", start, kwh: Math.max(0, kwh) };
-    const idx = powerPerPrintLog.findIndex(p => p.key === key);
-
-    if (idx !== -1) powerPerPrintLog[idx] = entry;
-    else powerPerPrintLog.push(entry);
-
-    if (powerPerPrintLog.length > POWER_PER_PRINT_MAX)
-        powerPerPrintLog.splice(0, powerPerPrintLog.length - POWER_PER_PRINT_MAX);
-
-    savePowerPerPrintLog();
-    renderPowerPerPrintList();
-}
-
-// Closes out whatever print is currently being tracked, using the latest
-// known Total-kWh reading as the end point. Safe to call more than once
-// for the same print (see `finalized`) and safe to call with nothing
-// being tracked yet (freshly loaded page, plug not yet reporting).
-function finalizeTrackedPrintPower()
-{
-    if (!trackedPrint || trackedPrint.finalized)
-        return;
-
-    if (trackedPrint.startKwh == null || lastKnownTotalKwh == null)
-        return;
-
-    recordPrintPowerUsage(trackedPrint.name, trackedPrint.start, lastKnownTotalKwh - trackedPrint.startKwh);
-    trackedPrint.finalized = true;
-}
+// Tracked entirely server-side now (scripts/print_watch.py, on the same
+// GitHub Actions cron that already watches for RUNNING->FINISH - see its
+// own comments), NOT in the browser - an earlier version of this sampled
+// the plug's cumulative Total-kWh counter from inside updatePower/
+// updatePrinter, which only ever ran while a tab happened to be open,
+// so any unattended print silently had no entry. print_watch.py has no
+// such gap: it snapshots totalKwh at print start and again at FINISH
+// regardless of whether a browser is open anywhere, and pushes the delta
+// to /api/power-per-print. This just displays that log, refreshed
+// alongside the day-level history in loadPowerHistoryCard().
+let powerPerPrintLog = [];   // [{ key, name, start, kwh }], from the server
 
 function savePowerHistory()
 {
@@ -2612,18 +2535,23 @@ const POWER_HISTORY_DAYS = { today: 1, week: 7, month: 30 };
 async function loadPowerHistoryCard()
 {
     const days = POWER_HISTORY_DAYS[powerHistoryPeriod] || 7;
-    let data;
+    let data, perPrintData;
 
     try
     {
-        const res = await fetch(`/api/power-history?days=${days}`);
-        data = await res.json();
+        const [histRes, perPrintRes] = await Promise.all([
+            fetch(`/api/power-history?days=${days}`),
+            fetch("/api/power-per-print"),
+        ]);
+        data = await histRes.json();
+        perPrintData = await perPrintRes.json();
     }
     catch (err)
     {
         return;
     }
 
+    powerPerPrintLog = Array.isArray(perPrintData?.prints) ? perPrintData.prints : [];
     renderPowerHistoryCard(Array.isArray(data.days) ? data.days : []);
 }
 
@@ -2700,12 +2628,13 @@ function powerHistoryPrintsInPeriod(period)
 }
 
 // The actual "how much did THIS print cost" list - real per-print kWh
-// from powerPerPrintLog (see its own comment for how that's captured),
-// looked up by the exact same key the filament side already uses
-// (`${name}__${start}`). A print with no logged entry (dashboard wasn't
-// open while it ran) still shows, just without a number - it's honest
-// about what wasn't tracked rather than silently dropping the print or
-// making up a number for it.
+// from powerPerPrintLog (fetched server-side in loadPowerHistoryCard, see
+// its own comment for how print_watch.py captures it), looked up by the
+// exact same key the filament side already uses (`${name}__${start}`).
+// A print with no logged entry (the plug or printer was unreachable at
+// exactly the start/finish moment print_watch.py checked) still shows,
+// just without a number - honest about what wasn't tracked rather than
+// silently dropping the print or making up a number for it.
 function renderPowerPerPrintList(printsInPeriod)
 {
     const list = byId("powerPerPrintList");
@@ -2713,9 +2642,6 @@ function renderPowerPerPrintList(printsInPeriod)
     if (!list)
         return;
 
-    // Called with no argument from recordPrintPowerUsage() (a print just
-    // got tracked, possibly while the Power tab is already open) - recompute
-    // the current period's set rather than requiring every caller to pass it.
     if (!printsInPeriod)
         printsInPeriod = powerHistoryPrintsInPeriod(powerHistoryPeriod);
 
@@ -2784,7 +2710,6 @@ document.querySelectorAll("[data-power-period]").forEach(btn =>
 // powerChartCanvas/powerChartCtx above are declared, since
 // schedulePowerChartDraw()/drawPowerChart() read them.
 loadPowerHistory();
-loadPowerPerPrintLog();
 
 // Read by the power-toggle confirm dialog, so turning the plug off while
 // a print is actively running gets an extra, more specific warning.
@@ -2803,21 +2728,8 @@ async function updatePrinter(data)
     // signal the Power tab's Min/Max/Average card needs.
     if (data.currentStart && data.currentStart !== lastPrintStart)
     {
-        // Belt-and-suspenders close-out for whatever was being tracked -
-        // the running->idle transition below normally already finalized
-        // it, this only matters if that never fired (e.g. queued prints
-        // with no observed idle gap in between). No-ops if already done.
-        finalizeTrackedPrintPower();
-
         lastPrintStart = data.currentStart;
         resetPowerStatsForNewPrint();
-
-        trackedPrint = {
-            name: trimProjectName(data.subtaskName) || "Untitled print",
-            start: data.currentStart,
-            startKwh: lastKnownTotalKwh,
-            finalized: false,
-        };
     }
 
     setDot("printerWifiDot", data.wifiConnected === true);
@@ -2891,13 +2803,6 @@ async function updatePrinter(data)
     if (running !== printCurrentlyRunning)
     {
         printCurrentlyRunning = running;
-
-        // The print just STOPPED running (finished/failed/cancelled) -
-        // this is the real end point for its energy tracking, right as it
-        // happens rather than waiting for whatever prints after it.
-        if (!running)
-            finalizeTrackedPrintPower();
-
         renderFilamentLibrary();
     }
     const preparing = bambuOk && (state === "RUNNING" || state === "PREPARE" || holdingLastJob);

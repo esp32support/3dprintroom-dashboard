@@ -41,11 +41,13 @@ import paho.mqtt.client as mqtt
 
 HIVEMQ_HOST = "489b8202ba4948fd959020e8eed0cedf.s1.eu.hivemq.cloud"
 PRINTER_TOPIC = "ifix/printerroom/jole2026/printer"
+POWER_TOPIC = "ifix/printerroom/jole2026/power"
 
 STATE_URL = "https://3dprintroom-dashboard.pages.dev/api/printer-watch-state"
 TASK_URL = "https://3dprintroom-dashboard.pages.dev/api/printer-task"
 SYNC_URL = "https://3dprintroom-dashboard.pages.dev/api/gcode-sync"
 FILAMENT_URL = "https://3dprintroom-dashboard.pages.dev/api/device-filament"
+POWER_PER_PRINT_URL = "https://3dprintroom-dashboard.pages.dev/api/power-per-print"
 
 USER_AGENT = "Mozilla/5.0 (compatible; print-watch-github-actions)"
 
@@ -74,19 +76,23 @@ def api_post(url, secret, body):
         return json.loads(resp.read())
 
 
-def fetch_live_snapshot(hivemq_user, hivemq_pass):
-    """One retained-message read, not a persistent subscription - this
-    process only needs the printer's LATEST report, published with
-    retain=true by the CYD."""
+def fetch_live_snapshots(hivemq_user, hivemq_pass, topics):
+    """One retained-message read per topic, single MQTT connection. Used
+    to fetch both the printer's own status AND the smart plug's power
+    reading (needed to snapshot totalKwh for per-print energy tracking)
+    without paying for two separate connections - each topic still gets
+    its own independent retained message, delivered whenever it lands."""
     got = {}
 
     def on_message(c, userdata, msg):
-        got["payload"] = json.loads(msg.payload.decode())
-        c.disconnect()
+        got[msg.topic] = json.loads(msg.payload.decode())
+        if len(got) == len(topics):
+            c.disconnect()
 
     def on_connect(c, userdata, flags, rc, properties=None):
         if rc == 0:
-            c.subscribe(PRINTER_TOPIC)
+            for topic in topics:
+                c.subscribe(topic)
         else:
             log(f"MQTT connect failed rc={rc}")
             c.disconnect()
@@ -100,12 +106,12 @@ def fetch_live_snapshot(hivemq_user, hivemq_pass):
     client.loop_start()
 
     for _ in range(50):
-        if "payload" in got:
+        if len(got) == len(topics):
             break
         time.sleep(0.2)
 
     client.loop_stop()
-    return got.get("payload")
+    return got
 
 
 def assigned_filament_for_slot(library, slot):
@@ -146,11 +152,25 @@ def main():
     hivemq_user = os.environ["HIVEMQ_USER"]
     hivemq_pass = os.environ["HIVEMQ_PASS"]
 
-    snapshot = fetch_live_snapshot(hivemq_user, hivemq_pass)
+    snapshots = fetch_live_snapshots(hivemq_user, hivemq_pass, [PRINTER_TOPIC, POWER_TOPIC])
+    snapshot = snapshots.get(PRINTER_TOPIC)
 
     if not snapshot:
         log("no live snapshot received this run - skipping")
         return
+
+    # Plug reading for per-print energy tracking - best-effort, same
+    # "online": false convention power_watch.py checks (master publishes
+    # that instead of real fields when it can't reach the plug). None here
+    # just means this run can't capture/close out an energy snapshot; the
+    # gcodeState logic below doesn't depend on it at all.
+    power_snapshot = snapshots.get(POWER_TOPIC)
+    total_kwh = None
+
+    if power_snapshot and power_snapshot.get("online") is not False:
+        raw_kwh = power_snapshot.get("totalKwh")
+        if isinstance(raw_kwh, (int, float)):
+            total_kwh = float(raw_kwh)
 
     gcode_state = snapshot.get("gcodeState") or ""
 
@@ -198,11 +218,28 @@ def main():
     # attributed the WHOLE job's weight to it (see the FINISH-gate comment
     # below for the full incident this caused). subtaskName staying the
     # same across a pause/resume is the real signal this is still one job.
-    if now_running and (state.get("subtaskName") != subtask_name or state.get("gcodeState") in ("FINISH", "FAILED")):
+    is_new_print = now_running and (state.get("subtaskName") != subtask_name or state.get("gcodeState") in ("FINISH", "FAILED"))
+
+    if is_new_print:
         tray_seen = set()
 
     if now_running and tray_now is not None and tray_now != 255:
         tray_seen.add(tray_now)
+
+    # Per-print energy: anchor point is whatever totalKwh reads on the
+    # exact run that detects a genuinely new print starting - same signal
+    # as the tray_seen reset above, not currentStart changing alone (that
+    # also fires on a plain pause/resume, which isn't a new print). Persists
+    # across this script's own stateless cron runs via printer-watch-state's
+    # startTotalKwh field until the matching FINISH below consumes it. If
+    # the plug happened to be unreachable on this exact run, total_kwh is
+    # None and this print simply has no anchor - it'll show "not tracked"
+    # rather than a wrong number, same honesty as the browser-side version
+    # this replaced.
+    start_total_kwh = state.get("startTotalKwh")
+
+    if is_new_print:
+        start_total_kwh = total_kwh
 
     # Only a genuine FINISH, not merely "stopped running" - the latter also
     # covers PAUSE, which happens repeatedly on a print with manual spool
@@ -316,13 +353,35 @@ def main():
             except Exception as e:
                 log(f"multi-color correction push failed: {e}")
 
+        # Per-print energy: delta between the anchor captured when this
+        # print started and the plug's reading right now. Both pieces have
+        # to be real numbers - a missing anchor (plug was unreachable on
+        # the exact run that detected the start) or a missing current
+        # reading (plug unreachable on THIS run) means no number can be
+        # trusted, so this print is simply left untracked rather than
+        # guessed at.
+        if isinstance(start_total_kwh, (int, float)) and total_kwh is not None:
+            try:
+                api_post(POWER_PER_PRINT_URL, sync_secret, {
+                    "printName": state["subtaskName"],
+                    "startTime": state["currentStart"],
+                    "kwh": max(0.0, total_kwh - start_total_kwh),
+                })
+                log(f"pushed per-print energy: {total_kwh - start_total_kwh:.3f} kWh")
+            except Exception as e:
+                log(f"per-print energy push failed: {e}")
+        else:
+            log("no start-of-print kWh anchor and/or no current plug reading - energy left untracked for this print")
+
         tray_seen = set()  # reset tracking for the next print
+        start_total_kwh = None  # consumed - clear so it can't leak into the next print
 
     new_state = {
         "gcodeState": gcode_state,
         "subtaskName": subtask_name or state.get("subtaskName", ""),
         "currentStart": current_start or state.get("currentStart", ""),
         "trayNowSeen": sorted(tray_seen),
+        "startTotalKwh": start_total_kwh,
     }
 
     # Only write when something actually changed. This runs every ~2
@@ -336,6 +395,7 @@ def main():
         "subtaskName": state.get("subtaskName", ""),
         "currentStart": state.get("currentStart", ""),
         "trayNowSeen": sorted(state.get("trayNowSeen", [])),
+        "startTotalKwh": state.get("startTotalKwh"),
     }
 
     if new_state != old_state:

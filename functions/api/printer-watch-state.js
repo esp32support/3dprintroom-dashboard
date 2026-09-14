@@ -21,7 +21,7 @@ function jsonResponse(obj, status = 200) {
 }
 
 function emptyState() {
-    return { gcodeState: "", subtaskName: "", currentStart: "", trayNowSeen: [] };
+    return { gcodeState: "", subtaskName: "", currentStart: "", trayNowSeen: [], startTotalKwh: null };
 }
 
 function checkAuth(request, env) {
@@ -69,11 +69,17 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
+    // startTotalKwh: the plug's cumulative kWh counter as of this print's
+    // start, captured by print_watch.py so it survives between its own
+    // stateless cron runs until the matching FINISH diffs against it (see
+    // that script's own comments). null when not yet captured - explicit
+    // null rather than 0, since 0 is a real (if unlikely) reading.
     const state = {
         gcodeState: String(body.gcodeState || ""),
         subtaskName: String(body.subtaskName || ""),
         currentStart: String(body.currentStart || ""),
         trayNowSeen: Array.isArray(body.trayNowSeen) ? body.trayNowSeen : [],
+        startTotalKwh: Number.isFinite(Number(body.startTotalKwh)) ? Number(body.startTotalKwh) : null,
     };
 
     await env.FILAMENT_KV.put(KV_KEY, JSON.stringify(state));
