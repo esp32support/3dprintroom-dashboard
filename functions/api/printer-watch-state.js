@@ -74,12 +74,29 @@ export async function onRequestPost(context) {
     // stateless cron runs until the matching FINISH diffs against it (see
     // that script's own comments). null when not yet captured - explicit
     // null rather than 0, since 0 is a real (if unlikely) reading.
+    //
+    // typeof check, NOT Number(body.startTotalKwh) - print_watch.py sends
+    // a genuine JSON null once an anchor is consumed at FINISH, and
+    // Number(null) is 0 in JS, so the old Number.isFinite(Number(...))
+    // form silently turned "no anchor" into a fake zero-anchor. Confirmed
+    // live 2026-09-15: a just-finished print's cleared anchor came back
+    // as startTotalKwh:0 instead of null. Harmless that one time only
+    // because gcodeState was genuinely "FINISH" (which re-anchors the
+    // next print regardless of name) - but had the plug been unreachable
+    // exactly when a new print started, this 0 would have been
+    // misread as a real anchor at that print's own FINISH, pushing the
+    // plug's entire lifetime total as "this print's" energy instead of
+    // honestly leaving it untracked.
+    const startTotalKwh = typeof body.startTotalKwh === "number" && Number.isFinite(body.startTotalKwh)
+        ? body.startTotalKwh
+        : null;
+
     const state = {
         gcodeState: String(body.gcodeState || ""),
         subtaskName: String(body.subtaskName || ""),
         currentStart: String(body.currentStart || ""),
         trayNowSeen: Array.isArray(body.trayNowSeen) ? body.trayNowSeen : [],
-        startTotalKwh: Number.isFinite(Number(body.startTotalKwh)) ? Number(body.startTotalKwh) : null,
+        startTotalKwh,
     };
 
     await env.FILAMENT_KV.put(KV_KEY, JSON.stringify(state));
