@@ -7,7 +7,10 @@ PER_PRINT_URL = "https://3dprintroom-dashboard.pages.dev/api/power-per-print"
 
 
 def get(url, secret):
-    req = urllib.request.Request(url, headers={"X-Sync-Secret": secret})
+    req = urllib.request.Request(url, headers={
+        "X-Sync-Secret": secret,
+        "User-Agent": "Mozilla/5.0 (compatible; check-power-state-github-actions)",
+    })
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())
 
