@@ -5,6 +5,7 @@ import urllib.request
 
 STATE_URL = "https://3dprintroom-dashboard.pages.dev/api/printer-watch-state"
 PER_PRINT_URL = "https://3dprintroom-dashboard.pages.dev/api/power-per-print"
+TASK_URL = "https://3dprintroom-dashboard.pages.dev/api/printer-task"
 
 
 def get_raw(url, secret):
@@ -27,6 +28,7 @@ def main():
     secret = os.environ["FILAMENT_SYNC_SECRET"]
     get_raw(STATE_URL, secret)
     get_raw(PER_PRINT_URL, secret)
+    get_raw(TASK_URL, secret)
 
 
 if __name__ == "__main__":
