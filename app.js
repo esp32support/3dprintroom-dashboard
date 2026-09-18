@@ -2627,14 +2627,66 @@ function powerHistoryPrintsInPeriod(period)
     });
 }
 
+// Matches a history item to its logged energy entry - name first, THEN
+// the closest start time within a tolerance, not exact string equality.
+// Confirmed live 2026-09-17: a CYD reconnect (the same boot-placeholder
+// stall fixed in firmware 1.2.34) left print_watch.py's own live-sampled
+// currentStart ~11 minutes later than Bambu Task API's real startTime for
+// the very print that reconnect interrupted - two independent sources for
+// "when did this print start" that don't always agree to the second, the
+// identical cross-source drift problem print_watch.py's own
+// find_matching_task() already has to handle for the exact same reason.
+// An exact match is tried first (the common case), falling back to
+// nearest-in-time only when that fails - never matching a WRONG print
+// with the same name from a different day, hours away.
+const POWER_PER_PRINT_MATCH_TOLERANCE_MS = 30 * 60 * 1000;
+
+function findLoggedEnergyFor(item)
+{
+    const candidates = powerPerPrintLog.filter(p => p.name === item.name);
+
+    if (candidates.length === 0)
+        return null;
+
+    const exact = candidates.find(p => p.start === item.start);
+
+    if (exact)
+        return exact;
+
+    const itemStart = parseDeviceTime(item.start);
+
+    if (!itemStart)
+        return null;
+
+    let best = null;
+    let bestDiffMs = Infinity;
+
+    for (const p of candidates)
+    {
+        const pStart = parseDeviceTime(p.start);
+
+        if (!pStart)
+            continue;
+
+        const diffMs = Math.abs(pStart.getTime() - itemStart.getTime());
+
+        if (diffMs < bestDiffMs)
+        {
+            bestDiffMs = diffMs;
+            best = p;
+        }
+    }
+
+    return (best && bestDiffMs <= POWER_PER_PRINT_MATCH_TOLERANCE_MS) ? best : null;
+}
+
 // The actual "how much did THIS print cost" list - real per-print kWh
 // from powerPerPrintLog (fetched server-side in loadPowerHistoryCard, see
-// its own comment for how print_watch.py captures it), looked up by the
-// exact same key the filament side already uses (`${name}__${start}`).
-// A print with no logged entry (the plug or printer was unreachable at
-// exactly the start/finish moment print_watch.py checked) still shows,
-// just without a number - honest about what wasn't tracked rather than
-// silently dropping the print or making up a number for it.
+// its own comment for how print_watch.py captures it). A print with no
+// logged entry (the plug or printer was unreachable through its entire
+// start/finish window) still shows, just without a number - honest about
+// what wasn't tracked rather than silently dropping the print or making
+// up a number for it.
 function renderPowerPerPrintList(printsInPeriod)
 {
     const list = byId("powerPerPrintList");
@@ -2661,8 +2713,7 @@ function renderPowerPerPrintList(printsInPeriod)
         .sort((a, b) => (parseDeviceTime(b.start) || 0) - (parseDeviceTime(a.start) || 0))
         .forEach(item =>
         {
-            const key = `${item.name}__${item.start}`;
-            const logged = powerPerPrintLog.find(p => p.key === key);
+            const logged = findLoggedEnergyFor(item);
 
             const row = document.createElement("div");
             row.className = "historyItem";
@@ -6357,9 +6408,8 @@ function selectTab(name)
     // The chart canvas reads getBoundingClientRect() to size itself, which
     // returns 0x0 while its tab is hidden - redraw once the Power tab
     // actually becomes visible so it picks up its real size. Also refresh
-    // the History card here rather than on an interval - it only changes
-    // hourly (see power_watch.py), so "whenever you open the tab" is
-    // plenty fresh.
+    // the History card here so switching TO the tab is always current -
+    // see the periodic refresh below for staying current while already ON it.
     if (name === "power")
     {
         schedulePowerChartDraw();
@@ -6376,6 +6426,24 @@ function selectTab(name)
         renderFilamentAmsPanels(lastAmsTrays, lastAmsTrayNow);
     }
 }
+
+// Per-print energy can appear at any moment - right after print_watch.py
+// detects a FINISH, not on a fixed hourly cadence like the old day-rollup
+// this replaced (see energy-per-print's own comment). Staying on the
+// Power tab across a print finishing would otherwise show a stale "not
+// tracked" until switching away and back - confirmed live 2026-09-17/18,
+// a print's real 0.237 kWh sat unseen because nothing re-fetched
+// /api/power-per-print while the tab was already open. 60s is a cheap KV
+// READ (this project's actual quota pressure has always been on WRITES -
+// see power-history.js's own comment), gated to only run while the tab
+// is actually visible.
+setInterval(() =>
+{
+    const panel = byId("tab-power");
+
+    if (panel && !panel.hasAttribute("hidden"))
+        loadPowerHistoryCard();
+}, 60000);
 
 TABS.forEach(t =>
 {
