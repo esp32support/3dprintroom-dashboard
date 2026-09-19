@@ -1,34 +1,54 @@
 import json
 import os
-import urllib.error
-import urllib.request
+import time
 
-FILAMENT_URL = "https://3dprintroom-dashboard.pages.dev/api/device-filament"
-STATE_URL = "https://3dprintroom-dashboard.pages.dev/api/printer-watch-state"
-AUDIT_URL = "https://3dprintroom-dashboard.pages.dev/api/deduction-audit"
+import paho.mqtt.client as mqtt
 
-
-def get_raw(url, secret):
-    req = urllib.request.Request(url, headers={
-        "X-Sync-Secret": secret,
-        "User-Agent": "Mozilla/5.0 (compatible; check-power-state-github-actions)",
-    })
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            body = resp.read()
-            print(f"{url} -> status={resp.status} body={body!r}")
-            return body
-    except urllib.error.HTTPError as e:
-        body = e.read()
-        print(f"{url} -> HTTPError {e.code} body={body!r}")
-        return None
+HIVEMQ_HOST = "489b8202ba4948fd959020e8eed0cedf.s1.eu.hivemq.cloud"
+PRINTER_TOPIC = "ifix/printerroom/jole2026/printer"
 
 
 def main():
-    secret = os.environ["FILAMENT_SYNC_SECRET"]
-    get_raw(FILAMENT_URL, secret)
-    get_raw(STATE_URL, secret)
-    get_raw(AUDIT_URL, secret)
+    hivemq_user = os.environ["HIVEMQ_USER"]
+    hivemq_pass = os.environ["HIVEMQ_PASS"]
+
+    got = {}
+
+    def on_message(c, userdata, msg):
+        got["payload"] = json.loads(msg.payload.decode())
+        c.disconnect()
+
+    def on_connect(c, userdata, flags, rc, properties=None):
+        if rc == 0:
+            c.subscribe(PRINTER_TOPIC)
+        else:
+            print(f"MQTT connect failed rc={rc}")
+            c.disconnect()
+
+    client = mqtt.Client(client_id="gh-actions-tray-check", protocol=mqtt.MQTTv311)
+    client.username_pw_set(hivemq_user, hivemq_pass)
+    client.tls_set()
+    client.on_message = on_message
+    client.on_connect = on_connect
+    client.connect(HIVEMQ_HOST, 8883, keepalive=30)
+    client.loop_start()
+
+    for _ in range(50):
+        if "payload" in got:
+            break
+        time.sleep(0.2)
+
+    client.loop_stop()
+
+    snapshot = got.get("payload")
+
+    if not snapshot:
+        print("no live snapshot received")
+        return
+
+    print("gcodeState:", snapshot.get("gcodeState"))
+    print("trayNow:", snapshot.get("trayNow"))
+    print("trays:", json.dumps(snapshot.get("trays")))
 
 
 if __name__ == "__main__":
