@@ -209,16 +209,23 @@ def main():
 
     # Reset tracking only when this is genuinely a NEW print - a different
     # job by name, or resuming after the previous one actually ended
-    # (FINISH/FAILED). NOT keyed on currentStart changing: Bambu assigns a
-    # brand-new currentStart on every manual resume after a plain PAUSE
-    # too, not only on a genuinely new print. Resetting on that alone wiped
-    # tray_seen on every pause of a multi-color print with manual EXT spool
-    # swaps - by the time the job's FINAL segment actually finished, this
-    # script had only ever tracked that last segment's one tray, and wrongly
-    # attributed the WHOLE job's weight to it (see the FINISH-gate comment
-    # below for the full incident this caused). subtaskName staying the
-    # same across a pause/resume is the real signal this is still one job.
-    is_new_print = now_running and (state.get("subtaskName") != subtask_name or state.get("gcodeState") in ("FINISH", "FAILED"))
+    # (FINISH/FAILED/IDLE). NOT keyed on currentStart changing: Bambu
+    # assigns a brand-new currentStart on every manual resume after a plain
+    # PAUSE too, not only on a genuinely new print. Resetting on that alone
+    # wiped tray_seen on every pause of a multi-color print with manual EXT
+    # spool swaps - by the time the job's FINAL segment actually finished,
+    # this script had only ever tracked that last segment's one tray, and
+    # wrongly attributed the WHOLE job's weight to it (see the FINISH-gate
+    # comment below for the full incident this caused). subtaskName staying
+    # the same across a pause/resume is the real signal this is still one
+    # job. IDLE included alongside FINISH/FAILED for the identical reason
+    # the energy watchdog below needs it: GitHub's cron cadence can skip
+    # straight past the one tick that would have caught literal FINISH,
+    # landing on IDLE with FINISH never observed at all - without IDLE
+    # here too, a SAME-NAMED reprint starting while stored state is still
+    # that stale "IDLE" would wrongly look like a continuing job instead of
+    # a new one. PAUSE is still deliberately excluded either way.
+    is_new_print = now_running and (state.get("subtaskName") != subtask_name or state.get("gcodeState") in ("FINISH", "FAILED", "IDLE"))
 
     if is_new_print:
         tray_seen = set()
@@ -258,7 +265,9 @@ def main():
     # from the ledger. Same conservative posture as the dashboard's own
     # outcome-gate (processFilamentDeductions in app.js) - only FINISH is
     # trustworthy for a weight-affecting decision.
-    if was_running and gcode_state == "FINISH" and state.get("subtaskName") and state.get("currentStart"):
+    has_subtask_info = bool(state.get("subtaskName")) and bool(state.get("currentStart"))
+
+    if was_running and gcode_state == "FINISH" and has_subtask_info:
         log(f"print finished: {state['subtaskName']!r}, AMS trays seen: {sorted(tray_seen)}")
 
         if len(tray_seen) == 1:
@@ -353,13 +362,33 @@ def main():
             except Exception as e:
                 log(f"multi-color correction push failed: {e}")
 
-        # Per-print energy: delta between the anchor captured when this
-        # print started and the plug's reading right now. Both pieces have
-        # to be real numbers - a missing anchor (plug was unreachable on
-        # the exact run that detected the start) or a missing current
-        # reading (plug unreachable on THIS run) means no number can be
-        # trusted, so this print is simply left untracked rather than
-        # guessed at.
+        tray_seen = set()  # reset tracking for the next print
+
+    # Per-print energy: deliberately broader than the tray/color gate just
+    # above (FINISH, FAILED, or IDLE - not FINISH alone). That gate stays
+    # FINISH-only for a documented reason (a PAUSE must never be mistaken
+    # for a finish - see its own comment), but GitHub's own cron cadence
+    # is unreliable enough (see github-actions-cron-throttling memory -
+    # sometimes multi-hour gaps, not just the previously-measured 25-60
+    # min) that a short print can skip past the single tick that would
+    # have caught literal "FINISH" entirely, landing on the NEXT tick
+    # already at "IDLE" with no FINISH ever observed. Confirmed live
+    # 2026-09-19: RUNNING seen at 08:59:45, the very next observation was
+    # already IDLE at 11:25:50 (a 2h26m gap) - the anchor captured at
+    # RUNNING would otherwise sit unconsumed forever, silently losing that
+    # print's energy AND risking a stale-anchor leak into a future
+    # same-named print (see start_total_kwh's own comment above). Safe to
+    # be broader here than the tray/color gate: unlike attributing
+    # filament weight to the wrong tray, closing an energy anchor out
+    # slightly later than the literal FINISH moment is harmless - and
+    # PAUSE is deliberately excluded from this set too, so a mid-print
+    # pause still doesn't close anything out here either.
+    if was_running and gcode_state in ("FINISH", "FAILED", "IDLE") and has_subtask_info:
+        # Both pieces have to be real numbers - a missing anchor (plug was
+        # unreachable on the exact run that detected the start) or a
+        # missing current reading (plug unreachable on THIS run) means no
+        # number can be trusted, so this print is simply left untracked
+        # rather than guessed at.
         if isinstance(start_total_kwh, (int, float)) and total_kwh is not None:
             try:
                 api_post(POWER_PER_PRINT_URL, sync_secret, {
@@ -373,7 +402,6 @@ def main():
         else:
             log("no start-of-print kWh anchor and/or no current plug reading - energy left untracked for this print")
 
-        tray_seen = set()  # reset tracking for the next print
         start_total_kwh = None  # consumed - clear so it can't leak into the next print
 
     new_state = {
