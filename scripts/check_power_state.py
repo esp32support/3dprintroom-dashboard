@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import urllib.request
 
 import paho.mqtt.client as mqtt
 
@@ -41,6 +42,17 @@ def main():
     client.loop_stop()
 
     print("full power payload:", json.dumps(got.get("payload")))
+
+    secret = os.environ["FILAMENT_SYNC_SECRET"]
+    req = urllib.request.Request(
+        "https://3dprintroom-dashboard.pages.dev/api/power-history?days=31",
+        headers={"X-Sync-Secret": secret, "User-Agent": "Mozilla/5.0 (compatible; check-github-actions)"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read())
+        total = sum(d.get("kwh", 0) for d in data.get("days", []))
+        print(f"sum of all {len(data.get('days', []))} day records: {total}")
+        print(json.dumps([(d["date"], d["kwh"]) for d in data.get("days", [])]))
 
 
 if __name__ == "__main__":
