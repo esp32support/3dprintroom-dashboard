@@ -3,25 +3,19 @@ import os
 import urllib.error
 import urllib.request
 
-FILAMENT_URL = "https://3dprintroom-dashboard.pages.dev/api/device-filament"
+REFUND_URL = "https://3dprintroom-dashboard.pages.dev/api/temp-refund-fix"
 
 
 def main():
     secret = os.environ["FILAMENT_SYNC_SECRET"]
-    req = urllib.request.Request(FILAMENT_URL, headers={
+    req = urllib.request.Request(REFUND_URL, data=b"{}", method="POST", headers={
         "X-Sync-Secret": secret,
-        "User-Agent": "Mozilla/5.0 (compatible; check-github-actions)",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (compatible; refund-github-actions)",
     })
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-            print("slotAssignments:", json.dumps(data.get("slotAssignments")))
-            for f in data.get("filaments", []):
-                remaining = sum(s.get("remaining", 0) for s in f.get("spools", []) if not s.get("removedAt"))
-                print(f"  {f['id']} {f['material']} {f['color']} #{f['colorHex']} remaining={remaining}")
-            print("recent deductionLog entries:")
-            for k, v in list(data.get("deductionLog", {}).items())[-6:]:
-                print(" ", k, "->", json.dumps(v))
+            print(f"status={resp.status} body={resp.read()!r}")
     except urllib.error.HTTPError as e:
         print(f"HTTPError {e.code} body={e.read()!r}")
 
