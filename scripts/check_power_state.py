@@ -1,28 +1,46 @@
 import json
 import os
-import urllib.error
-import urllib.request
+import time
 
-HISTORY_URL = "https://3dprintroom-dashboard.pages.dev/api/power-history?days=3"
-PER_PRINT_URL = "https://3dprintroom-dashboard.pages.dev/api/power-per-print"
+import paho.mqtt.client as mqtt
 
-
-def get_raw(url, secret):
-    req = urllib.request.Request(url, headers={
-        "X-Sync-Secret": secret,
-        "User-Agent": "Mozilla/5.0 (compatible; check-github-actions)",
-    })
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            print(f"{url} -> {resp.read().decode()}")
-    except urllib.error.HTTPError as e:
-        print(f"{url} -> HTTPError {e.code} {e.read()!r}")
+HIVEMQ_HOST = "489b8202ba4948fd959020e8eed0cedf.s1.eu.hivemq.cloud"
+POWER_TOPIC = "ifix/printerroom/jole2026/power"
 
 
 def main():
-    secret = os.environ["FILAMENT_SYNC_SECRET"]
-    get_raw(HISTORY_URL, secret)
-    get_raw(PER_PRINT_URL, secret)
+    hivemq_user = os.environ["HIVEMQ_USER"]
+    hivemq_pass = os.environ["HIVEMQ_PASS"]
+
+    got = {}
+
+    def on_message(c, userdata, msg):
+        got["payload"] = json.loads(msg.payload.decode())
+        c.disconnect()
+
+    def on_connect(c, userdata, flags, rc, properties=None):
+        if rc == 0:
+            c.subscribe(POWER_TOPIC)
+        else:
+            print(f"MQTT connect failed rc={rc}")
+            c.disconnect()
+
+    client = mqtt.Client(client_id="gh-actions-power-check", protocol=mqtt.MQTTv311)
+    client.username_pw_set(hivemq_user, hivemq_pass)
+    client.tls_set()
+    client.on_message = on_message
+    client.on_connect = on_connect
+    client.connect(HIVEMQ_HOST, 8883, keepalive=30)
+    client.loop_start()
+
+    for _ in range(50):
+        if "payload" in got:
+            break
+        time.sleep(0.2)
+
+    client.loop_stop()
+
+    print("full power payload:", json.dumps(got.get("payload")))
 
 
 if __name__ == "__main__":
