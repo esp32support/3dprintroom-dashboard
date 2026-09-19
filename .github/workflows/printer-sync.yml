@@ -49,13 +49,20 @@ name: Printer sync (filament relay + print watch)
 #      for the dashboard's Power tab History card - throttles its own KV
 #      writes to once/hour internally, see that script's docstring.
 #
-# GitHub doesn't run schedules reliably below ~5 minutes (and may delay
-# even this under load) - the PC daemon these replace ran continuously,
-# so updates/detections here are on a coarser cadence. Also runnable by
-# hand via the Actions tab (workflow_dispatch) for testing.
+# Schedule trigger DISABLED 2026-09-19 - this cron's own unreliability
+# (measured gaps of 25-60 minutes, sometimes multiple hours overnight) is
+# exactly what let short prints start and finish completely unobserved -
+# see cron-worker/ for the replacement: the same three jobs, ported to a
+# Cloudflare Worker with a native Cron Trigger (every 2 minutes, reliable
+# on Cloudflare's own scheduler rather than a third-party CI runner).
+# Confirmed live: the new Worker caught a print that started and finished
+# within a single 2-minute window, something no cadence this workflow
+# could ever reliably declare would have caught consistently.
+#
+# Left as workflow_dispatch-only (not deleted) as a manual fallback/testing
+# path - GitHub doesn't run schedules reliably below ~5 minutes anyway (and
+# may delay even this under load).
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:

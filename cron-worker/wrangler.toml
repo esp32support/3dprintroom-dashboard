@@ -1,0 +1,34 @@
+name = "printroom-cron"
+main = "src/index.js"
+compatibility_date = "2026-09-19"
+
+# No public HTTP route needed - the cron trigger is all this Worker uses.
+# Registering a workers.dev subdomain is an account-level, one-time,
+# dashboard-only step; skipping it here means deploy needs nothing beyond
+# this file and the three secrets below. The fetch() handler in index.js
+# (a manual-trigger convenience) simply won't be reachable without a route -
+# use `wrangler dev` locally, or `wrangler deployments trigger` equivalents,
+# to test on demand instead.
+workers_dev = false
+
+# Every 2 minutes, on Cloudflare's own scheduler - NOT subject to GitHub
+# Actions' free-tier schedule throttling (measured gaps of 25-60 minutes,
+# sometimes multiple hours - see this repo's .github/workflows/printer-sync.yml
+# for the full history this Worker replaces). A print shorter than the old
+# cron's gap could start and finish without ever being observed; 2 minutes
+# gives comfortable margin even for a short calibration print.
+[triggers]
+crons = ["*/2 * * * *"]
+
+# No KV binding needed - this Worker only talks to the dashboard's own
+# public /api/* endpoints (X-Sync-Secret auth) and the HiveMQ broker over
+# WSS, exactly like the Python scripts it replaces. That means it can be
+# deployed under ANY Cloudflare account, independent of which account
+# hosts the 3dprintroom-dashboard Pages project.
+#
+# Secrets needed (set with `wrangler secret put <NAME>`, run interactively
+# so the value never appears in shell history or a file):
+#   FILAMENT_SYNC_SECRET  - same value as the GitHub Actions secret of the
+#                           same name (matches the dashboard's LOCAL_SYNC_SECRET)
+#   HIVEMQ_USER           - same value as the GitHub Actions secret
+#   HIVEMQ_PASS           - same value as the GitHub Actions secret
