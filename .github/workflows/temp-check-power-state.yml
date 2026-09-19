@@ -9,8 +9,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install paho-mqtt
       - run: python scripts/check_power_state.py
         env:
-          HIVEMQ_USER: ${{ secrets.HIVEMQ_USER }}
-          HIVEMQ_PASS: ${{ secrets.HIVEMQ_PASS }}
+          FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
