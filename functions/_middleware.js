@@ -10,11 +10,11 @@ import { verifySessionCookie } from "./_lib/session.js";
 // to /login.html -> Cloudflare canonicalises to /login -> middleware sees
 // /login (not allowlisted) -> redirects to /login.html again -> ...
 //
-// /api/gcode-sync, /api/device-filament and /api/printer-watch-state are
-// meant to be called by scripts/devices with no browser session cookie -
-// each enforces its own X-Sync-Secret check internally, so they're
-// allowlisted here purely to let the request reach that check at all, not
-// to skip authentication entirely. /api/printer-task,
+// /api/gcode-sync, /api/device-filament, /api/printer-watch-state and
+// /api/fix-slot-assignment are meant to be called by scripts/devices with
+// no browser session cookie - each enforces its own X-Sync-Secret check
+// internally, so they're allowlisted here purely to let the request reach
+// that check at all, not to skip authentication entirely. /api/printer-task,
 // /api/power-history, /api/power-per-print and /api/deduction-audit are
 // dual-use (the dashboard's own UI calls them with a session cookie, a
 // script calls them with X-Sync-Secret) - also allowlisted here since
@@ -24,6 +24,7 @@ const PUBLIC_PATHS = new Set([
     "/api/gcode-sync", "/api/device-filament",
     "/api/printer-watch-state", "/api/printer-task",
     "/api/power-history", "/api/power-per-print", "/api/deduction-audit",
+    "/api/fix-slot-assignment",
 ]);
 
 export async function onRequest(context) {

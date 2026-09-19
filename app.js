@@ -3432,19 +3432,41 @@ async function loadFilamentLibrary()
     }
 }
 
+// Returns whether the save actually reached the server - callers that
+// represent an interactive edit (see withFreshLibrary) need to know this
+// to avoid the exact bug confirmed live 2026-09-19: a slot-assignment
+// change rendered instantly (the mutator + renderFilamentLibrary() below
+// run before this ever awaits anything) and LOOKED like it saved, but a
+// failed POST here was only ever logged to the console - invisible
+// without devtools open - so the library silently reverted to its old
+// (wrong) slot assignment the next time anything reloaded it, with
+// nothing telling the user their fix hadn't actually taken. The
+// background auto-deduction path (processFilamentDeductions) also calls
+// this directly, every 5s tick - it deliberately does NOT alert on
+// failure (that's this function's caller's job, not this function's),
+// so a transient network hiccup there doesn't pop a dialog on its own.
 async function saveFilamentLibrary()
 {
     try
     {
-        await fetch("/api/filament-library", {
+        const res = await fetch("/api/filament-library", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(filamentLibrary),
         });
+
+        if (!res.ok)
+        {
+            console.log("filament-library save failed", res.status);
+            return false;
+        }
+
+        return true;
     }
     catch (err)
     {
         console.log("filament-library save failed", err);
+        return false;
     }
 }
 
@@ -4447,7 +4469,20 @@ async function withFreshLibrary(mutatorFn)
     await loadFilamentLibrary();
     mutatorFn(filamentLibrary);
     renderFilamentLibrary();
-    await saveFilamentLibrary();
+
+    const saved = await saveFilamentLibrary();
+
+    if (!saved)
+    {
+        // The render above already made this edit LOOK applied - reload
+        // and re-render from whatever's actually on the server so the
+        // screen doesn't keep showing a change that silently didn't
+        // persist (see saveFilamentLibrary's own comment for the exact
+        // incident this fixes).
+        window.alert("That change didn't save - check your connection and try again.");
+        await loadFilamentLibrary();
+        renderFilamentLibrary();
+    }
 }
 
 // A slot can only hold one filamentId at a time (it's a single object key),
