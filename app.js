@@ -2639,11 +2639,22 @@ function powerHistoryPrintsInPeriod(period)
 // An exact match is tried first (the common case), falling back to
 // nearest-in-time only when that fails - never matching a WRONG print
 // with the same name from a different day, hours away.
+//
+// usedKeys prevents the SAME logged entry being handed to more than one
+// history row. Confirmed live 2026-09-20: a real failed 1m43s print
+// attempt ("Body1_v2.stl") was immediately re-run and finished properly a
+// few minutes later - two genuinely distinct prints, same name, minutes
+// apart. Without usedKeys, the failed attempt's fuzzy lookup found the
+// SUCCESSFUL attempt's own logged energy (nearest in time, same name) and
+// displayed it a second time, showing 0.397 kWh for a print that was
+// actually never tracked at all (too short for even this Worker's 2-
+// minute cadence to observe). Each logged entry can now only ever satisfy
+// ONE row.
 const POWER_PER_PRINT_MATCH_TOLERANCE_MS = 30 * 60 * 1000;
 
-function findLoggedEnergyFor(item)
+function findLoggedEnergyFor(item, usedKeys)
 {
-    const candidates = powerPerPrintLog.filter(p => p.name === item.name);
+    const candidates = powerPerPrintLog.filter(p => p.name === item.name && !usedKeys.has(p.key));
 
     if (candidates.length === 0)
         return null;
@@ -2708,12 +2719,48 @@ function renderPowerPerPrintList(printsInPeriod)
         return;
     }
 
-    printsInPeriod
+    const sorted = printsInPeriod
         .slice()
-        .sort((a, b) => (parseDeviceTime(b.start) || 0) - (parseDeviceTime(a.start) || 0))
-        .forEach(item =>
+        .sort((a, b) => (parseDeviceTime(b.start) || 0) - (parseDeviceTime(a.start) || 0));
+
+    // Exact matches resolved FIRST, in their own pass, before any fuzzy
+    // lookup runs - otherwise a print with no logged entry of its own
+    // could fuzzy-match and steal another print's EXACT entry before that
+    // other print gets a chance to claim it correctly. See
+    // findLoggedEnergyFor's own comment for the live incident this fixes.
+    // Resolutions are recorded per-item (not just per-key) so a pass-1
+    // claim can't accidentally exclude the very item that made it once
+    // pass 2 runs.
+    const usedKeys = new Set();
+    const resolved = new Map();
+
+    for (const item of sorted)
+    {
+        const exact = powerPerPrintLog.find(p => p.name === item.name && p.start === item.start && !usedKeys.has(p.key));
+
+        if (exact)
         {
-            const logged = findLoggedEnergyFor(item);
+            usedKeys.add(exact.key);
+            resolved.set(item, exact);
+        }
+    }
+
+    for (const item of sorted)
+    {
+        if (resolved.has(item))
+            continue;
+
+        const logged = findLoggedEnergyFor(item, usedKeys);
+
+        if (logged)
+            usedKeys.add(logged.key);
+
+        resolved.set(item, logged || null);
+    }
+
+    sorted.forEach(item =>
+        {
+            const logged = resolved.get(item);
 
             const row = document.createElement("div");
             row.className = "historyItem";

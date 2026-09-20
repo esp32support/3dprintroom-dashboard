@@ -106,30 +106,37 @@ export async function onRequestPost(context) {
     const existingRaw = await env.FILAMENT_KV.get(key);
     const day = existingRaw ? { ...emptyDay(), ...JSON.parse(existingRaw) } : emptyDay();
 
-    // Once-per-hour dedup lives HERE now, not in the caller's own "only
-    // run near minute :00" check that used to gate this. GitHub's cron
-    // doesn't actually fire every 5 minutes the way the workflow's own
-    // schedule claims - measured elsewhere in this project at 25-60
-    // minutes in practice - so a narrow 5-minute acceptance window could,
-    // and did, go entire hours (a full day, even) without ever being hit,
-    // silently under-sampling regardless of how healthy the plug was.
-    // Computed from THIS server's clock, not anything the caller sends -
-    // a GitHub runner's clock is trustworthy enough, but there's no reason
-    // to depend on it when the source of truth for "what hour is it"
-    // should be authoritative either way.
-    const currentHour = new Date().getUTCHours();
+    // Tasmota's own todayKwh counter is already cumulative for the day -
+    // just take the latest reading rather than summing samples.
+    const newKwh = Number.isFinite(Number(body.kwh)) ? Number(body.kwh) : day.kwh;
 
-    if (day.lastHour === currentHour) {
-        return jsonResponse({ ok: true, skipped: "already recorded this hour" });
+    // Dedup by VALUE CHANGE now, not by hour-of-day. The old "once per
+    // hour, first sample wins" rule (see git history) was needed when the
+    // caller's own cadence was a GitHub Actions cron that fired every
+    // 25-60+ minutes at unpredictable offsets - a single sample per hour,
+    // landing at a random minute, was a reasonable-enough proxy for that
+    // hour's usage on average. cron-worker/ replaced that cron with a
+    // reliable 2-minute Cloudflare Worker cadence, which broke this rule
+    // in a new way: the FIRST sample of every hour now lands within that
+    // hour's first ~2 minutes almost every time, locking in a near-
+    // start-of-hour reading and silently discarding every later, more
+    // complete sample for the rest of that hour. Confirmed live
+    // 2026-09-20: a print running through most of UTC hour 13 (ending
+    // 13:50) had that hour's contribution to Total Energy frozen at
+    // whatever todayKwh read at ~13:01, undercounting the day's real
+    // total by most of that hour's actual usage. Tasmota's own todayKwh
+    // is monotonically authoritative for the whole day regardless of hour
+    // boundaries, so there's no reason to bucket by hour at all - keep
+    // the latest reading always, and only skip the KV write when nothing
+    // has actually changed (idle periods protect the free-tier write
+    // quota on their own, the same way this dedup always intended).
+    if (Math.abs(newKwh - (day.kwh || 0)) < 0.0005) {
+        return jsonResponse({ ok: true, skipped: "kwh unchanged" });
     }
 
     mergeSample(day, Number(body.w) || 0, Number(body.v) || 0, Number(body.a) || 0);
-    day.lastHour = currentHour;
-
-    // Tasmota's own todayKwh counter is already cumulative for the day -
-    // just take the latest reading rather than summing samples.
-    if (Number.isFinite(Number(body.kwh)))
-        day.kwh = Number(body.kwh);
+    day.lastHour = new Date().getUTCHours();   // informational only, nothing gates on it anymore
+    day.kwh = newKwh;
 
     await env.FILAMENT_KV.put(key, JSON.stringify(day));
     return jsonResponse({ ok: true });
