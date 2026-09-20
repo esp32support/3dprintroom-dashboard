@@ -26,6 +26,64 @@ function emptyLibrary() {
     return { filaments: [], processedPrints: [], historyOverrides: {}, deductionLog: {} };
 }
 
+// Parses a "YYYY-MM-DD HH:MM:SS" device-local-time string (the format
+// every historyOverrides key's start segment uses) into a value that's
+// only ever DIFFED against another string in the exact same format - not
+// a real timestamp. `new Date("...", no zone)` would be misinterpreted as
+// UTC here (Cloudflare Workers has no local timezone, unlike a real
+// browser, where the identical string correctly parses as that browser's
+// local time - see app.js's parseDeviceTime), so this reads the digits
+// directly instead of trusting environment-dependent Date parsing.
+function localTimeToComparable(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(s || "");
+
+    if (!m) return null;
+
+    const [, y, mo, d, h, mi, se] = m.map(Number);
+    return Date.UTC(y, mo - 1, d, h, mi, se);
+}
+
+// Finds an EXISTING historyOverrides key for the same print, within a
+// tolerance window, other than the exact key this request would write -
+// used to avoid double-deducting a print that another path already
+// corrected under a very slightly different timestamp. Confirmed live
+// 2026-09-20: recoverOrphanedTasks() (app.js, client-side) and this
+// endpoint (server-side, called by cron-worker/) each independently
+// derive their own timestamp for the SAME print - Task API's own
+// startTime vs the live snapshot's currentStart, seconds apart - and
+// neither path knew about the other's already-written correction, so
+// both created their own historyOverrides entry and their own deduction.
+// Two real PETG prints in one day (Body1_v2.stl, bovenkant_v3.stl) each
+// got double-deducted this way - the SAME print's weight taken twice from
+// the same spool. print_watch.py's own find_matching_task() already
+// tolerates this identical cross-source drift for a different purpose;
+// this is the same idea applied to prevent a duplicate WRITE rather than
+// just picking the right READ.
+function findExistingOverrideKey(historyOverrides, printName, startTime, toleranceMs) {
+    const targetMs = localTimeToComparable(startTime);
+    const ownKey = `${printName}__${startTime}`;
+
+    if (targetMs === null) return null;
+
+    for (const key of Object.keys(historyOverrides)) {
+        if (key === ownKey) continue;
+
+        const sep = key.lastIndexOf("__");
+        if (sep === -1) continue;
+
+        if (key.slice(0, sep) !== printName) continue;
+
+        const ms = localTimeToComparable(key.slice(sep + 2));
+        if (ms === null) continue;
+
+        if (Math.abs(ms - targetMs) <= toleranceMs) return key;
+    }
+
+    return null;
+}
+
+const DUPLICATE_TOLERANCE_MS = 10 * 60 * 1000;
+
 export async function onRequestPost(context) {
     const { request, env } = context;
 
@@ -120,6 +178,12 @@ export async function onRequestPost(context) {
 
         const key = `${printName}__${startTime}`;
 
+        const existingKey = findExistingOverrideKey(lib.historyOverrides, printName, startTime, DUPLICATE_TOLERANCE_MS);
+
+        if (existingKey) {
+            return jsonResponse({ ok: true, alreadyCovered: existingKey });
+        }
+
         lib.historyOverrides[key] = {
             details: details.map((d) => ({
                 material: String(d.material).trim(),
@@ -146,6 +210,12 @@ export async function onRequestPost(context) {
     const lib = raw ? { ...emptyLibrary(), ...JSON.parse(raw) } : emptyLibrary();
 
     const key = `${printName}__${startTime}`;
+
+    const existingKey = findExistingOverrideKey(lib.historyOverrides, printName, startTime, DUPLICATE_TOLERANCE_MS);
+
+    if (existingKey) {
+        return jsonResponse({ ok: true, alreadyCovered: existingKey });
+    }
 
     lib.historyOverrides[key] = {
         material: String(material).trim(),

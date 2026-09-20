@@ -3202,6 +3202,35 @@ function formatAsDeviceLocalTime(isoString)
         + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+// See functions/api/gcode-sync.js's own findExistingOverrideKey for the
+// server-side mirror of this exact check, and its comment for the live
+// incident (two real PETG prints double-deducted the same day) this
+// prevents. This client-side copy is needed because recoverOrphanedTasks
+// below and gcode-sync.js write historyOverrides through two completely
+// separate paths (a browser-side whole-library save vs a server-side
+// script POST) - neither can see the other's already-written correction
+// without checking the shared data first, and they derive their own
+// timestamp for the same print from two different sources (Task API's
+// startTime here vs the live snapshot's currentStart there) that don't
+// always agree to the second.
+function findNearbyHistoryOverrideKey(historyOverrides, printName, startMs, toleranceMs)
+{
+    for (const key of Object.keys(historyOverrides))
+    {
+        const sep = key.lastIndexOf("__");
+
+        if (sep === -1 || key.slice(0, sep) !== printName)
+            continue;
+
+        const existing = parseDeviceTime(key.slice(sep + 2));
+
+        if (existing && Math.abs(existing.getTime() - startMs) <= toleranceMs)
+            return key;
+    }
+
+    return null;
+}
+
 // Safety net for a print that finishes, but scrolls off the device's own
 // ~20-slot rolling history buffer before ever being processed - normally
 // impossible to reach (processFilamentDeductions runs on every 5s tick,
@@ -3287,7 +3316,14 @@ async function recoverOrphanedTasks(deviceHistory)
                 .filter(d => d.type && d.color && typeof d.weight === "number")
                 .map(d => ({ material: d.type, colorHex: d.color.slice(0, 6).toUpperCase(), weight: d.weight }));
 
-            if (start && end && details.length > 0)
+            // Already corrected via the live gcode-sync path (server-side,
+            // near-instant) under a very slightly different timestamp -
+            // see findNearbyHistoryOverrideKey's own comment. Don't create
+            // a second override/deduction for the same print; recovered
+            // above already guards against rechecking this taskId forever.
+            const nearbyKey = findNearbyHistoryOverrideKey(filamentLibrary.historyOverrides, task.title, startMs, 10 * 60 * 1000);
+
+            if (start && end && details.length > 0 && !nearbyKey)
             {
                 const key = `${task.title}__${start}`;
                 const durationSeconds = Math.round((endMs - startMs) / 1000);
