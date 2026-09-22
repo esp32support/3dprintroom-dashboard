@@ -1,16 +1,16 @@
-name: TEMP diag magio 2
+name: TEMP apply refund 2
 
 on:
   workflow_dispatch:
 
 jobs:
-  diag:
+  refund:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python scripts/_temp_diag_magio2.py
+      - run: python scripts/_temp_apply_refund2.py
         env:
           FILAMENT_SYNC_SECRET: ${{ secrets.FILAMENT_SYNC_SECRET }}
