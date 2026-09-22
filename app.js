@@ -3231,6 +3231,38 @@ function findNearbyHistoryOverrideKey(historyOverrides, printName, startMs, tole
     return null;
 }
 
+// Same idea as findNearbyHistoryOverrideKey above, but scanning
+// processedPrints instead of historyOverrides - catches the case where the
+// EARLIER of two same-print sightings had no override at all (a plain
+// task-amsdetail live deduction), so there was never a historyOverrides
+// entry for the later check to find. Confirmed live 2026-09-22:
+// magio_mg640_compound_gear.stl was recovered+deducted via
+// recoverOrphanedTasks() (source=task-api-recovered/override-single) at
+// 10:51:51, then the SAME print reappeared in the device's own history 24
+// seconds later at 10:52:15 - apparently a CYD reconnect re-uploading its
+// rolling buffer - and got deducted AGAIN in full under that second key
+// (source=task-amsdetail, no override involved), taking 32.94g off one
+// 16.47g print. findNearbyHistoryOverrideKey alone couldn't have caught
+// this: the second sighting never writes an override, so it never called
+// that check in the first place.
+function findNearbyProcessedKey(processedPrints, printName, startMs, toleranceMs)
+{
+    for (const key of processedPrints)
+    {
+        const sep = key.lastIndexOf("__");
+
+        if (sep === -1 || key.slice(0, sep) !== printName)
+            continue;
+
+        const existing = parseDeviceTime(key.slice(sep + 2));
+
+        if (existing && Math.abs(existing.getTime() - startMs) <= toleranceMs)
+            return key;
+    }
+
+    return null;
+}
+
 // Safety net for a print that finishes, but scrolls off the device's own
 // ~20-slot rolling history buffer before ever being processed - normally
 // impossible to reach (processFilamentDeductions runs on every 5s tick,
@@ -3318,10 +3350,19 @@ async function recoverOrphanedTasks(deviceHistory)
 
             // Already corrected via the live gcode-sync path (server-side,
             // near-instant) under a very slightly different timestamp -
-            // see findNearbyHistoryOverrideKey's own comment. Don't create
-            // a second override/deduction for the same print; recovered
-            // above already guards against rechecking this taskId forever.
-            const nearbyKey = findNearbyHistoryOverrideKey(filamentLibrary.historyOverrides, task.title, startMs, 10 * 60 * 1000);
+            // see findNearbyHistoryOverrideKey's own comment. Also check
+            // processedPrints directly (not just historyOverrides): a
+            // plain task-amsdetail live deduction never writes an
+            // override at all, so a print already fully deducted that way
+            // would otherwise be invisible to this check and get
+            // recovered+deducted a second time here under this task's own
+            // (different) timestamp - the same bug class, opposite order
+            // from the one findNearbyProcessedKey's own comment documents.
+            // Don't create a second override/deduction for the same
+            // print; recovered above already guards against rechecking
+            // this taskId forever.
+            const nearbyKey = findNearbyHistoryOverrideKey(filamentLibrary.historyOverrides, task.title, startMs, 10 * 60 * 1000)
+                || findNearbyProcessedKey(filamentLibrary.processedPrints, task.title, startMs, 10 * 60 * 1000);
 
             if (start && end && details.length > 0 && !nearbyKey)
             {
@@ -5291,6 +5332,41 @@ async function processFilamentDeductions(items)
         // of 0 and touches nothing.
         if (filamentLibrary.processedPrints.includes(key) && !override)
             return;
+
+        // This exact key is unprocessed, but the SAME print may already
+        // have been fully processed under a nearby-but-different key from
+        // another source (see findNearbyProcessedKey's own comment for the
+        // live incident this closes). Only relevant when there's no
+        // override for THIS key - an override is a deliberate correction
+        // and must always be allowed through, even if an older
+        // uncorrected entry for the same print sits nearby.
+        if (!override)
+        {
+            const startMs = parseDeviceTime(item.start)?.getTime();
+            const nearbyKey = startMs != null
+                ? findNearbyProcessedKey(filamentLibrary.processedPrints, item.name, startMs, 10 * 60 * 1000)
+                : null;
+
+            if (nearbyKey)
+            {
+                if (!filamentLibrary.processedPrints.includes(key))
+                {
+                    auditSpoolChange({
+                        printKey: key,
+                        printName: item.name,
+                        printStart: item.start,
+                        event: "skip",
+                        reason: `already processed under a nearby timestamp (${nearbyKey}) - same print reported twice by two different sources`,
+                        source: "duplicate-key-guard",
+                    });
+
+                    filamentLibrary.processedPrints.push(key);
+                    changed = true;
+                }
+
+                return;
+            }
+        }
 
         const usage = parseTrayUsage(item.trays);
         const matchedTask = usage.length === 0 ? matchTaskForHistoryItem(item) : null;
