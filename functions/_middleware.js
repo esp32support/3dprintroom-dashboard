@@ -24,7 +24,7 @@ const PUBLIC_PATHS = new Set([
     "/api/gcode-sync", "/api/device-filament",
     "/api/printer-watch-state", "/api/printer-task",
     "/api/power-history", "/api/power-per-print", "/api/deduction-audit",
-    "/api/fix-slot-assignment", "/api/temp-refund-fix",
+    "/api/fix-slot-assignment",
 ]);
 
 export async function onRequest(context) {
