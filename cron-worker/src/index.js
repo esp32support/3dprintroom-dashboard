@@ -35,6 +35,7 @@ const FILAMENT_URL = `${BASE_URL}/api/device-filament`;
 const POWER_PER_PRINT_URL = `${BASE_URL}/api/power-per-print`;
 const HISTORY_URL = `${BASE_URL}/api/power-history`;
 const AUTO_OFF_CONFIG_URL = `${BASE_URL}/api/auto-off-config`;
+const AUTO_OFF_STATE_URL = `${BASE_URL}/api/auto-off-state`;
 const TRIGGER_POWER_URL = `${BASE_URL}/api/trigger-power`;
 
 // Cloudflare's bot protection blocks generic/default client User-Agents
@@ -366,12 +367,14 @@ async function runPowerWatch(env, snapshots) {
 // Cuts the plug once the printer has sat idle-eligible (FINISH, FAILED,
 // or IDLE - see printer-watch-state.js's idleSince tracking and its own
 // comment for why FINISH/FAILED are included, not just literal IDLE) for
-// at least the configured idleMinutes. Deliberately reads idleSince from
-// that endpoint rather than computing it here - it's the single
-// authoritative source, kept correct across restarts of this Worker and
-// regardless of which tick actually observed the transition. PAUSE and
-// PREPARE/SLICING still never count - a paused or actively-starting
-// print must never trigger this.
+// at least the configured idleMinutes AND the relay has been continuously
+// on for at least that long too (see auto-off-state.js's own comment for
+// why: idleSince only resets when a NEW PRINT starts, so a manual
+// re-enable after an auto-off left the old idle timer running in the
+// background, already past threshold, and got cut right back off within
+// minutes - confirmed live 2026-09-24). PAUSE and PREPARE/SLICING still
+// never count as idle-eligible - a paused or actively-starting print must
+// never trigger this.
 async function runAutoOff(env, snapshots) {
     let config;
 
@@ -380,6 +383,43 @@ async function runAutoOff(env, snapshots) {
     } catch (e) {
         console.log(`auto-off: config fetch failed: ${e.message}`);
         return;
+    }
+
+    const powerSnapshot = snapshots[POWER_TOPIC];
+    const relayState = powerSnapshot && powerSnapshot.relayState;
+
+    // relayOnSince tracking runs regardless of whether the feature is
+    // currently enabled or idle-eligible, so it's always accurate from
+    // the moment anyone flips the relay - not just from whenever
+    // auto-off itself happens to be turned on.
+    let autoOffState;
+
+    try {
+        autoOffState = await apiGet(AUTO_OFF_STATE_URL, env.FILAMENT_SYNC_SECRET);
+    } catch (e) {
+        console.log(`auto-off: state fetch failed: ${e.message}`);
+        autoOffState = { relayOnSince: null };
+    }
+
+    let relayOnSince = autoOffState.relayOnSince;
+    let stateChanged = false;
+
+    if (relayState === "ON") {
+        if (!relayOnSince) {
+            relayOnSince = new Date().toISOString();
+            stateChanged = true;
+        }
+    } else if (relayOnSince) {
+        relayOnSince = null;
+        stateChanged = true;
+    }
+
+    if (stateChanged) {
+        try {
+            await apiPost(AUTO_OFF_STATE_URL, env.FILAMENT_SYNC_SECRET, { relayOnSince });
+        } catch (e) {
+            console.log(`auto-off: state write failed: ${e.message}`);
+        }
     }
 
     if (!config.enabled) {
@@ -402,19 +442,21 @@ async function runAutoOff(env, snapshots) {
         return;
     }
 
-    // Only act if the plug is confirmed ON - avoids re-publishing an Off
-    // command every 2 minutes once it's already off, and avoids acting on
-    // a missing/stale power snapshot as if it meant anything.
-    const powerSnapshot = snapshots[POWER_TOPIC];
+    if (relayState !== "ON") {
+        console.log(`auto-off: threshold reached but relay isn't reporting ON (relayState=${JSON.stringify(relayState)}) - nothing to do`);
+        return;
+    }
 
-    if (!powerSnapshot || powerSnapshot.relayState !== "ON") {
-        console.log(`auto-off: threshold reached but relay isn't reporting ON (relayState=${JSON.stringify(powerSnapshot && powerSnapshot.relayState)}) - nothing to do`);
+    const relayOnMs = Date.now() - new Date(relayOnSince).getTime();
+
+    if (relayOnMs < thresholdMs) {
+        console.log(`auto-off: idle ${Math.round(idleMs / 60000)}m OK, but relay has only been on ${Math.round(relayOnMs / 60000)}m of ${config.idleMinutes}m - not yet (fresh window since it was last turned on)`);
         return;
     }
 
     try {
         const result = await apiPost(TRIGGER_POWER_URL, env.FILAMENT_SYNC_SECRET, { state: "Off" });
-        console.log(`auto-off: idle for ${Math.round(idleMs / 60000)}m >= ${config.idleMinutes}m threshold - powered off: ${JSON.stringify(result)}`);
+        console.log(`auto-off: idle for ${Math.round(idleMs / 60000)}m and relay on for ${Math.round(relayOnMs / 60000)}m, both >= ${config.idleMinutes}m threshold - powered off: ${JSON.stringify(result)}`);
     } catch (e) {
         console.log(`auto-off: power-off request failed: ${e.message}`);
     }
