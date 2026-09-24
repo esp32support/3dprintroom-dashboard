@@ -1,10 +1,16 @@
 // POST /api/trigger-power  { "state": "On" | "Off" | "Toggle" }
-// Publishes a remote plug power command over MQTT. Gated by the session
-// cookie (_middleware.js already blocks unauthenticated requests to this
-// route) - reuses REBOOT_PASSWORD device-side (see mqtt_manager.cpp's
-// handlePowerCommand) rather than a dedicated secret, since both commands
-// are triggered from the same login-gated dashboard button and share the
-// same trust boundary.
+// Publishes a remote plug power command over MQTT. Reuses REBOOT_PASSWORD
+// device-side (see mqtt_manager.cpp's handlePowerCommand) rather than a
+// dedicated secret, since both commands share the same trust boundary.
+//
+// This path is NOT in _middleware.js's PUBLIC_PATHS allowlist, so a
+// session cookie normally gates it (the dashboard's own "Turn ON/OFF"
+// button). Also accepts X-Sync-Secret so cron-worker's auto-off-when-idle
+// check (see auto-off-config.js) can cut power itself with no browser
+// involved - same dual-auth idea as power-history.js, just checked here
+// instead of via the middleware since this route stays cookie-gated for
+// everyone else.
+import { verifySessionCookie } from "../_lib/session.js";
 import { mqttPublishOnce } from "../_lib/mqtt-mini.js";
 
 function jsonResponse(obj, status = 200) {
@@ -16,8 +22,23 @@ function jsonResponse(obj, status = 200) {
 
 const VALID_STATES = new Set(["On", "Off", "Toggle"]);
 
+async function checkSessionOrSyncAuth(request, env) {
+    const provided = request.headers.get("X-Sync-Secret");
+
+    if (provided) {
+        return provided === env.LOCAL_SYNC_SECRET;
+    }
+
+    const cookie = request.headers.get("Cookie");
+    return verifySessionCookie(cookie, env.ADMIN_USERNAME, env.SESSION_SECRET);
+}
+
 export async function onRequestPost(context) {
     const { request, env } = context;
+
+    if (!(await checkSessionOrSyncAuth(request, env))) {
+        return jsonResponse({ error: "unauthorized" }, 401);
+    }
 
     let state;
 

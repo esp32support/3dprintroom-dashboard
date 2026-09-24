@@ -7092,3 +7092,110 @@ if (timerGlobalToggleBtn)
     });
 }
 
+// ===== Auto power-off when idle =====
+// Config lives server-side (see functions/api/auto-off-config.js); the
+// actual idle-timeout check and power-off happen in cron-worker every 2
+// minutes, not here - this is just the settings UI. Deliberately counts
+// only the printer's literal IDLE gcode_state (never "anything that
+// isn't RUNNING") - see printer-watch-state.js's idleSince comment for
+// why a paused or finishing print must not start this countdown.
+
+async function loadAutoOffConfig()
+{
+    const stateEl = byId("autoOffState");
+    const enableEl = byId("autoOffEnable");
+    const valueEl = byId("autoOffValue");
+    const unitEl = byId("autoOffUnit");
+
+    if (!enableEl || !valueEl || !unitEl)
+        return;
+
+    try
+    {
+        const res = await fetch("/api/auto-off-config");
+
+        if (!res.ok)
+            return;
+
+        const config = await res.json();
+
+        enableEl.checked = !!config.enabled;
+
+        // Stored in minutes - show as whole hours when it divides evenly
+        // and is at least 60, otherwise minutes, matching how someone
+        // would naturally have entered it.
+        if (config.idleMinutes >= 60 && config.idleMinutes % 60 === 0)
+        {
+            valueEl.value = config.idleMinutes / 60;
+            unitEl.value = "hours";
+        }
+        else
+        {
+            valueEl.value = config.idleMinutes;
+            unitEl.value = "minutes";
+        }
+
+        if (stateEl)
+        {
+            stateEl.textContent = config.enabled
+                ? `ON (after ${config.idleMinutes >= 60 && config.idleMinutes % 60 === 0 ? config.idleMinutes / 60 + "h" : config.idleMinutes + "m"} idle)`
+                : "OFF";
+        }
+    }
+    catch (err)
+    {
+        console.log("auto-off-config fetch failed", err);
+    }
+}
+
+loadAutoOffConfig();
+
+const autoOffSaveBtn = byId("autoOffSaveBtn");
+
+if (autoOffSaveBtn)
+{
+    autoOffSaveBtn.addEventListener("click", async () =>
+    {
+        const enableEl = byId("autoOffEnable");
+        const valueEl = byId("autoOffValue");
+        const unitEl = byId("autoOffUnit");
+        const resultEl = byId("autoOffResult");
+
+        const rawValue = Number(valueEl.value);
+
+        if (!Number.isFinite(rawValue) || rawValue < 1)
+        {
+            resultEl.textContent = "Enter a value of at least 1.";
+            return;
+        }
+
+        const idleMinutes = unitEl.value === "hours" ? rawValue * 60 : rawValue;
+
+        autoOffSaveBtn.disabled = true;
+        resultEl.textContent = "Saving...";
+
+        try
+        {
+            const res = await fetch("/api/auto-off-config", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ enabled: enableEl.checked, idleMinutes }),
+            });
+            const data = await res.json();
+
+            resultEl.textContent = res.ok ? "Saved." : `Error: ${data.error || res.statusText}`;
+
+            if (res.ok)
+                await loadAutoOffConfig();
+        }
+        catch (err)
+        {
+            resultEl.textContent = `Request failed: ${err.message}`;
+        }
+        finally
+        {
+            autoOffSaveBtn.disabled = false;
+        }
+    });
+}
+

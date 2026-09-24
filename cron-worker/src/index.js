@@ -34,6 +34,8 @@ const SYNC_URL = `${BASE_URL}/api/gcode-sync`;
 const FILAMENT_URL = `${BASE_URL}/api/device-filament`;
 const POWER_PER_PRINT_URL = `${BASE_URL}/api/power-per-print`;
 const HISTORY_URL = `${BASE_URL}/api/power-history`;
+const AUTO_OFF_CONFIG_URL = `${BASE_URL}/api/auto-off-config`;
+const TRIGGER_POWER_URL = `${BASE_URL}/api/trigger-power`;
 
 // Cloudflare's bot protection blocks generic/default client User-Agents
 // outright (403) - same fix the Python scripts already needed.
@@ -359,6 +361,64 @@ async function runPowerWatch(env, snapshots) {
     console.log(`recorded sample for ${dateStr}: ${w}W ${v}V ${a}A today=${kwh}kWh -> ${JSON.stringify(result)}`);
 }
 
+// ===== auto power-off when idle =====
+
+// Cuts the plug once the printer has sat in the literal IDLE gcode_state
+// (see printer-watch-state.js's idleSince tracking) for at least the
+// configured idleMinutes. Deliberately reads idleSince from that
+// endpoint rather than computing it here - it's the single authoritative
+// source, kept correct across restarts of this Worker and regardless of
+// which tick actually observed the RUNNING->IDLE transition. Explicit
+// user requirement: IDLE only, never "anything that isn't RUNNING" - a
+// paused or finishing print must never trigger this.
+async function runAutoOff(env, snapshots) {
+    let config;
+
+    try {
+        config = await apiGet(AUTO_OFF_CONFIG_URL, env.FILAMENT_SYNC_SECRET);
+    } catch (e) {
+        console.log(`auto-off: config fetch failed: ${e.message}`);
+        return;
+    }
+
+    if (!config.enabled) {
+        console.log("auto-off: disabled - skipping");
+        return;
+    }
+
+    const state = await apiGet(STATE_URL, env.FILAMENT_SYNC_SECRET);
+
+    if (!state.idleSince) {
+        console.log(`auto-off: not idle (gcodeState=${JSON.stringify(state.gcodeState)}) - skipping`);
+        return;
+    }
+
+    const idleMs = Date.now() - new Date(state.idleSince).getTime();
+    const thresholdMs = config.idleMinutes * 60 * 1000;
+
+    if (idleMs < thresholdMs) {
+        console.log(`auto-off: idle ${Math.round(idleMs / 60000)}m of ${config.idleMinutes}m threshold - not yet`);
+        return;
+    }
+
+    // Only act if the plug is confirmed ON - avoids re-publishing an Off
+    // command every 2 minutes once it's already off, and avoids acting on
+    // a missing/stale power snapshot as if it meant anything.
+    const powerSnapshot = snapshots[POWER_TOPIC];
+
+    if (!powerSnapshot || powerSnapshot.relayState !== "ON") {
+        console.log(`auto-off: threshold reached but relay isn't reporting ON (relayState=${JSON.stringify(powerSnapshot && powerSnapshot.relayState)}) - nothing to do`);
+        return;
+    }
+
+    try {
+        const result = await apiPost(TRIGGER_POWER_URL, env.FILAMENT_SYNC_SECRET, { state: "Off" });
+        console.log(`auto-off: idle for ${Math.round(idleMs / 60000)}m >= ${config.idleMinutes}m threshold - powered off: ${JSON.stringify(result)}`);
+    } catch (e) {
+        console.log(`auto-off: power-off request failed: ${e.message}`);
+    }
+}
+
 // ===== scheduled entry point =====
 
 async function runAll(env) {
@@ -394,6 +454,12 @@ async function runAll(env) {
         await runPowerWatch(env, snapshots);
     } catch (e) {
         console.log(`power-watch failed: ${e.message}`);
+    }
+
+    try {
+        await runAutoOff(env, snapshots);
+    } catch (e) {
+        console.log(`auto-off failed: ${e.message}`);
     }
 }
 

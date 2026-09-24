@@ -21,7 +21,7 @@ function jsonResponse(obj, status = 200) {
 }
 
 function emptyState() {
-    return { gcodeState: "", subtaskName: "", currentStart: "", trayNowSeen: [], startTotalKwh: null };
+    return { gcodeState: "", subtaskName: "", currentStart: "", trayNowSeen: [], startTotalKwh: null, idleSince: null };
 }
 
 function checkAuth(request, env) {
@@ -69,6 +69,32 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
+    // idleSince: when the printer most recently entered the literal IDLE
+    // gcode_state, tracked authoritatively here (not trusted from the
+    // caller) so the auto-off-when-idle feature (see auto-off-config.js
+    // and cron-worker's runAutoOff) has one honest source for "how long
+    // has it actually been idle" regardless of which script/Worker posts
+    // a given tick.
+    //
+    // Deliberately gated on gcodeState === "IDLE" specifically, NOT on
+    // "anything that isn't RUNNING" - explicit user requirement: PAUSE,
+    // FINISH, FAILED, PREPARE, SLICING etc. must NOT start (or continue)
+    // the idle countdown just because they aren't RUNNING. A paused print
+    // sitting for 40 minutes, or a FINISH state lingering briefly before
+    // the device reports IDLE, must never be mistaken for "safe to power
+    // off" - only the printer's own genuine idle state counts.
+    const existingRaw = await env.FILAMENT_KV.get(KV_KEY);
+    const existing = existingRaw ? { ...emptyState(), ...JSON.parse(existingRaw) } : emptyState();
+    const gcodeState = String(body.gcodeState || "");
+
+    let idleSince = existing.idleSince || null;
+
+    if (gcodeState === "IDLE") {
+        if (!idleSince) idleSince = new Date().toISOString();
+    } else {
+        idleSince = null;
+    }
+
     // startTotalKwh: the plug's cumulative kWh counter as of this print's
     // start, captured by print_watch.py so it survives between its own
     // stateless cron runs until the matching FINISH diffs against it (see
@@ -92,11 +118,12 @@ export async function onRequestPost(context) {
         : null;
 
     const state = {
-        gcodeState: String(body.gcodeState || ""),
+        gcodeState,
         subtaskName: String(body.subtaskName || ""),
         currentStart: String(body.currentStart || ""),
         trayNowSeen: Array.isArray(body.trayNowSeen) ? body.trayNowSeen : [],
         startTotalKwh,
+        idleSince,
     };
 
     await env.FILAMENT_KV.put(KV_KEY, JSON.stringify(state));

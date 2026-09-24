@@ -15,16 +15,17 @@ import { verifySessionCookie } from "./_lib/session.js";
 // no browser session cookie - each enforces its own X-Sync-Secret check
 // internally, so they're allowlisted here purely to let the request reach
 // that check at all, not to skip authentication entirely. /api/printer-task,
-// /api/power-history, /api/power-per-print and /api/deduction-audit are
-// dual-use (the dashboard's own UI calls them with a session cookie, a
-// script calls them with X-Sync-Secret) - also allowlisted here since
-// they check auth themselves either way, for the same reason.
+// /api/power-history, /api/power-per-print, /api/deduction-audit,
+// /api/auto-off-config and /api/trigger-power are dual-use (the
+// dashboard's own UI calls them with a session cookie, a script calls
+// them with X-Sync-Secret) - also allowlisted here since they check auth
+// themselves either way, for the same reason.
 const PUBLIC_PATHS = new Set([
     "/login", "/login.html", "/api/login",
     "/api/gcode-sync", "/api/device-filament",
     "/api/printer-watch-state", "/api/printer-task",
     "/api/power-history", "/api/power-per-print", "/api/deduction-audit",
-    "/api/fix-slot-assignment",
+    "/api/fix-slot-assignment", "/api/auto-off-config", "/api/trigger-power",
 ]);
 
 export async function onRequest(context) {

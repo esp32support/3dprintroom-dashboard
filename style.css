@@ -1523,6 +1523,15 @@ dd{
     margin-top:14px;
 }
 
+.autoOffEnableLabel{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:13px;
+    color:var(--muted);
+    white-space:nowrap;
+}
+
 .timerGlobalWarning{
     margin:10px 0 0;
     padding:8px 10px;

@@ -782,6 +782,28 @@
                     <div class="timerSlotsList" id="timerSlotsList"></div>
                 </div>
 
+                <div class="timerSection" id="autoOffSection">
+                    <div class="powerToggleRow">
+                        <span>Auto power-off when idle: <strong id="autoOffState">--</strong></span>
+                        <label class="autoOffEnableLabel">
+                            <input type="checkbox" id="autoOffEnable"> Enabled
+                        </label>
+                    </div>
+                    <div class="timerFieldRow">
+                        <label>After
+                            <input type="number" id="autoOffValue" class="timerInput" min="1" step="1" style="width:70px">
+                            <select id="autoOffUnit" class="timerInput">
+                                <option value="minutes">Minutes</option>
+                                <option value="hours">Hours</option>
+                            </select>
+                            idle
+                        </label>
+                        <button type="button" class="infoBtn" id="autoOffSaveBtn">Save</button>
+                    </div>
+                    <p class="hint">Only counts once the printer reports IDLE - a paused or finishing print never triggers this.</p>
+                    <p class="watchdogReason" id="autoOffResult"></p>
+                </div>
+
             </section>
 
             <p class="hint powerDeviceInfo" id="powerDeviceInfo">--</p>
