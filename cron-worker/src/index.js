@@ -363,14 +363,15 @@ async function runPowerWatch(env, snapshots) {
 
 // ===== auto power-off when idle =====
 
-// Cuts the plug once the printer has sat in the literal IDLE gcode_state
-// (see printer-watch-state.js's idleSince tracking) for at least the
-// configured idleMinutes. Deliberately reads idleSince from that
-// endpoint rather than computing it here - it's the single authoritative
-// source, kept correct across restarts of this Worker and regardless of
-// which tick actually observed the RUNNING->IDLE transition. Explicit
-// user requirement: IDLE only, never "anything that isn't RUNNING" - a
-// paused or finishing print must never trigger this.
+// Cuts the plug once the printer has sat idle-eligible (FINISH, FAILED,
+// or IDLE - see printer-watch-state.js's idleSince tracking and its own
+// comment for why FINISH/FAILED are included, not just literal IDLE) for
+// at least the configured idleMinutes. Deliberately reads idleSince from
+// that endpoint rather than computing it here - it's the single
+// authoritative source, kept correct across restarts of this Worker and
+// regardless of which tick actually observed the transition. PAUSE and
+// PREPARE/SLICING still never count - a paused or actively-starting
+// print must never trigger this.
 async function runAutoOff(env, snapshots) {
     let config;
 

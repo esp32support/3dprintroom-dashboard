@@ -69,27 +69,39 @@ export async function onRequestPost(context) {
         return jsonResponse({ error: "invalid JSON body" }, 400);
     }
 
-    // idleSince: when the printer most recently entered the literal IDLE
+    // idleSince: when the printer most recently entered an idle-eligible
     // gcode_state, tracked authoritatively here (not trusted from the
     // caller) so the auto-off-when-idle feature (see auto-off-config.js
     // and cron-worker's runAutoOff) has one honest source for "how long
     // has it actually been idle" regardless of which script/Worker posts
     // a given tick.
     //
-    // Deliberately gated on gcodeState === "IDLE" specifically, NOT on
-    // "anything that isn't RUNNING" - explicit user requirement: PAUSE,
-    // FINISH, FAILED, PREPARE, SLICING etc. must NOT start (or continue)
-    // the idle countdown just because they aren't RUNNING. A paused print
-    // sitting for 40 minutes, or a FINISH state lingering briefly before
-    // the device reports IDLE, must never be mistaken for "safe to power
-    // off" - only the printer's own genuine idle state counts.
+    // Idle-eligible = FINISH, FAILED, or IDLE. NOT "anything that isn't
+    // RUNNING" - PAUSE and PREPARE/SLICING still correctly never count
+    // (a paused mid-job print must never be mistaken for "safe to power
+    // off"). FINISH/FAILED were deliberately excluded in an earlier
+    // version of this logic on the assumption that the raw gcode_state
+    // eventually settles to a literal "IDLE" on its own after a completed
+    // print - confirmed WRONG live 2026-09-24: watched cron-worker's own
+    // logs across a 10+ minute real idle period and the raw gcode_state
+    // stayed "FINISH" the entire time, then jumped straight to "RUNNING"
+    // the moment the next print started, never once reporting "IDLE".
+    // Root cause confirmed in 3DPrintRoomMonitorDisplay's own firmware
+    // (bambu_client.cpp): the "IDLE" a user sees on the CYD's screen or
+    // this dashboard is a COSMETIC label synthesized independently in two
+    // separate places (the firmware's own `holdingLastJob`, and this
+    // repo's app.js) from FINISH/FAILED + a 2-minute display-hold timer -
+    // neither ever writes that back into the actual gcode_state field
+    // Bambu publishes over MQTT, which is the only thing available here.
+    // So gating on literal "IDLE" alone meant this feature could
+    // essentially never fire after a normal completed print.
     const existingRaw = await env.FILAMENT_KV.get(KV_KEY);
     const existing = existingRaw ? { ...emptyState(), ...JSON.parse(existingRaw) } : emptyState();
     const gcodeState = String(body.gcodeState || "");
 
     let idleSince = existing.idleSince || null;
 
-    if (gcodeState === "IDLE") {
+    if (gcodeState === "IDLE" || gcodeState === "FINISH" || gcodeState === "FAILED") {
         if (!idleSince) idleSince = new Date().toISOString();
     } else {
         idleSince = null;

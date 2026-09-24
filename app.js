@@ -7095,10 +7095,11 @@ if (timerGlobalToggleBtn)
 // ===== Auto power-off when idle =====
 // Config lives server-side (see functions/api/auto-off-config.js); the
 // actual idle-timeout check and power-off happen in cron-worker every 2
-// minutes, not here - this is just the settings UI. Deliberately counts
-// only the printer's literal IDLE gcode_state (never "anything that
-// isn't RUNNING") - see printer-watch-state.js's idleSince comment for
-// why a paused or finishing print must not start this countdown.
+// minutes, not here - this is just the settings UI. Counts FINISH,
+// FAILED, or IDLE as idle-eligible (never PAUSE/PREPARE) - see
+// printer-watch-state.js's idleSince comment for why literal IDLE alone
+// isn't enough (confirmed live: the raw gcode_state never actually
+// reaches "IDLE" after a normal finish on this printer).
 
 async function loadAutoOffConfig()
 {
