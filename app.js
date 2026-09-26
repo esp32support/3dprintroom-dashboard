@@ -1410,14 +1410,19 @@ function renderPrintHistory(items)
             ? override.layers
             : (item.outcome === "RECOVERED" ? "?" : (item.layers || 0));
 
+        // See getCorrectedHistoryTimes' own comment - display-only, never
+        // affects historyKey/deduction below, which still uses item.start
+        // unchanged.
+        const correctedTimes = getCorrectedHistoryTimes(item);
+
         const sub = document.createElement("small");
-        sub.textContent = `${displayLayers} layers - ${formatDeviceDate(item.start)}`;
+        sub.textContent = `${displayLayers} layers - ${formatDeviceDate(correctedTimes.start)}`;
         left.appendChild(sub);
 
         const time = document.createElement("span");
         time.textContent = (override && typeof override.durationSeconds === "number")
             ? formatTime(override.durationSeconds)
-            : printDuration(item.start, item.end);
+            : printDuration(correctedTimes.start, correctedTimes.end);
 
         row.appendChild(left);
         row.appendChild(time);
@@ -1483,7 +1488,9 @@ function renderPrintHistory(items)
         detail.appendChild(fixBtn);
 
         const times = document.createElement("p");
-        times.textContent = `Started ${formatDeviceDate(item.start)} - Ended ${formatDeviceDate(item.end)}`;
+        times.textContent = `Started ${formatDeviceDate(correctedTimes.start)} - Ended ${formatDeviceDate(correctedTimes.end)}`;
+        if (correctedTimes.corrected)
+            times.textContent += " (corrected from Task API - device's own clock missed the real start)";
         detail.appendChild(times);
 
         row.appendChild(detail);
@@ -1570,6 +1577,64 @@ function printDuration(start, end)
         return "--";
 
     return formatTime(Math.max(0, Math.round((b - a) / 1000)));
+}
+
+// Corrects the DISPLAYED start/end/duration for a history entry whose
+// device-recorded values are implausible - purely a rendering fix, never
+// writes anything anywhere, and never touches the historyKey/deductionLog/
+// historyOverrides/processedPrints keys (which all still key off the
+// device's own, unchanged item.start) - deliberately, to avoid any risk
+// of the nearby-key double-deduction bug class fixed elsewhere in this
+// project (see filament-library.js's stripDuplicateDeductions).
+// Confirmed live 2026-09-26: a print that started while the Bambu Cloud
+// connection was stuck (see bambu_client.cpp) only had its RUNNING
+// transition observed once the connection recovered, right near the
+// print's real end - historyOnPrintStart() then recorded THAT moment as
+// the start, producing an absurd "22 second" print that actually took
+// ~11 minutes. Task API's own startTime/endTime come from Bambu's cloud
+// side, unaffected by the device's own tracking gap, so this prefers
+// Task API's duration whenever it's wildly larger than the device's own -
+// a normal print's two independently-sourced durations should agree
+// within a few seconds.
+function getCorrectedHistoryTimes(item)
+{
+    const fallback = { start: item.start, end: item.end, corrected: false };
+
+    const deviceStart = parseDeviceTime(item.start);
+    const deviceEnd = parseDeviceTime(item.end);
+
+    if (!deviceStart || !deviceEnd)
+        return fallback;
+
+    const match = matchTaskForHistoryItem(item);
+
+    if (!match || !match.startTime || !match.endTime)
+        return fallback;
+
+    const taskStart = new Date(match.startTime);
+    const taskEnd = new Date(match.endTime);
+
+    if (isNaN(taskStart.getTime()) || isNaN(taskEnd.getTime()))
+        return fallback;
+
+    const deviceDurationSec = (deviceEnd - deviceStart) / 1000;
+    const taskDurationSec = (taskEnd - taskStart) / 1000;
+    const diffSec = taskDurationSec - deviceDurationSec;
+
+    // Threshold: device duration under half of Task API's AND at least
+    // 60s of absolute difference - avoids "correcting" short prints where
+    // a few seconds of ordinary reporting drift would otherwise look like
+    // a big ratio.
+    if (taskDurationSec <= 0 || deviceDurationSec >= taskDurationSec * 0.5 || diffSec < 60)
+        return fallback;
+
+    const correctedStart = formatAsDeviceLocalTime(match.startTime);
+    const correctedEnd = formatAsDeviceLocalTime(match.endTime);
+
+    if (!correctedStart || !correctedEnd)
+        return fallback;
+
+    return { start: correctedStart, end: correctedEnd, corrected: true };
 }
 
 // ===== Historical filament spend (Today / Yesterday / This Week) =====
