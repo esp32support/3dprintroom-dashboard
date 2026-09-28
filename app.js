@@ -4920,10 +4920,71 @@ async function syncAmsToLibrary(trays)
 // print's several hex entries are legitimate by design, not stale
 // duplicates) and only refunds a hex that doesn't fuzzy-match what the
 // override says is actually correct.
+// Cheap, non-mutating scan for "does any deductionLog row look stale
+// against its own print's override" - same detection logic
+// reconcileDeductionLog's own mutating pass uses below, factored out so
+// it can run cheaply against a possibly-stale in-memory snapshot first
+// (see reconcileDeductionLog's own comment for why that matters).
+function hasStaleDeductionRows(library)
+{
+    for (const [key, log] of Object.entries(library.deductionLog || {}))
+    {
+        const override = library.historyOverrides[key];
+
+        if (!override)
+            continue;
+
+        const correctHexes = new Set(
+            Array.isArray(override.details)
+                ? override.details.filter(d => typeof d.colorHex === "string").map(d => d.colorHex.toUpperCase())
+                : (typeof override.colorHex === "string" ? [override.colorHex.toUpperCase()] : []));
+
+        if (correctHexes.size === 0)
+            continue;
+
+        for (const hex of Object.keys(log))
+        {
+            if (!correctHexes.has(hex) && gramsOf(log[hex]))
+                return true;
+        }
+    }
+
+    return false;
+}
+
 async function reconcileDeductionLog()
 {
     if (!filamentLibraryLoaded)
         return;
+
+    // Cheap pre-check on whatever this tab's in-memory copy currently
+    // holds, BEFORE paying for a network reload - this runs on EVERY live
+    // printer MQTT tick (see updatePrinter's own call, every ~5s), so an
+    // unconditional reload here would mean a filament-library GET (plus a
+    // full re-render) every ~5 seconds for as long as the tab stays open,
+    // even when there's never anything to fix.
+    if (!hasStaleDeductionRows(filamentLibrary))
+        return;
+
+    // Something LOOKS stale - but only in this tab's own possibly-outdated
+    // snapshot. Refresh before actually mutating/saving, exactly like
+    // processFilamentDeductions (its sibling a few lines above this
+    // function's own call site) already does before ITS mutation pass, for
+    // the identical reason: without this, a tab whose own in-memory
+    // filamentLibrary ever fell behind the true KV state (another tab or
+    // script already corrected the same print) would keep "discovering"
+    // the same already-fixed stale row in its own frozen copy forever, and
+    // keep re-writing the identical refund every ~5 seconds indefinitely.
+    // Confirmed live 2026-09-28: exactly this loop, the same delta
+    // (143.46g -> 160.52g) written over and over for at least several
+    // minutes straight - a meaningful contributor to that day's KV daily
+    // write quota usage, and the same bug class (an open tab silently
+    // hammering KV from a stale in-memory snapshot) already documented
+    // from the 2026-09-10 incident, apparently never actually fixed at the
+    // root back then. The mutating pass below re-derives everything from
+    // this fresh copy, so if the reload shows it's already fixed, `changed`
+    // simply stays false and nothing gets written.
+    await loadFilamentLibrary();
 
     let changed = false;
 
