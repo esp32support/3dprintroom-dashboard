@@ -27,7 +27,7 @@ const PUBLIC_PATHS = new Set([
     "/api/printer-watch-state", "/api/printer-task",
     "/api/power-history", "/api/power-per-print", "/api/deduction-audit",
     "/api/fix-slot-assignment", "/api/auto-off-config", "/api/trigger-power",
-    "/api/auto-off-state",
+    "/api/auto-off-state", "/api/_temp-printer-snapshot",
 ]);
 
 export async function onRequest(context) {
