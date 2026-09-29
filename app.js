@@ -2597,15 +2597,27 @@ let powerHistoryPeriod = "today";
 
 const POWER_HISTORY_DAYS = { today: 1, week: 7, month: 30 };
 
-async function loadPowerHistoryCard()
+// Last full result per period, so the periodic refresh can re-read only
+// TODAY's record - past days' records never change once their UTC day is
+// over, but the old refresh re-fetched every one of them every 60s: one KV
+// read per day in the period, i.e. 31 reads/minute (~46k/day, nearly half
+// the free tier's 100k reads/day) for a tab left on the Month view.
+// Confirmed 2026-09-29 while chasing a Cloudflare "50% of daily KV limit"
+// alert.
+const powerHistoryCache = {};
+
+async function loadPowerHistoryCard({ todayOnly = false } = {})
 {
-    const days = POWER_HISTORY_DAYS[powerHistoryPeriod] || 7;
+    const period = powerHistoryPeriod;
+    const days = POWER_HISTORY_DAYS[period] || 7;
+    const cached = powerHistoryCache[period];
+    const fetchDays = todayOnly && cached ? 1 : days;
     let data, perPrintData;
 
     try
     {
         const [histRes, perPrintRes] = await Promise.all([
-            fetch(`/api/power-history?days=${days}`),
+            fetch(`/api/power-history?days=${fetchDays}`),
             fetch("/api/power-per-print"),
         ]);
         data = await histRes.json();
@@ -2616,8 +2628,22 @@ async function loadPowerHistoryCard()
         return;
     }
 
+    let records = Array.isArray(data.days) ? data.days : [];
+
+    if (fetchDays !== days)
+    {
+        // Splice the fresh day record(s) over the cached ones by date - the
+        // UTC day may have rolled over since the full load, in which case
+        // the fresh record is simply a new day at the front.
+        const fresh = new Map(records.map(r => [r.date, r]));
+        records = [...records, ...cached.filter(r => !fresh.has(r.date))]
+            .sort((a, b) => (a.date < b.date ? 1 : -1))
+            .slice(0, days);
+    }
+
+    powerHistoryCache[period] = records;
     powerPerPrintLog = Array.isArray(perPrintData?.prints) ? perPrintData.prints : [];
-    renderPowerHistoryCard(Array.isArray(data.days) ? data.days : []);
+    renderPowerHistoryCard(records);
 }
 
 function renderPowerHistoryCard(dayRecords)
@@ -5314,6 +5340,38 @@ function logSkipOnce(auditEntry, key, hex, reasonId)
     auditSpoolChange(auditEntry);
 }
 
+// True once deductionLog already holds everything this print's override
+// asks for - i.e. re-running processFilamentDeductions for it would compute
+// a delta of 0 for every color and change nothing. Lets the outer
+// hasUnprocessed short-circuit tell a SETTLED override (nothing to do) from
+// one that's still waiting to be applied. Without it, every print that ever
+// received an override kept hasUnprocessed true forever, forcing a full
+// filament-library KV read on every ~5s MQTT tick for as long as any tab
+// stayed open (~17k reads/day per tab) - confirmed 2026-09-29 while
+// chasing a Cloudflare "50% of daily KV limit" alert. Keys match the
+// deduction loop's own: override colorHex, first 6 chars, uppercase.
+function overrideAlreadyApplied(key, override)
+{
+    const log = filamentLibrary.deductionLog[key];
+
+    if (!log)
+        return false;
+
+    const entries = Array.isArray(override.details)
+        ? override.details
+        : [{ colorHex: override.colorHex, weight: override.weight }];
+
+    return entries.every(d =>
+    {
+        const grams = gramsOf(log[(d.colorHex || "").slice(0, 6).toUpperCase()]);
+
+        // A manual "Fix filament" override carries no weight of its own
+        // (the Task API total supplies it at deduction time) - any logged
+        // amount for its color means it was applied.
+        return typeof d.weight === "number" ? grams >= d.weight - 0.005 : grams > 0;
+    });
+}
+
 async function processFilamentDeductions(items)
 {
     if (!filamentLibraryLoaded || !items || items.length === 0)
@@ -5346,7 +5404,7 @@ async function processFilamentDeductions(items)
         // still needs to see it once - only an already-settled one is
         // excluded.
         if (filamentLibrary.processedPrints.includes(key))
-            return !!override && !override.skip;
+            return !!override && !override.skip && !overrideAlreadyApplied(key, override);
 
         return true;
     });
@@ -6753,16 +6811,15 @@ function selectTab(name)
 // Power tab across a print finishing would otherwise show a stale "not
 // tracked" until switching away and back - confirmed live 2026-09-17/18,
 // a print's real 0.237 kWh sat unseen because nothing re-fetched
-// /api/power-per-print while the tab was already open. 60s is a cheap KV
-// READ (this project's actual quota pressure has always been on WRITES -
-// see power-history.js's own comment), gated to only run while the tab
-// is actually visible.
+// /api/power-per-print while the tab was already open. Gated to only run
+// while the tab is actually visible, and re-reads only TODAY's day record
+// (see powerHistoryCache) - 2 KV reads per minute regardless of period.
 setInterval(() =>
 {
     const panel = byId("tab-power");
 
     if (panel && !panel.hasAttribute("hidden"))
-        loadPowerHistoryCard();
+        loadPowerHistoryCard({ todayOnly: true });
 }, 60000);
 
 TABS.forEach(t =>

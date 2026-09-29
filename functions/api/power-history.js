@@ -134,8 +134,29 @@ export async function onRequestPost(context) {
         return jsonResponse({ ok: true, skipped: "kwh unchanged" });
     }
 
+    // Value-change dedup alone turned out to write far too often: Tasmota
+    // reports todayKwh in 0.001 kWh steps, so even the printer's ~12W
+    // standby draw ticks it every ~5 minutes (~290 writes/day doing
+    // nothing), and while printing it changes on every 2-minute
+    // cron-worker tick (up to 720/day). Confirmed 2026-09-29 as the
+    // dominant steady consumer of the free tier's 1,000 KV writes/day -
+    // the day it prompted a Cloudflare "50% of daily KV limit" email was a
+    // heavy print day. Throttled to one write per WRITE_INTERVAL_MS (max
+    // 96/day) while still always keeping the LATEST reading when it does
+    // write, so the 2026-09-20 "first sample of the hour wins" undercount
+    // can't come back - the day total just lags live by at most 15 min.
+    // Trade-off: min/max/avg W/V/A are sampled every 15 min instead of
+    // every 2, which is plenty for a daily summary card.
+    const WRITE_INTERVAL_MS = 15 * 60 * 1000;
+    const nowMs = Date.now();
+
+    if (existingRaw && typeof day.lastWriteAt === "number" && nowMs - day.lastWriteAt < WRITE_INTERVAL_MS) {
+        return jsonResponse({ ok: true, skipped: "throttled" });
+    }
+
     mergeSample(day, Number(body.w) || 0, Number(body.v) || 0, Number(body.a) || 0);
     day.lastHour = new Date().getUTCHours();   // informational only, nothing gates on it anymore
+    day.lastWriteAt = nowMs;
     day.kwh = newKwh;
 
     await env.FILAMENT_KV.put(key, JSON.stringify(day));
