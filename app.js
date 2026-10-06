@@ -4072,8 +4072,8 @@ function filamentColorFamily(f)
     //          light and not strongly saturated (a vivid yellow stays Yellow)
     //   Brown  dark-to-mid orange/red-orange, not vivid (FF6A13 stays Orange)
     if (h >= 35 && h < 55 && s >= 40 && s <= 90 && l >= 28 && l <= 70) return "Gold";
-    if (h >= 20 && h < 65 && (l >= 80 || (l >= 60 && s <= 60))) return "Beige";
-    if (h >= 10 && h < 45 && s <= 85 && l < 46) return "Brown";
+    if (h >= 20 && h < 65 && (l >= 80 || (l >= 55 && s <= 60))) return "Beige";
+    if (h >= 5 && h < 45 && s <= 85 && l < 46) return "Brown";
 
     if (h < 15 || h >= 345) return "Red";
     if (h < 45) return "Orange";
