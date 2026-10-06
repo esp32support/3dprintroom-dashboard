@@ -3983,7 +3983,8 @@ function hexToHsl(hex)
 // (a light neutral grey reads as "silver" without a metallic flag to go
 // on), Fuchsia Pink -> Pink, Basic Purple -> Purple, Charcoal/Basic Black
 // -> Black, Original Red / Red -> Red, Basic Green -> Green, Basic Yellow
-// / Basic Beige -> Yellow. "Transparent" is name-detected first (same
+// -> Yellow, Basic Beige -> Beige (was Yellow before Beige/Brown/Gold/Cyan
+// existed - see the carve-outs below). "Transparent" is name-detected first (same
 // regex used for the spool's translucent rendering), since clear stock
 // has no real hue to bucket by.
 function filamentColorFamily(f)
@@ -4001,17 +4002,28 @@ function filamentColorFamily(f)
         return "White";
     }
 
-    // Gold/champagne/bronze: warm yellow-orange hue, but muted (not a
-    // vivid pure orange/amber) and not pale. Without this, hue alone filed
-    // a Champagne Gold #9C6C14 (hue 38.8) under Orange, while a classic
-    // gold #D4AF37 (hue 45.9) landed in Yellow - golds scattered across
-    // two families neither of which reads as "gold" (reported 2026-10-06).
-    if (h >= 35 && h < 55 && s >= 40 && s <= 90 && l <= 70) return "Gold";
+    // The warm families below can't be told apart by hue alone - a dark
+    // orange IS brown, a pale yellow IS beige, a muted yellow-orange IS
+    // gold - so each is carved out by saturation/lightness BEFORE the
+    // plain hue wheel runs. Order matters (Gold, then Beige, then Brown).
+    // Reported 2026-10-06: a Champagne Gold #9C6C14 (hue 38.8) was filed
+    // under Orange and looked like it hadn't been added at all; the same
+    // hue-only rules also put Basic Beige under Yellow, any brown under
+    // Orange, and a classic gold #D4AF37 under Yellow.
+    //   Gold   hue 35-55, muted-to-moderate saturation, mid lightness
+    //          (vivid pure ambers/oranges, sat > 90, stay Orange)
+    //   Beige  pale/cream/tan: warm hue, light - either very light, or
+    //          light and not strongly saturated (a vivid yellow stays Yellow)
+    //   Brown  dark-to-mid orange/red-orange, not vivid (FF6A13 stays Orange)
+    if (h >= 35 && h < 55 && s >= 40 && s <= 90 && l >= 28 && l <= 70) return "Gold";
+    if (h >= 20 && h < 65 && (l >= 80 || (l >= 60 && s <= 60))) return "Beige";
+    if (h >= 10 && h < 45 && s <= 85 && l < 46) return "Brown";
 
     if (h < 15 || h >= 345) return "Red";
     if (h < 45) return "Orange";
     if (h < 70) return "Yellow";
     if (h < 170) return "Green";
+    if (h < 200) return "Cyan";
     if (h < 255) return "Blue";
     if (h < 290) return "Purple";
     return "Pink";
@@ -4021,7 +4033,8 @@ function filamentColorFamily(f)
 // filament's own hex (that's a bucket of many different exact shades).
 const COLOR_FAMILY_SWATCH = {
     Black: "#1a1a1a", White: "#f4f4f0", Gray: "#8a8d90", Silver: "#c9cdd0",
-    Red: "#d9463f", Orange: "#e0873c", Gold: "#c9a227", Yellow: "#e6cf46", Green: "#4caf6b",
+    Red: "#d9463f", Orange: "#e0873c", Brown: "#7a4a2a", Gold: "#c9a227", Beige: "#e6d8b8",
+    Yellow: "#e6cf46", Green: "#4caf6b", Cyan: "#2fb5b8",
     Blue: "#3d78d8", Purple: "#8a5cc9", Pink: "#d968a8", Transparent: "#dfe4e7",
 };
 
