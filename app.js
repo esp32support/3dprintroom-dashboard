@@ -1419,8 +1419,18 @@ function renderPrintHistory(items)
         sub.textContent = `${displayLayers} layers - ${formatDeviceDate(correctedTimes.start)}`;
         left.appendChild(sub);
 
+        // A recovered override written while its job was still running (see
+        // taskLooksStillRunning) carries Bambu's placeholder end time as its
+        // durationSeconds - e.g. 14 s for an 81 g print. Don't display that.
+        const matchedForDuration = override ? matchTaskForHistoryItem(item) : null;
+        const overrideDurationOk = override && typeof override.durationSeconds === "number"
+            && durationPlausibleForWeight(
+                override.weight || (override.details || []).reduce((t, d) => t + (d.weight || 0), 0)
+                    || (matchedForDuration && matchedForDuration.weight) || 0,
+                override.durationSeconds);
+
         const time = document.createElement("span");
-        time.textContent = (override && typeof override.durationSeconds === "number")
+        time.textContent = overrideDurationOk
             ? formatTime(override.durationSeconds)
             : printDuration(correctedTimes.start, correctedTimes.end);
 
@@ -3159,7 +3169,7 @@ async function updatePrinter(data)
     // for that same grace window, then clears with everything else.
     renderAmsGrid(trays, preparing ? trayNow : -1);
     const deviceHistory = data.history || [];
-    const recoveredPhantoms = await recoverOrphanedTasks(deviceHistory);
+    const recoveredPhantoms = await recoverOrphanedTasks(deviceHistory, { gcodeState: state, subtaskName: data.subtaskName });
     const historyWithRecovered = recoveredPhantoms.length === 0
         ? deviceHistory
         : [...recoveredPhantoms, ...deviceHistory].sort(
@@ -3387,7 +3397,50 @@ function findNearbyProcessedKey(processedPrints, printName, startMs, toleranceMs
 // needs recovering forever) would get re-synthesized and re-saved to KV
 // on every single tick, the exact KV-write-storm class of bug just fixed
 // above for processedPrints itself.
-async function recoverOrphanedTasks(deviceHistory)
+// No FDM printer extrudes faster than roughly 0.035 g/s (A1 max volumetric
+// flow ~28 mm^3/s of PLA); 0.06 leaves a wide margin. A task whose weight
+// would need MORE than that over its own start->end span cannot have
+// finished in that time - its endTime is Bambu's placeholder for a job that
+// is still running (observed 2026-10-06: Cestitka_1, 81.57 g, "ended" 14
+// seconds after it started, 72 minutes into a print still in progress;
+// Tirador cajon kia v7's second print the same, 13.61 g in 8 s). The
+// old code took that placeholder at face value once it was an hour old.
+const MAX_PLAUSIBLE_GRAMS_PER_SEC = 0.06;
+
+function durationPlausibleForWeight(weightG, durationSec)
+{
+    return !(weightG > 0) || durationSec >= weightG / MAX_PLAUSIBLE_GRAMS_PER_SEC;
+}
+
+// True when a Task API entry is really a job still in progress, so it must
+// not be treated as a finished-but-missing print (no recovery override, no
+// deduction, no phantom history row). Two independent signals: the
+// physical-impossibility check above (works with no live data at all, e.g.
+// while the CYD's Bambu link is down), and - only for the NEWEST task, so a
+// finished earlier reprint of the same file isn't skipped - the live
+// printer reporting an active job with the same title.
+function taskLooksStillRunning(task, live)
+{
+    const startMs = new Date(task.startTime).getTime();
+    const endMs = new Date(task.endTime).getTime();
+
+    if (!isNaN(startMs) && !isNaN(endMs) && !durationPlausibleForWeight(task.weight, (endMs - startMs) / 1000))
+        return true;
+
+    if (live && ["RUNNING", "PAUSE", "PREPARE"].includes(live.gcodeState) && live.subtaskName)
+    {
+        const newest = latestPrinterTasks.reduce((a, b) =>
+            (new Date(b.startTime) > new Date(a.startTime) ? b : a), latestPrinterTasks[0]);
+
+        if (newest && newest.id === task.id
+            && String(live.subtaskName).trim().toLowerCase() === String(task.title || "").trim().toLowerCase())
+            return true;
+    }
+
+    return false;
+}
+
+async function recoverOrphanedTasks(deviceHistory, live)
 {
     if (!filamentLibraryLoaded || latestPrinterTasks.length === 0)
         return [];
@@ -3407,6 +3460,9 @@ async function recoverOrphanedTasks(deviceHistory)
 
         if (deviceTaskIds.has(taskIdStr))
             continue;   // back in device history (e.g. a later reconnect) - the normal path owns it
+
+        if (taskLooksStillRunning(task, live))
+            continue;   // still printing - see taskLooksStillRunning; no override, deduction or phantom row yet
 
         const startMs = new Date(task.startTime).getTime();
         const endMs = new Date(task.endTime).getTime();
