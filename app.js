@@ -4001,6 +4001,13 @@ function filamentColorFamily(f)
         return "White";
     }
 
+    // Gold/champagne/bronze: warm yellow-orange hue, but muted (not a
+    // vivid pure orange/amber) and not pale. Without this, hue alone filed
+    // a Champagne Gold #9C6C14 (hue 38.8) under Orange, while a classic
+    // gold #D4AF37 (hue 45.9) landed in Yellow - golds scattered across
+    // two families neither of which reads as "gold" (reported 2026-10-06).
+    if (h >= 35 && h < 55 && s >= 40 && s <= 90 && l <= 70) return "Gold";
+
     if (h < 15 || h >= 345) return "Red";
     if (h < 45) return "Orange";
     if (h < 70) return "Yellow";
@@ -4014,7 +4021,7 @@ function filamentColorFamily(f)
 // filament's own hex (that's a bucket of many different exact shades).
 const COLOR_FAMILY_SWATCH = {
     Black: "#1a1a1a", White: "#f4f4f0", Gray: "#8a8d90", Silver: "#c9cdd0",
-    Red: "#d9463f", Orange: "#e0873c", Yellow: "#e6cf46", Green: "#4caf6b",
+    Red: "#d9463f", Orange: "#e0873c", Gold: "#c9a227", Yellow: "#e6cf46", Green: "#4caf6b",
     Blue: "#3d78d8", Purple: "#8a5cc9", Pink: "#d968a8", Transparent: "#dfe4e7",
 };
 
