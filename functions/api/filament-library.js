@@ -168,7 +168,10 @@ function stripDuplicateDeductions(lib) {
 
         const filament = (lib.filaments || []).find((f) => f.id === dup.filamentId);
         const spool = filament && filament.spools.find((s) => !s.removedAt);
-        if (spool) spool.remaining = Math.round((spool.remaining + dup.grams) * 100) / 100;
+        if (spool) {
+            spool.remaining = Math.round((spool.remaining + dup.grams) * 100) / 100;
+            if (spool.remaining > 0) delete spool.emptiedAt;
+        }
     }
 
     return duplicates;

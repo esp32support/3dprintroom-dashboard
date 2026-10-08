@@ -3819,7 +3819,12 @@ function buildSpoolHistoryPanel(f)
         row.className = "spoolHistoryRow";
 
         const added = spool.createdAt ? new Date(spool.createdAt) : null;
-        const removed = spool.removedAt ? new Date(spool.removedAt) : null;
+        // A spool's life ends when it ran out (emptiedAt), not when the
+        // empty reel was later removed from the list - removedAt is only
+        // the fallback for spools emptied before emptiedAt was tracked.
+        const emptied = spool.emptiedAt ? new Date(spool.emptiedAt) : null;
+        const removed = emptied || (spool.removedAt ? new Date(spool.removedAt) : null);
+        const endLabel = emptied ? "empty" : "removed";
 
         const addedText = added ? added.toLocaleDateString() : "unknown date";
         const line = document.createElement("span");
@@ -3827,7 +3832,7 @@ function buildSpoolHistoryPanel(f)
         if (removed && added)
         {
             const days = Math.max(0, Math.round((removed - added) / 86400000));
-            line.textContent = `${spool.total}g - added ${addedText}, removed ${removed.toLocaleDateString()} (lasted ${days} day${days === 1 ? "" : "s"})`;
+            line.textContent = `${spool.total}g - added ${addedText}, ${endLabel} ${removed.toLocaleDateString()} (lasted ${days} day${days === 1 ? "" : "s"})`;
         }
         else if (added)
         {
@@ -4857,7 +4862,14 @@ function onEditSpoolRemaining(filamentId, spoolId, value)
         const spool = f && f.spools.find(s => s.id === spoolId);
 
         if (spool)
+        {
             spool.remaining = n;
+
+            if (n <= 0 && !spool.emptiedAt)
+                spool.emptiedAt = new Date().toISOString();
+            else if (n > 0)
+                delete spool.emptiedAt;
+        }
     });
 }
 
@@ -5188,6 +5200,8 @@ async function reconcileDeductionLog()
                 {
                     const before = target.remaining;
                     target.remaining += grams;
+                    if (target.remaining > 0)
+                        delete target.emptiedAt;
 
                     auditSpoolChange({
                         printKey: key,
@@ -5771,6 +5785,8 @@ async function processFilamentDeductions(items)
             {
                 const before = target.remaining;
                 target.remaining = Math.max(0, before - delta);
+                if (target.remaining <= 0 && !target.emptiedAt)
+                    target.emptiedAt = new Date().toISOString();
                 log[hex] = { grams: already + delta, filamentId: filament.id };
                 changed = true;
 
