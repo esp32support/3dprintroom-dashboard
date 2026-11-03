@@ -4237,6 +4237,18 @@ function renderFilamentFilters()
 
     const materialCounts = countBy(f => f.material || "Other");
     const brandCounts = countBy(f => f.brand || "Other");
+
+    // Known brands/materials are always listed (count 0 until a spool of
+    // them exists) so e.g. ELEGOO or TPU can be spotted/ticked in the filter
+    // before the first spool is added. FILAMENT_BRANDS is declared further
+    // down the file (const, so reading it before that line runs throws) -
+    // fall back to just the existing ones in that case.
+    let knownBrands = [];
+    try { knownBrands = FILAMENT_BRANDS; } catch { /* not initialised yet */ }
+
+    knownBrands.forEach(b => { if (!brandCounts.has(b)) brandCounts.set(b, 0); });
+    ["ABS", "ASA", "PA", "PA-CF", "PC", "PETG", "PETG-CF", "PLA", "PLA-CF", "PVA", "TPU"]
+        .forEach(m => { if (!materialCounts.has(m)) materialCounts.set(m, 0); });
     const colorCounts = countBy(filamentColorFamily);
     const diameterCounts = countBy(filamentDiameterOf);
 
