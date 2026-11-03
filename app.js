@@ -4178,6 +4178,16 @@ function filamentIsLow(f)
     return filamentActiveSpools(f).length > 0 && filamentPercent(f) < 35;
 }
 
+// Material filter key: PLA+ is its own entry (stored as material "PLA" with
+// variant "PLA+"), everything else filters by its base material.
+function filamentMaterialFilterKey(f)
+{
+    if (String(f.variant || "").trim().toUpperCase().startsWith("PLA+"))
+        return "PLA+";
+
+    return f.material || "Other";
+}
+
 function filamentMatchesFilters(f)
 {
     const s = filamentFilterState;
@@ -4190,7 +4200,7 @@ function filamentMatchesFilters(f)
             return false;
     }
 
-    if (s.materials.size && !s.materials.has(f.material || "Other"))
+    if (s.materials.size && !s.materials.has(filamentMaterialFilterKey(f)))
         return false;
 
     if (s.brands.size && !s.brands.has(f.brand || "Other"))
@@ -4235,20 +4245,15 @@ function renderFilamentFilters()
         return m;
     };
 
-    const materialCounts = countBy(f => f.material || "Other");
+    const materialCounts = countBy(filamentMaterialFilterKey);
     const brandCounts = countBy(f => f.brand || "Other");
 
-    // Known brands/materials are always listed (count 0 until a spool of
-    // them exists) so e.g. ELEGOO or TPU can be spotted/ticked in the filter
-    // before the first spool is added. FILAMENT_BRANDS is declared further
-    // down the file (const, so reading it before that line runs throws) -
-    // fall back to just the existing ones in that case.
-    let knownBrands = [];
-    try { knownBrands = FILAMENT_BRANDS; } catch { /* not initialised yet */ }
-
-    knownBrands.forEach(b => { if (!brandCounts.has(b)) brandCounts.set(b, 0); });
-    ["ABS", "ASA", "PA", "PA-CF", "PC", "PETG", "PETG-CF", "PLA", "PLA-CF", "PVA", "TPU"]
-        .forEach(m => { if (!materialCounts.has(m)) materialCounts.set(m, 0); });
+    // A few entries are always listed (count 0 until a spool of them
+    // exists) so e.g. ELEGOO or TPU can be spotted/ticked in the filter
+    // before the first spool is added; anything else only shows up once the
+    // library actually has it.
+    ["ELEGOO"].forEach(b => { if (!brandCounts.has(b)) brandCounts.set(b, 0); });
+    ["PETG", "PLA", "PLA+", "TPU"].forEach(m => { if (!materialCounts.has(m)) materialCounts.set(m, 0); });
     const colorCounts = countBy(filamentColorFamily);
     const diameterCounts = countBy(filamentDiameterOf);
 
