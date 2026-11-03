@@ -5881,7 +5881,7 @@ const FILAMENT_MATERIALS = {
         "PLA Lite", "PLA Marble", "PLA Matte", "PLA Metal", "PLA Pure", "PLA Silk",
         "PLA Silk+", "PLA Sparkle", "PLA Tough", "PLA Tough+", "PLA Translucent",
         "PLA Wood", "PLA-CF", "PPA-CF", "PPS-CF", "PVA", "Support For PA/PET",
-        "Support For PLA", "TPU 95A HF", "TPU for AMS",
+        "Support For PLA", "TPU", "TPU 95A HF", "TPU for AMS",
     ],
     "ELEGOO": [
         "ABS", "ASA", "PA12-CF", "PAHT-CF", "PC", "PETG", "PETG-CF", "PETG Translucent",
@@ -5908,7 +5908,7 @@ const FILAMENT_MATERIALS = {
     "eSUN": [
         "ABS", "ASA", "PETG", "PLA", "PLA Matte", "PLA+", "Silk PLA", "TPU", "Wood PLA",
     ],
-    "Azure Film": ["PETG", "PETG HS", "PLA"],
+    "Azure Film": ["PETG", "PETG HS", "PLA", "TPU"],
 };
 
 const OTHER_OPTION = "Other...";
