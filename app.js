@@ -5886,7 +5886,7 @@ const FILAMENT_MATERIALS = {
     "ELEGOO": [
         "ABS", "ASA", "PA12-CF", "PAHT-CF", "PC", "PETG", "PETG-CF", "PETG Translucent",
         "PLA", "PLA+", "PLA Galaxy", "PLA Marble", "PLA Matte", "PLA Silk", "PLA Wood",
-        "PLA-CF", "Rapid PETG", "Rapid PLA+", "TPU",
+        "PLA-CF", "Rapid PETG", "Rapid PLA+", "Rapid TPU 95A", "TPU",
     ],
     "Generic": [
         "ABS", "ASA", "BVOH", "EVA", "HIPS", "PA", "PA-CF", "PC", "PCTG", "PE",
