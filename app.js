@@ -5870,7 +5870,7 @@ loadFilamentLibrary()
 // Alphabetical so a brand is easy to find as this list grows - these are
 // only a convenience shortcut, anything missing still goes in through the
 // "Other..." option with a free-text name.
-const FILAMENT_BRANDS = ["Azure Film", "Bambu Lab", "eSUN", "Generic", "Overture", "Polymaker", "SUNLU"];
+const FILAMENT_BRANDS = ["Azure Film", "Bambu Lab", "ELEGOO", "eSUN", "Generic", "Overture", "Polymaker", "SUNLU"];
 
 // Per-brand material lists, matching what Bambu Studio offers for each.
 const FILAMENT_MATERIALS = {
@@ -5882,6 +5882,11 @@ const FILAMENT_MATERIALS = {
         "PLA Silk+", "PLA Sparkle", "PLA Tough", "PLA Tough+", "PLA Translucent",
         "PLA Wood", "PLA-CF", "PPA-CF", "PPS-CF", "PVA", "Support For PA/PET",
         "Support For PLA", "TPU 95A HF", "TPU for AMS",
+    ],
+    "ELEGOO": [
+        "ABS", "ASA", "PA12-CF", "PAHT-CF", "PC", "PETG", "PETG-CF", "PETG Translucent",
+        "PLA", "PLA+", "PLA Galaxy", "PLA Marble", "PLA Matte", "PLA Silk", "PLA Wood",
+        "PLA-CF", "Rapid PETG", "Rapid PLA+", "TPU",
     ],
     "Generic": [
         "ABS", "ASA", "BVOH", "EVA", "HIPS", "PA", "PA-CF", "PC", "PCTG", "PE",
