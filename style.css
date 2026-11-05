@@ -476,6 +476,12 @@ dd{
 .airPanel{
     display:grid;
     grid-template-columns:160px 1fr;
+    /* Header row sized to its content, the dial/rows row takes all spare
+       height - without this the grid spread the extra height over BOTH
+       rows, which pushed the header (title + trend badge) down so it no
+       longer lined up with the Temperature/Humidity headers. */
+    grid-template-rows:auto 1fr;
+    align-items:center;
     column-gap:18px;
 }
 
