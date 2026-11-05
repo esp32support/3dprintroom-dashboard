@@ -3213,6 +3213,15 @@ async function updatePrinterTask()
         const data = await res.json();
         latestPrinterTask = data.task || null;
         latestPrinterTasks = data.tasks || [];
+
+        // Lifetime print time, same figure as the printer's own
+        // Settings > Device screen (minutes from Bambu Cloud).
+        if (typeof data.totalPrintMinutes === "number")
+        {
+            const h = Math.floor(data.totalPrintMinutes / 60);
+            const m = data.totalPrintMinutes % 60;
+            setText("printerTotalHours", `${h.toLocaleString("hr-HR")} h ${String(m).padStart(2, "0")} min`);
+        }
     }
     catch (err)
     {
