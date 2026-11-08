@@ -2161,15 +2161,15 @@ dd{
 }
 
 /* Small STOCK tag on a library card for a sealed, unopened spare */
-.filamentSpool{
+.filamentCardSpecs{
     position:relative;
 }
 
 .filamentStockTag{
     position:absolute;
-    left:50%;
-    bottom:-4px;
-    transform:translateX(-50%);
+    top:50%;
+    right:4px;
+    transform:translateY(-50%);
     padding:1px 8px;
     border-radius:999px;
     border:1px solid #8a5cc9;

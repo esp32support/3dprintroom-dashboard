@@ -4656,15 +4656,6 @@ function renderFilamentLibrary()
         colorName.className = "filamentCardColor";
         colorName.textContent = f.color || "—";
 
-        // Sealed spare - small tag so it reads as unopened at a glance.
-        if (filamentIsStock(f))
-        {
-            const tag = document.createElement("span");
-            tag.className = "filamentStockTag";
-            tag.textContent = "STOCK";
-            spool.appendChild(tag);
-        }
-
         meta.appendChild(brand);
         meta.appendChild(name);
         meta.appendChild(colorName);
@@ -4692,6 +4683,17 @@ function renderFilamentLibrary()
         specs.innerHTML =
             `<span>${specIcon}${filamentDiameterOf(f)} mm</span>` +
             `<span>${specIcon}${f.material || "—"}</span>`;
+
+        // Sealed spare - small tag on the right of the spec rows (the empty
+        // space beside 1.75 mm / PLA) so it reads as unopened at a glance.
+        if (filamentIsStock(f))
+        {
+            const tag = document.createElement("span");
+            tag.className = "filamentStockTag";
+            tag.textContent = "STOCK";
+            specs.appendChild(tag);
+        }
+
         card.appendChild(specs);
 
         // --- weight + % ring + color square ---
