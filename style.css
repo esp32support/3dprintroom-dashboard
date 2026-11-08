@@ -389,6 +389,16 @@ dd{
     border-color:var(--cyan);
 }
 
+.firmwareInfo{
+    margin-bottom:12px;
+}
+
+/* System Health now has an odd number of tiles - let the last one (Uptime)
+   take the full row instead of leaving a hole beside it. */
+.systemPanel .statusList > div:last-child:nth-child(odd){
+    grid-column:1 / -1;
+}
+
 .toolsButtonRow{
     display:flex;
     flex-wrap:wrap;
