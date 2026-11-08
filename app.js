@@ -4276,6 +4276,11 @@ function renderFilamentFilters()
     ["ELEGOO"].forEach(b => { if (!brandCounts.has(b)) brandCounts.set(b, 0); });
     ["PETG", "PLA", "PLA+", "TPU"].forEach(m => { if (!materialCounts.has(m)) materialCounts.set(m, 0); });
     const colorCounts = countBy(filamentColorFamily);
+
+    // Transparent is always offered in the Color filter, even before the
+    // first transparent spool exists (it is detected by name, not by hex).
+    if (!colorCounts.has("Transparent"))
+        colorCounts.set("Transparent", 0);
     const diameterCounts = countBy(filamentDiameterOf);
 
     const statusCounts = { loaded: 0, low: 0, stock: 0, unavailable: 0 };
@@ -6445,6 +6450,15 @@ if (filamentAddToggle && filamentModal)
     {
         if (filamentMaterialCustomWrap)
             filamentMaterialCustomWrap.hidden = filamentMaterialSelect.value !== OTHER_OPTION;
+    });
+
+    // Quick pick for clear filament: transparent spools have no real colour,
+    // so the family is recognised by the NAME (see filamentColorFamily) -
+    // this just fills in that name plus a pale clear-looking hex.
+    byId("filamentPresetTransparent")?.addEventListener("click", () =>
+    {
+        byId("filamentColorName").value = "Transparent";
+        applyFilamentColor("D6E4EA");
     });
 
     filamentColorChip?.addEventListener("click", () =>

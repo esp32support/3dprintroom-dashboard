@@ -1329,6 +1329,41 @@ dd{
     color:var(--muted);
 }
 
+.modalPresetRow{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0 10px;
+}
+
+.modalPresetChip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 12px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:transparent;
+    color:var(--text);
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.modalPresetChip:hover{
+    border-color:var(--cyan);
+}
+
+.modalPresetSwatch{
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    border:1px solid #6b747a;
+    background:
+        linear-gradient(135deg,#d6e4ea 50%,transparent 50%),
+        repeating-conic-gradient(#8a949a 0 25%,#c9d2d6 0 50%) 0 0 / 8px 8px;
+}
+
 .modalNoPresets{
     margin:0 0 10px;
 }
