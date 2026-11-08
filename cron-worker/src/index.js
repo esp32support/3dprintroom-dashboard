@@ -90,6 +90,19 @@ function trimLibraryForDevice(lib) {
 async function runFilamentRelay(env) {
     const lib = await apiGet(FILAMENT_URL, env.FILAMENT_SYNC_SECRET);
     const trimmed = trimLibraryForDevice(lib);
+
+    // The printer's lifetime print time (minutes, from Bambu Cloud via the
+    // dashboard's own printer-task endpoint), for the CYD's System screen.
+    // Best-effort: a hiccup here must not stop the filament relay itself.
+    try {
+        const taskData = await apiGet(TASK_URL, env.FILAMENT_SYNC_SECRET);
+
+        if (Number.isFinite(taskData.totalPrintMinutes))
+            trimmed.totalPrintMinutes = taskData.totalPrintMinutes;
+    } catch (e) {
+        console.log(`filament-relay: print-time lookup failed: ${e.message}`);
+    }
+
     const payload = JSON.stringify(trimmed);
 
     await mqttPublishOnce({
