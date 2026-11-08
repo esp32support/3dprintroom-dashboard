@@ -2138,6 +2138,49 @@ dd{
 .filterStatusDot.loaded{ background:var(--green); }
 .filterStatusDot.low{ background:var(--yellow); }
 .filterStatusDot.unavailable{ background:var(--muted); }
+.filterStatusDot.stock{ background:#8a5cc9; }
+
+/* "In stock" tick in the Add/Edit filament modal */
+.modalCheckRow{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    margin:4px 0 14px;
+    cursor:pointer;
+}
+
+.modalCheckRow input{
+    margin-top:3px;
+}
+
+.modalCheckRow small{
+    display:block;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:500;
+}
+
+/* Small STOCK tag on a library card for a sealed, unopened spare */
+.filamentSpool{
+    position:relative;
+}
+
+.filamentStockTag{
+    position:absolute;
+    left:50%;
+    bottom:-4px;
+    transform:translateX(-50%);
+    padding:1px 8px;
+    border-radius:999px;
+    border:1px solid #8a5cc9;
+    background:#1c1426;
+    color:#c3a3f0;
+    font-size:10px;
+    font-weight:800;
+    letter-spacing:.06em;
+    line-height:1.4;
+    white-space:nowrap;
+}
 
 /* Color filter's family swatch - a small square (vs. the round status
    dot) so it reads as "a colour sample", not another status indicator. */
@@ -2301,7 +2344,7 @@ dd{
 
 .filamentStats{
     display:grid;
-    grid-template-columns:repeat(4,minmax(0,1fr));
+    grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
     gap:10px;
 }
 
@@ -2337,6 +2380,8 @@ dd{
 .filamentStatDot.loaded{ background:var(--green); }
 .filamentStatDot.low{ background:var(--yellow); }
 .filamentStatDot.unavailable{ background:var(--muted); }
+.filamentStatDot.inuse{ background:var(--orange); }
+.filamentStatDot.stock{ background:#8a5cc9; }
 
 .filamentStat .filamentStatValue{
     font-size:19px;
@@ -2387,6 +2432,7 @@ dd{
 .filamentChipDot.loaded{ background:var(--green); }
 .filamentChipDot.low{ background:var(--yellow); }
 .filamentChipDot.unavailable{ background:var(--muted); }
+.filamentChipDot.stock{ background:#8a5cc9; }
 
 .filamentChip.active .filamentChipDot{
     background:#08181c;

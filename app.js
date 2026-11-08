@@ -3955,7 +3955,7 @@ function loadFilamentViewState()
         filamentFilterState.brands = new Set(Array.isArray(f.brands) ? f.brands : []);
         filamentFilterState.colors = new Set(Array.isArray(f.colors) ? f.colors : []);
         filamentFilterState.diameters = new Set(Array.isArray(f.diameters) ? f.diameters : []);
-        filamentFilterState.status = ["all", "loaded", "low", "unavailable"].includes(f.status) ? f.status : "all";
+        filamentFilterState.status = ["all", "loaded", "low", "stock", "unavailable"].includes(f.status) ? f.status : "all";
     }
 
     const s = saved.sort;
@@ -4136,6 +4136,15 @@ function filamentIsLoaded(f)
     return Object.keys(a).some(slot => a[slot] === f.id);
 }
 
+// Sealed, unopened spare (In stock). The flag is set in the Add/Edit modal
+// and cleared the moment the filament is assigned to an AMS slot (see
+// onToggleSlotAssignment); the loaded check here is belt and braces so a
+// loaded filament can never count as stock even if the flag lingers.
+function filamentIsStock(f)
+{
+    return !!f.stock && !filamentIsLoaded(f) && filamentActiveSpools(f).length > 0;
+}
+
 function filamentRemainingGrams(f)
 {
     return filamentActiveSpools(f).reduce((sum, s) => sum + Math.max(0, s.remaining), 0);
@@ -4229,6 +4238,9 @@ function filamentMatchesFilters(f)
         if (s.status === "low" && !filamentIsLow(f))
             return false;
 
+        if (s.status === "stock" && !filamentIsStock(f))
+            return false;
+
         if (s.status === "unavailable" && filamentStatus(f) !== "unavailable")
             return false;
     }
@@ -4266,12 +4278,13 @@ function renderFilamentFilters()
     const colorCounts = countBy(filamentColorFamily);
     const diameterCounts = countBy(filamentDiameterOf);
 
-    const statusCounts = { loaded: 0, low: 0, unavailable: 0 };
+    const statusCounts = { loaded: 0, low: 0, stock: 0, unavailable: 0 };
 
     fils.forEach(f =>
     {
         if (filamentIsLoaded(f)) statusCounts.loaded++;
         if (filamentIsLow(f)) statusCounts.low++;
+        if (filamentIsStock(f)) statusCounts.stock++;
         if (filamentStatus(f) === "unavailable") statusCounts.unavailable++;
     });
 
@@ -4379,6 +4392,7 @@ function renderFilamentFilters()
     const statusRows = [
         ["loaded", "Loaded", statusCounts.loaded],
         ["low", "Low", statusCounts.low],
+        ["stock", "Stock", statusCounts.stock],
     ].map(([val, label, count]) =>
         makeOpt(filamentFilterState.status === val, (on) =>
         {
@@ -4401,13 +4415,15 @@ function renderFilamentStats()
     const totalCount = fils.length;
     const availableG = fils.reduce((sum, f) => sum + filamentRemainingGrams(f), 0);
 
-    let loaded = 0, low = 0, unavailable = 0;
+    let loaded = 0, low = 0, unavailable = 0, stock = 0, inUse = 0;
 
     fils.forEach(f =>
     {
         if (filamentIsLoaded(f)) loaded++;
         if (filamentIsLow(f)) low++;
         if (filamentStatus(f) === "unavailable") unavailable++;
+        else if (filamentIsStock(f)) stock++;
+        else inUse++;   // opened and still has filament on a spool
     });
 
     if (statsWrap)
@@ -4420,6 +4436,8 @@ function renderFilamentStats()
         // filter state ever holds it, just not offered as a visible category.
         statsWrap.innerHTML =
             stat("total", "Total", totalCount) +
+            stat("inuse", "In use", inUse) +
+            stat("stock", "In stock", stock) +
             stat("available", "Available", (availableG / 1000).toFixed(2) + " kg") +
             stat("loaded", "Loaded", loaded) +
             stat("low", "Low", low);
@@ -4433,6 +4451,7 @@ function renderFilamentStats()
             ["all", "All", totalCount, null],
             ["loaded", "Loaded", loaded, "loaded"],
             ["low", "Low", low, "low"],
+            ["stock", "Stock", stock, "stock"],
         ].forEach(([val, label, count, dot]) =>
         {
             const b = document.createElement("button");
@@ -4637,6 +4656,15 @@ function renderFilamentLibrary()
         colorName.className = "filamentCardColor";
         colorName.textContent = f.color || "—";
 
+        // Sealed spare - small tag so it reads as unopened at a glance.
+        if (filamentIsStock(f))
+        {
+            const tag = document.createElement("span");
+            tag.className = "filamentStockTag";
+            tag.textContent = "STOCK";
+            spool.appendChild(tag);
+        }
+
         meta.appendChild(brand);
         meta.appendChild(name);
         meta.appendChild(colorName);
@@ -4829,7 +4857,17 @@ function onToggleSlotAssignment(filamentId, slot)
         if (lib.slotAssignments[slot] === filamentId)
             delete lib.slotAssignments[slot];
         else
+        {
             lib.slotAssignments[slot] = filamentId;
+
+            // Loading a spare into the printer opens it: it is no longer
+            // sealed stock, and stays that way even if it comes out of the
+            // slot again.
+            const loadedFilament = lib.filaments.find(x => x.id === filamentId);
+
+            if (loadedFilament && loadedFilament.stock)
+                delete loadedFilament.stock;
+        }
 
         renderAmsGrid(lastAmsTrays, lastAmsTrayNow);
     });
@@ -6154,6 +6192,9 @@ function openFilamentModal(filamentId)
         byId("filamentColorName").value = entry.color || "";
         applyFilamentColor(entry.colorHex || "FFFFFF");
 
+        const stockCheckEl = byId("filamentStockCheck");
+        if (stockCheckEl) stockCheckEl.checked = !!entry.stock;
+
         if (filamentNoteInput)
         {
             filamentNoteInput.value = entry.note || "";
@@ -6441,6 +6482,7 @@ if (filamentAddToggle && filamentModal)
         const color = byId("filamentColorName").value.trim();
         const colorHex = normalizeHex(filamentColorHexInput.value);
         const note = filamentNoteInput.value.trim();
+        const isStock = !!byId("filamentStockCheck")?.checked;
 
         const isEdit = !!editingFilamentId;
 
@@ -6546,6 +6588,11 @@ if (filamentAddToggle && filamentModal)
                 f.colorHex = colorHex;
                 f.brand = brand;
                 f.note = note;
+
+                if (isStock)
+                    f.stock = true;
+                else
+                    delete f.stock;
             });
 
             return;
@@ -6561,6 +6608,7 @@ if (filamentAddToggle && filamentModal)
                 colorHex,
                 brand,
                 note,
+                ...(isStock ? { stock: true } : {}),
                 spools: [{
                     id: uid(),
                     total: totalWeight,
