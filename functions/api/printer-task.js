@@ -62,7 +62,10 @@ export async function onRequestGet(context) {
         res = await fetch(url, {
             headers: {
                 Accept: "application/json",
-                "User-Agent": "bambu_network_agent/01.09.05.01",
+                // Our own honest identifier. Impersonating Bambu's network agent
+                // (bambu_network_agent/01.09.*) got every request answered with a
+                // Cloudflare 403 from 2026-11-10; a plain own UA passes.
+                "User-Agent": "3dprintroom-dashboard/1.0",
                 Authorization: `Bearer ${env.BAMBU_ACCESS_TOKEN}`,
             },
         });
