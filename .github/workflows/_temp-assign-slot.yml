@@ -1,0 +1,21 @@
+name: TEMP assign slot
+on:
+  workflow_dispatch:
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA="Mozilla/5.0 (compatible; printer-sync-assign)"
+          B=https://3dprintroom-dashboard.pages.dev
+          LIB=$(curl -s -m 30 -H "X-Sync-Secret: ${{ secrets.FILAMENT_SYNC_SECRET }}" -H "User-Agent: $UA" $B/api/device-filament)
+          echo "PETG entries:"
+          echo "$LIB" | jq -c '[.filaments[] | select(.material=="PETG") | {id, brand, color}]'
+          echo "slots before:"
+          echo "$LIB" | jq -c '.slotAssignments'
+          ID=$(echo "$LIB" | jq -r '[.filaments[] | select(.material=="PETG" and (.color|test("Basic Black";"i")))][0].id')
+          echo "chosen id: $ID"
+          if [ -n "$ID" ] && [ "$ID" != "null" ]; then
+            curl -s -m 30 -X POST -H "X-Sync-Secret: ${{ secrets.FILAMENT_SYNC_SECRET }}" -H "Content-Type: application/json" -H "User-Agent: $UA" -d "{\"slot\":3,\"filamentId\":\"$ID\"}" $B/api/fix-slot-assignment
+            echo
+          fi
