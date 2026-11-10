@@ -1,0 +1,17 @@
+name: TEMP seed printer hours
+on:
+  workflow_dispatch:
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s -m 30 -o out.txt -w "HTTP %{http_code}\n" -X POST \
+            -H "X-Sync-Secret: ${{ secrets.FILAMENT_SYNC_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: Mozilla/5.0 (compatible; printer-sync-seed)" \
+            -d '{"minutes": 29003}' \
+            https://3dprintroom-dashboard.pages.dev/api/printer-hours
+          cat out.txt
+          echo
+          curl -s -m 30 -H "X-Sync-Secret: ${{ secrets.FILAMENT_SYNC_SECRET }}" -H "User-Agent: Mozilla/5.0 (compatible; printer-sync-seed)" https://3dprintroom-dashboard.pages.dev/api/printer-hours
