@@ -30,6 +30,7 @@ const FILAMENT_TOPIC = "ifix/printerroom/jole2026/filament";
 const BASE_URL = "https://3dprintroom-dashboard.pages.dev";
 const STATE_URL = `${BASE_URL}/api/printer-watch-state`;
 const TASK_URL = `${BASE_URL}/api/printer-task`;
+const HOURS_URL = `${BASE_URL}/api/printer-hours`;
 const SYNC_URL = `${BASE_URL}/api/gcode-sync`;
 const FILAMENT_URL = `${BASE_URL}/api/device-filament`;
 const POWER_PER_PRINT_URL = `${BASE_URL}/api/power-per-print`;
@@ -91,14 +92,17 @@ async function runFilamentRelay(env) {
     const lib = await apiGet(FILAMENT_URL, env.FILAMENT_SYNC_SECRET);
     const trimmed = trimLibraryForDevice(lib);
 
-    // The printer's lifetime print time (minutes, from Bambu Cloud via the
-    // dashboard's own printer-task endpoint), for the CYD's System screen.
-    // Best-effort: a hiccup here must not stop the filament relay itself.
+    // The printer's lifetime print time (minutes), for the CYD's System
+    // screen. /api/printer-hours falls back to the last good value (stale)
+    // when Bambu Cloud blocks the live request. Best-effort: a hiccup here
+    // must not stop the filament relay itself.
     try {
-        const taskData = await apiGet(TASK_URL, env.FILAMENT_SYNC_SECRET);
+        const hours = await apiGet(HOURS_URL, env.FILAMENT_SYNC_SECRET);
 
-        if (Number.isFinite(taskData.totalPrintMinutes))
-            trimmed.totalPrintMinutes = taskData.totalPrintMinutes;
+        if (Number.isFinite(hours.minutes)) {
+            trimmed.totalPrintMinutes = hours.minutes;
+            trimmed.totalPrintMinutesStale = !!hours.stale;
+        }
     } catch (e) {
         console.log(`filament-relay: print-time lookup failed: ${e.message}`);
     }

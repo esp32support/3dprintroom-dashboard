@@ -128,38 +128,8 @@ export async function onRequestGet(context) {
 
     const tasks = hits.map(simplify);
 
-    // Lifetime print time the printer's own Settings > Device screen shows
-    // (confirmed live: 28925 here = 482.1 h = the 482 hrs on the screen, so
-    // the unit is MINUTES). Lives on the account's bound-devices list, not on
-    // the tasks endpoint. Best-effort: a failure here must never take the
-    // task data above down with it, the dashboard just shows "--".
-    let totalPrintMinutes = null;
-
-    try {
-        const bindRes = await fetch("https://api.bambulab.com/v1/iot-service/api/user/bind", {
-            headers: {
-                Accept: "application/json",
-                "User-Agent": "bambu_network_agent/01.09.05.01",
-                Authorization: `Bearer ${env.BAMBU_ACCESS_TOKEN}`,
-            },
-        });
-
-        if (bindRes.ok) {
-            const bind = await bindRes.json();
-            const devices = bind.devices || [];
-            const dev = (deviceId && devices.find((d) => d.dev_id === deviceId)) || devices[0];
-
-            if (dev && Number.isFinite(Number(dev.total_print_time))) {
-                totalPrintMinutes = Number(dev.total_print_time);
-            }
-        }
-    } catch {
-        // see comment above - leave null
-    }
-
     return jsonResponse({
         task: tasks[0] || null,
         tasks,
-        totalPrintMinutes,
     });
 }

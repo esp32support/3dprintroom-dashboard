@@ -3213,15 +3213,6 @@ async function updatePrinterTask()
         const data = await res.json();
         latestPrinterTask = data.task || null;
         latestPrinterTasks = data.tasks || [];
-
-        // Lifetime print time, same figure as the printer's own
-        // Settings > Device screen (minutes from Bambu Cloud).
-        if (typeof data.totalPrintMinutes === "number")
-        {
-            const h = Math.floor(data.totalPrintMinutes / 60);
-            const m = data.totalPrintMinutes % 60;
-            setText("printerTotalHours", `${h.toLocaleString("hr-HR")} h ${String(m).padStart(2, "0")} min`);
-        }
     }
     catch (err)
     {
@@ -3626,6 +3617,38 @@ function resolveItemUsage(item)
 
 updatePrinterTask();
 setInterval(updatePrinterTask, 60000);
+
+// Lifetime print time, same figure as the printer's own Settings > Device
+// screen. Comes from /api/printer-hours, which falls back to the last good
+// value when Bambu Cloud refuses the live request (stale = true). It only
+// changes when a print ends, so every 5 minutes is plenty.
+async function updatePrinterHours()
+{
+    try
+    {
+        const res = await fetch("/api/printer-hours");
+
+        if (!res.ok)
+            return;
+
+        const data = await res.json();
+
+        if (typeof data.minutes !== "number")
+            return;
+
+        const h = Math.floor(data.minutes / 60);
+        const m = data.minutes % 60;
+        setText("printerTotalHours",
+            `${data.stale ? "~" : ""}${h.toLocaleString("hr-HR")} h ${String(m).padStart(2, "0")} min${data.stale ? " (last known)" : ""}`);
+    }
+    catch (err)
+    {
+        console.log("printer-hours fetch failed", err);
+    }
+}
+
+updatePrinterHours();
+setInterval(updatePrinterHours, 5 * 60 * 1000);
 
 // ===== Filament library (manually curated inventory, KV-backed) =====
 // A separate record from "what's loaded right now" (the AMS grid above) -
