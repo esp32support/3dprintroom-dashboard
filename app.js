@@ -4219,6 +4219,23 @@ function filamentIsLow(f)
     return filamentActiveSpools(f).length > 0 && filamentPercent(f) < 35;
 }
 
+// Card title: base material plus the marketing variant, without repeating the
+// material when the variant already contains it (variant "PETG HS" on a PETG
+// entry used to read "PETG PETG HS", "Silk PLA+" on PLA "PLA Silk PLA+").
+function filamentDisplayName(f)
+{
+    const material = String(f.material || "").trim();
+    const variant = String(f.variant || "").trim();
+
+    if (!variant)
+        return material || "Filament";
+
+    if (!material || variant.toUpperCase().includes(material.toUpperCase()))
+        return variant;
+
+    return material + " " + variant;
+}
+
 // Material filter key: PLA+ is its own entry (stored as material "PLA" with
 // variant "PLA+"), everything else filters by its base material.
 function filamentMaterialFilterKey(f)
@@ -4668,7 +4685,7 @@ function renderFilamentLibrary()
 
         const name = document.createElement("strong");
         name.className = "filamentCardName";
-        name.textContent = [f.material, f.variant].filter(Boolean).join(" ") || (f.material || "Filament");
+        name.textContent = filamentDisplayName(f);
 
         // "!" low-stock marker - shown for anything below the green
         // threshold (filamentIsLow), coloured red in the critical band.
