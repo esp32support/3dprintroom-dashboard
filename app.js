@@ -303,7 +303,13 @@ function updateStatus(data)
     renderBootHistory(data.bootHistory);
 
     setText("pressureDetail", `${data.pressure.toFixed(1)} hPa`);
-    setText("lastUpdate", new Date().toLocaleTimeString([], { hour12: false }));
+    // When the DEVICE last published (its own clock, sent as "now"), not when
+    // this browser tab happened to receive/load the message. A retained
+    // message arriving at page load used to show the page-load time here.
+    // Falls back to the browser time only for firmware that does not send
+    // "now" yet.
+    setText("lastUpdate", formatDeviceTime(data.now) ||
+        new Date().toLocaleTimeString([], { hour12: false }));
 
     setSensorState("ahtState", "AHT21", data.ahtOK !== false);
     setSensorState("bmeState", "BME280", data.bmeOK !== false);
@@ -541,6 +547,22 @@ function renderSystemEvents(items)
 
         list.appendChild(row);
     });
+}
+
+// "2026-11-16 12:34:56" -> "12:34:56" for today, "16.11. 12:34:56" otherwise.
+function formatDeviceTime(now)
+{
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2}:\d{2})$/.exec(String(now || ""));
+
+    if (!m)
+        return "";
+
+    const today = new Date();
+    const sameDay = Number(m[1]) === today.getFullYear()
+        && Number(m[2]) === today.getMonth() + 1
+        && Number(m[3]) === today.getDate();
+
+    return sameDay ? m[4] : m[3] + "." + m[2] + ". " + m[4];
 }
 
 function setOffline()
